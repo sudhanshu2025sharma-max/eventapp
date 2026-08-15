@@ -186,6 +186,24 @@ export default function App() {
         } else if (data.type === 'connection_request') {
           setNotificationRoute({ type: 'connection_requests' });
           if (user && tokens) setScreen('app');
+        } else if (data.type === 'session_reminder' && data.session_id) {
+          setNotificationRoute({
+            type: 'schedule',
+            sessionId: data.session_id,
+          });
+          if (user && tokens) setScreen('app');
+        } else if (data.type === 'feed_post') {
+          setNotificationRoute({ type: 'feed' });
+          if (user && tokens) setScreen('app');
+        } else if (data.type === 'checkin_success' || data.type === 'meal_verified') {
+          setNotificationRoute({ type: 'qr' });
+          if (user && tokens) setScreen('app');
+        } else {
+          // Generic — open notifications list
+          if (user && tokens) {
+            setNotificationRoute({ type: 'notifications' });
+            setScreen('app');
+          }
         }
       }
     );

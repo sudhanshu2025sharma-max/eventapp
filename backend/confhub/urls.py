@@ -5,6 +5,8 @@ from django.conf.urls.static import static
 
 urlpatterns = [
     path('admin/', admin.site.urls),
+
+    # Web Admin Panel
     path('panel/', include('apps.accounts.admin_urls')),
     path('panel/', include('apps.notifications.admin_urls')),
     path('panel/', include('apps.checkins.admin_urls')),
@@ -14,6 +16,7 @@ urlpatterns = [
     path('panel/', include('apps.schedule.admin_urls')),
     path('panel/', include('apps.leaderboard.admin_urls')),
     path('panel/', include('apps.photos.admin_urls')),
+    path('panel/', include('apps.posts.admin_urls')),
 
     # API routes
     path('api/v1/auth/',          include('apps.accounts.urls')),
@@ -27,6 +30,6 @@ urlpatterns = [
     path('api/v1/leaderboard/',   include('apps.leaderboard.urls')),
     path('api/v1/sponsors/',      include('apps.sponsors.urls')),
     path('api/v1/speakers/',      include('apps.speakers.urls')),
-    path('api/v1/schedule/', include('apps.schedule.urls')),
+    path('api/v1/schedule/',      include('apps.schedule.urls')),
     path('api/v1/chat/',          include('apps.chat.urls')),
 ] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

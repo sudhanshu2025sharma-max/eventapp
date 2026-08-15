@@ -1,0 +1,28 @@
+iOS Push Notifications in Expo Go:
+  - REQUIRE Expo's push relay servers
+  - Expo Go on iOS cannot receive local/direct pushes
+  - The relay goes: Your server → api.expo.dev → Apple APNs → iPhone
+  - This worked with ngrok because api.expo.dev could call back to your ngrok URL ← WRONG
+
+ACTUAL REASON IT WORKED WITH NGROK:
+  The token registration is what matters, not the callback URL.
+  
+Real difference:
+  Codespace + ngrok → Expo tunnel mode (--tunnel)
+  VM now           → LAN mode (--lan)
+  
+Expo tunnel mode: Expo's servers proxy the JS bundle
+Expo LAN mode:    Direct IP serves the JS bundle
+
+Push notification delivery path (SAME in both):
+  Your Django → api.expo.dev → APNs → iPhone
+  
+This path does NOT need ngrok or any tunnel.
+
+
+So why does iOS fail but Android works?
+Android (Expo Go): Uses Expo's FCM relay → works anywhere
+iOS (Expo Go):     Uses APNs certificates held by Expo
+                   → Requires valid Expo push token
+                   → Token format: ExponentPushToken[xxxxx]
+                   → ONLY works if the token was registered correctly

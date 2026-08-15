@@ -1,0 +1,147 @@
+{% extends 'panel/base.html' %}
+{% block title %}{{ mode|title }} Post — ETD 2026 Admin{% endblock %}
+{% block page_title %}{% if mode == 'edit' %}Edit Post{% else %}New Post{% endif %}{% endblock %}
+{% block page_subtitle %}{% if post %}{{ post.title }}{% else %}Create a new feed post{% endif %}{% endblock %}
+
+{% block content %}
+{% if messages %}{% for m in messages %}
+<div class="alert alert-{% if m.tags == 'error' %}error{% else %}success{% endif %}">
+    <i class="fas fa-circle-check"></i> {{ m }}
+</div>{% endfor %}{% endif %}
+
+<form method="post" enctype="multipart/form-data">
+{% csrf_token %}
+
+<div style="display:grid;grid-template-columns:2fr 1fr;gap:20px;align-items:start;">
+
+<!-- Left -->
+<div>
+<div class="card" style="margin-bottom:20px;">
+    <div class="card-header"><h3>Post Content</h3></div>
+    <div class="card-body" style="display:grid;gap:16px;">
+
+        <div style="display:grid;grid-template-columns:2fr 1fr;gap:12px;">
+            <div>
+                <label class="form-label">Title *</label>
+                <input class="form-control" name="title" required maxlength="300"
+                       value="{{ post.title|default:'' }}" placeholder="e.g. Lunch extended by 30 mins">
+            </div>
+            <div>
+                <label class="form-label">Type *</label>
+                <select class="form-control" name="post_type">
+                    {% for val,label in post_types %}
+                    <option value="{{ val }}" {% if post and post.post_type == val %}selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+        </div>
+
+        <div>
+            <label class="form-label">Body *</label>
+            <textarea class="form-control" name="body" rows="6" required
+                      placeholder="Write the full post content here...">{{ post.body|default:'' }}</textarea>
+        </div>
+
+        <div>
+            <label class="form-label">Image (optional)</label>
+            {% if post and post.image %}
+            <div style="margin-bottom:8px;">
+                <img src="{{ post.image.url }}" style="max-height:120px;border-radius:8px;border:1px solid var(--border);">
+                <label style="display:flex;align-items:center;gap:6px;margin-top:6px;font-size:13px;cursor:pointer;">
+                    <input type="checkbox" name="clear_image"> Remove image
+                </label>
+            </div>
+            {% endif %}
+            <input type="file" class="form-control" name="image" accept="image/*">
+        </div>
+
+        <div>
+            <label class="form-label">Link to Session (optional)</label>
+            <select class="form-control" name="session_id">
+                <option value="">— No session link —</option>
+                {% for s in sessions %}
+                <option value="{{ s.pk }}" {% if post and post.session_id == s.pk %}selected{% endif %}>
+                    Day {{ s.day }} | {{ s.start_datetime|date:"H:i" }} — {{ s.title|truncatechars:50 }}
+                </option>
+                {% endfor %}
+            </select>
+        </div>
+
+    </div>
+</div>
+</div>
+
+<!-- Right -->
+<div>
+<div class="card" style="margin-bottom:20px;">
+    <div class="card-header"><h3>Publish Settings</h3></div>
+    <div class="card-body" style="display:flex;flex-direction:column;gap:16px;">
+
+        <div>
+            <label class="form-label">Schedule Publish (optional)</label>
+            <input type="datetime-local" class="form-control" name="scheduled_at"
+                   value="{{ post.scheduled_at|date:'Y-m-d\TH:i'|default:'' }}">
+            <small style="color:var(--text-tertiary);font-size:11px;margin-top:4px;display:block;">
+                Leave blank to publish immediately on save.
+            </small>
+        </div>
+
+        <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;">
+            <input type="checkbox" name="send_push" style="margin-top:3px;width:16px;height:16px;"
+                   {% if not post or post.send_push %}checked{% endif %}>
+            <div>
+                <div style="font-size:14px;font-weight:600;">Send Push Notification</div>
+                <div style="font-size:11px;color:var(--text-tertiary);">Notify all app users on publish</div>
+            </div>
+        </label>
+
+        <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;">
+            <input type="checkbox" name="pinned" style="margin-top:3px;width:16px;height:16px;"
+                   {% if post and post.pinned %}checked{% endif %}>
+            <div>
+                <div style="font-size:14px;font-weight:600;">📌 Pin Post</div>
+                <div style="font-size:11px;color:var(--text-tertiary);">Stays at top of feed</div>
+            </div>
+        </label>
+
+        <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;">
+            <input type="checkbox" name="allow_comments" style="margin-top:3px;width:16px;height:16px;"
+                   {% if not post or post.allow_comments %}checked{% endif %}>
+            <div>
+                <div style="font-size:14px;font-weight:600;">Allow Comments</div>
+                <div style="font-size:11px;color:var(--text-tertiary);">Attendees can comment on this post</div>
+            </div>
+        </label>
+
+    </div>
+</div>
+
+{% if mode == 'edit' and post %}
+<div class="card" style="margin-bottom:20px;">
+    <div class="card-header"><h3>Engagement</h3></div>
+    <div class="card-body" style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+        <div style="text-align:center;padding:12px;background:var(--bg);border-radius:10px;">
+            <div style="font-size:22px;font-weight:800;color:var(--primary);">{{ post.reactions.count }}</div>
+            <div style="font-size:12px;color:var(--text-tertiary);">Reactions</div>
+        </div>
+        <div style="text-align:center;padding:12px;background:var(--bg);border-radius:10px;">
+            <a href="{% url 'feed_comments' post.pk %}" style="text-decoration:none;">
+                <div style="font-size:22px;font-weight:800;color:var(--primary);">{{ post.comments.count }}</div>
+                <div style="font-size:12px;color:var(--text-tertiary);">Comments →</div>
+            </a>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<div style="display:flex;gap:10px;flex-direction:column;">
+    <button type="submit" class="btn btn-primary" style="width:100%;justify-content:center;">
+        <i class="fas fa-check"></i> {% if mode == 'edit' %}Save Changes{% else %}Create Post{% endif %}
+    </button>
+    <a href="{% url 'feed_panel' %}" class="btn btn-secondary" style="width:100%;justify-content:center;">Cancel</a>
+</div>
+</div>
+
+</div>
+</form>
+{% endblock %}

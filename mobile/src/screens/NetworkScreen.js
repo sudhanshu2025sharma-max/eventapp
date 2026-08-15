@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef, memo } from 'react';
 import {
-  View, Text, StyleSheet, Platform, ScrollView, TextInput,
+  View, Text, StyleSheet, Platform, ScrollView, FlatList, TextInput,
   TouchableOpacity, Image, RefreshControl,
   Animated, Easing, Pressable, LayoutAnimation, UIManager,
 } from 'react-native';
@@ -18,6 +18,15 @@ import SpeakerRequestModal from './SpeakerRequestModal';
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
 }
+
+const _memCache = {
+  attendees: null,
+  speakers: null,
+  interests: null,
+};
+
+// Module-level in-memory cache — survives tab switches (component remounts)
+
 
 const TABS = ['Attendees', 'Speakers'];
 const authH = t => ({ ...API_HEADERS, Authorization: `Bearer ${t?.access}` });
@@ -411,19 +420,20 @@ function EmptyState({ tab, hasFilter, onClear }) {
    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
 export default function NetworkScreen({ tokens, user, onOpenChat, pendingCount, onOpenRequests }) {
   const [activeTab, setActiveTab] = useState('Attendees');
-  const [attendees, setAttendees] = useState([]);
-  const [speakers, setSpeakers]   = useState([]);
-  const [interests, setInterests] = useState([]);
+  const [attendees, setAttendees] = useState(_memCache.attendees || []);
+  const [speakers, setSpeakers]   = useState(_memCache.speakers || []);
+  const [interests, setInterests] = useState(_memCache.interests || []);
   const [search, setSearch]       = useState('');
   const [activeTag, setActiveTag] = useState('');
-  const [loading, setLoading]     = useState(true);
+  const [loading, setLoading]     = useState(!_memCache.attendees);
   const [refreshing, setRefreshing] = useState(false);
   const [connStatus, setConnStatus] = useState({});
   const [cardTarget, setCardTarget] = useState(null);
   const [speakerTarget, setSpeakerTarget] = useState(null);
   const [searchVisible, setSearchVisible] = useState(false);
   const searchTimer = useRef(null);
-  const initial = useRef({ a: false, s: false });
+  const initial = useRef({ a: !!_memCache.attendees, s: !!_memCache.speakers });
+  
 
   const heroFade = useRef(new Animated.Value(0)).current;
   const searchHeight = useRef(new Animated.Value(0)).current;
@@ -447,18 +457,36 @@ export default function NetworkScreen({ tokens, user, onOpenChat, pendingCount, 
   // ── data loading ─────────────────────────────────────────────────
   const loadStatuses = useCallback(async (ids) => {
     if (!ids?.length) return;
+    // Show cached statuses instantly
+    const cacheKey = 'conn_status_' + ids.slice().sort().join('_').substring(0, 40);
+    const cached = await getCached(cacheKey);
+    if (cached) setConnStatus(p => ({ ...p, ...cached }));
     try {
       const r = await fetch(`${API_URL}/chat/check/bulk/`, { method: 'POST', headers: authH(tokens), body: JSON.stringify({ user_ids: ids }) });
       const d = await r.json();
-      if (d.statuses) setConnStatus(p => ({ ...p, ...d.statuses }));
+      if (d.statuses) {
+        setConnStatus(p => ({ ...p, ...d.statuses }));
+        setCache(cacheKey, d.statuses);
+      }
     } catch {}
   }, [tokens]);
 
   const loadAttendees = useCallback(async (ref = false) => {
     const isS = !!(search.trim() || activeTag), ck = 'network_attendees';
-    if (!ref && !isS && !initial.current.a) {
-      const c = await getCached(ck);
-      if (c) { setAttendees(c.list); setInterests(c.interests || []); setLoading(false); initial.current.a = true; fetchA(false, ck, isS); return; }
+    if (!ref && !isS) {
+      // In-memory first (instant, no AsyncStorage delay)
+      if (_memCache.attendees) {
+        setAttendees(_memCache.attendees);
+        setInterests(_memCache.interests || []);
+        setLoading(false);
+        if (!initial.current.a) { initial.current.a = true; fetchA(false, ck, isS); }
+        return;
+      }
+      // AsyncStorage fallback
+      if (!initial.current.a) {
+        const c = await getCached(ck);
+        if (c) { setAttendees(c.list); setInterests(c.interests || []); setLoading(false); initial.current.a = true; fetchA(false, ck, isS); return; }
+      }
     }
     ref ? setRefreshing(true) : (!initial.current.a && setLoading(true));
     await fetchA(ref, ck, isS); initial.current.a = true;
@@ -473,16 +501,29 @@ export default function NetworkScreen({ tokens, user, onOpenChat, pendingCount, 
       const d = await r.json();
       const l = (d.attendees || []).filter(a => a.role !== 'speaker').map(a => ({ ...a, profile_photo_url: fixMediaUrl(a.profile_photo_url) }));
       setAttendees(l);
-      if (!isS) { setInterests(d.interests || []); setCache(ck, { list: l, interests: d.interests || [] }); }
+      if (!isS) {
+        setInterests(d.interests || []);
+        _memCache.attendees = l;
+        _memCache.interests = d.interests || [];
+        setCache(ck, { list: l, interests: d.interests || [] });
+      }
       loadStatuses(l.map(a => a.id).filter(id => id !== user?.id));
     } catch {} finally { setLoading(false); setRefreshing(false); }
   };
 
   const loadSpeakers = useCallback(async (ref = false) => {
     const isS = !!search.trim(), ck = 'network_speakers';
-    if (!ref && !isS && !initial.current.s) {
-      const c = await getCached(ck);
-      if (c) { setSpeakers(c); setLoading(false); initial.current.s = true; fetchS(false, ck, isS); return; }
+    if (!ref && !isS) {
+      if (_memCache.speakers) {
+        setSpeakers(_memCache.speakers);
+        setLoading(false);
+        if (!initial.current.s) { initial.current.s = true; fetchS(false, ck, isS); }
+        return;
+      }
+      if (!initial.current.s) {
+        const c = await getCached(ck);
+        if (c) { setSpeakers(c); setLoading(false); initial.current.s = true; fetchS(false, ck, isS); return; }
+      }
     }
     ref ? setRefreshing(true) : (!initial.current.s && setLoading(true));
     await fetchS(ref, ck, isS); initial.current.s = true;
@@ -497,12 +538,14 @@ export default function NetworkScreen({ tokens, user, onOpenChat, pendingCount, 
       const d = await r.json();
       const l = (d.attendees || []).filter(a => a.role === 'speaker').map(a => ({ ...a, profile_photo_url: fixMediaUrl(a.profile_photo_url) }));
       setSpeakers(l);
-      if (!isS) setCache(ck, l);
+      if (!isS) { _memCache.speakers = l; setCache(ck, l); }
       loadStatuses(l.map(a => a.id).filter(id => id !== user?.id));
     } catch {} finally { setLoading(false); setRefreshing(false); }
   };
 
   useEffect(() => { activeTab === 'Attendees' ? loadAttendees() : loadSpeakers(); }, [activeTab]);
+  
+
 
   const onSearchInput = v => {
     setSearch(v);
@@ -670,20 +713,25 @@ export default function NetworkScreen({ tokens, user, onOpenChat, pendingCount, 
         ) : list.length === 0 ? (
           <EmptyState tab={activeTab} hasFilter={hasFilter} onClear={clearAll} />
         ) : (
-          <ScrollView
+          <FlatList
+            data={list}
+            keyExtractor={p => p.id}
             showsVerticalScrollIndicator={false}
             contentContainerStyle={_s.listContent}
             keyboardShouldPersistTaps="handled"
+            initialNumToRender={8}
+            maxToRenderPerBatch={8}
+            windowSize={5}
+            removeClippedSubviews={true}
             refreshControl={
               <RefreshControl refreshing={refreshing}
                 onRefresh={() => activeTab === 'Attendees' ? loadAttendees(true) : loadSpeakers(true)}
                 tintColor={COLORS.brand} colors={[COLORS.brand]}
               />
             }
-          >
-            {list.map((p, i) => (
+            renderItem={({ item: p, index: i }) => (
               <PersonCard
-                key={p.id} person={p} idx={i}
+                person={p} idx={i}
                 isSelf={p.id === user?.id}
                 isSpeaker={activeTab === 'Speakers'}
                 cs={connStatus[p.id]}
@@ -691,9 +739,9 @@ export default function NetworkScreen({ tokens, user, onOpenChat, pendingCount, 
                 onPress={handlePress}
                 onTag={activeTab === 'Attendees' ? toggleTag : undefined}
               />
-            ))}
-            <View style={{ height: 140 }} />
-          </ScrollView>
+            )}
+            ListFooterComponent={<View style={{ height: 140 }} />}
+          />
         )}
       </View>
 

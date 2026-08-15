@@ -92,9 +92,20 @@ const REMINDER_OPTIONS = [
 function fmtTime(dt) {
   if (!dt) return '';
   const d = new Date(dt);
-  const h = d.getHours().toString().padStart(2, '0');
-  const m = d.getMinutes().toString().padStart(2, '0');
-  return `${h}:${m}`;
+  // Format in IST (Asia/Kolkata) to avoid timezone ambiguity
+  try {
+    return d.toLocaleTimeString('en-IN', {
+      hour: '2-digit', minute: '2-digit', hour12: false,
+      timeZone: 'Asia/Kolkata',
+    });
+  } catch {
+    // Fallback if toLocaleTimeString fails
+    const h = d.getUTCHours() + 5;
+    const m = d.getUTCMinutes() + 30;
+    const adjH = m >= 60 ? h + 1 : h;
+    const adjM = m >= 60 ? m - 60 : m;
+    return `${String(adjH % 24).padStart(2, '0')}:${String(adjM).padStart(2, '0')}`;
+  }
 }
 
 function isNow(start, end) {

@@ -346,8 +346,8 @@
                 <i class="fas fa-images"></i> Photo Moderation
                 <span class="menu-badge">34</span>
             </a> -->
-            <a href="#" class="menu-item">
-                <i class="fas fa-newspaper"></i> Posts & Feed
+            <a href="/panel/feed/" class="menu-item {% if 'feed' in request.resolver_match.url_name %}active{% endif %}">
+                <i class="fas fa-newspaper"></i> Posts &amp; Feed
             </a>
 
             <div class="menu-label">Engagement</div>

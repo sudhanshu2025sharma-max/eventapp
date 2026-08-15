@@ -3,31 +3,36 @@ from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.response import Response
 from rest_framework import status
 from django.utils import timezone
+from django.utils.dateparse import parse_datetime
 from django.db.models import Avg, Count
+from zoneinfo import ZoneInfo
 
 from .models import (
     ScheduleSession, SessionBookmark,
     FeedbackForm, FeedbackQuestion, FeedbackResponse, FeedbackAnswer
 )
-from django.utils.dateparse import parse_datetime
-
-def _parse_dt(val):
-    """Parse datetime string to aware datetime."""
-    if not val:
-        return None
-    if isinstance(val, str):
-        from django.utils import timezone
-        dt = parse_datetime(val)
-        if dt and dt.tzinfo is None:
-            dt = timezone.make_aware(dt)
-        return dt
-    return val
-
 from .serializers import (
     SessionListSerializer, SessionDetailSerializer,
     BookmarkSerializer, FeedbackFormSerializer,
     FeedbackSubmitSerializer, FeedbackResponseSerializer
 )
+
+IST = ZoneInfo("Asia/Kolkata")
+
+def _parse_dt(val):
+    """Parse incoming datetime string and treat naive values as IST."""
+    if not val:
+        return None
+    if isinstance(val, str):
+        dt = parse_datetime(val)
+        if not dt:
+            return None
+        # If no timezone was supplied (e.g. datetime-local from web),
+        # treat it as Asia/Kolkata, then convert to UTC for storage.
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=IST)
+        return dt.astimezone(timezone.utc)
+    return val
 
 
 # ── Schedule ─────────────────────────────────────────────────────────────────
@@ -35,12 +40,6 @@ from .serializers import (
 @api_view(['GET'])
 @permission_classes([AllowAny])
 def session_list(request):
-    """
-    GET /api/v1/schedule/sessions/
-    ?day=1|2|3  — filter by day
-    ?featured=1 — only featured
-    Returns published sessions with bookmark state for auth users.
-    """
     qs = ScheduleSession.objects.filter(is_published=True).prefetch_related('sub_sessions','bookmarks')
     day = request.query_params.get('day')
     if day:
@@ -54,7 +53,6 @@ def session_list(request):
 @api_view(['GET'])
 @permission_classes([AllowAny])
 def session_detail(request, pk):
-    """GET /api/v1/schedule/sessions/<pk>/"""
     try:
         sess = ScheduleSession.objects.prefetch_related('sub_sessions','bookmarks').get(pk=pk, is_published=True)
     except ScheduleSession.DoesNotExist:
@@ -67,11 +65,6 @@ def session_detail(request, pk):
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def toggle_bookmark(request, pk):
-    """
-    POST /api/v1/schedule/sessions/<pk>/bookmark/
-    Body: { reminder_minutes: 5|15|30|60 }
-    Toggles bookmark. Returns { bookmarked: bool, reminder_minutes: int }
-    """
     try:
         sess = ScheduleSession.objects.get(pk=pk, is_published=True)
     except ScheduleSession.DoesNotExist:
@@ -92,10 +85,6 @@ def toggle_bookmark(request, pk):
 @api_view(['PATCH'])
 @permission_classes([IsAuthenticated])
 def update_reminder(request, pk):
-    """
-    PATCH /api/v1/schedule/sessions/<pk>/reminder/
-    Body: { reminder_minutes: 5|15|30|60 }
-    """
     bm = SessionBookmark.objects.filter(user=request.user, session__pk=pk).first()
     if not bm:
         return Response({'error': 'Bookmark not found'}, status=404)
@@ -103,7 +92,7 @@ def update_reminder(request, pk):
     if reminder not in [5, 15, 30, 60]:
         return Response({'error': 'Invalid reminder'}, status=400)
     bm.reminder_minutes = reminder
-    bm.reminder_sent = False  # reset so it fires again at new time
+    bm.reminder_sent = False
     bm.save()
     return Response({'reminder_minutes': bm.reminder_minutes})
 
@@ -111,7 +100,6 @@ def update_reminder(request, pk):
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def my_bookmarks(request):
-    """GET /api/v1/schedule/bookmarks/ — user's bookmarked sessions."""
     bms = SessionBookmark.objects.filter(user=request.user).select_related('session').prefetch_related('session__sub_sessions','session__bookmarks')
     data = BookmarkSerializer(bms, many=True, context={'request': request}).data
     return Response({'bookmarks': data})
@@ -122,16 +110,11 @@ def my_bookmarks(request):
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def feedback_form(request, pk):
-    """
-    GET /api/v1/schedule/sessions/<pk>/feedback/
-    Returns form + questions. Only if feedback is open and user is checked in.
-    """
     try:
         sess = ScheduleSession.objects.get(pk=pk, is_published=True)
     except ScheduleSession.DoesNotExist:
         return Response({'error': 'Not found'}, status=404)
 
-    # Must be checked in
     from apps.checkins.models import CheckIn
     if not CheckIn.objects.filter(user=request.user, checkin_type='conference').exists():
         return Response({'error': 'Check-in required to submit feedback'}, status=403)
@@ -154,16 +137,11 @@ def feedback_form(request, pk):
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def submit_feedback(request, pk):
-    """
-    POST /api/v1/schedule/sessions/<pk>/feedback/
-    Body: { answers: [{question_id, rating_value?, boolean_value?, text_value?}] }
-    """
     try:
         sess = ScheduleSession.objects.get(pk=pk, is_published=True)
     except ScheduleSession.DoesNotExist:
         return Response({'error': 'Not found'}, status=404)
 
-    # Must be checked in
     from apps.checkins.models import CheckIn
     if not CheckIn.objects.filter(user=request.user, checkin_type='conference').exists():
         return Response({'error': 'Check-in required'}, status=403)
@@ -183,7 +161,6 @@ def submit_feedback(request, pk):
     if not ser.is_valid():
         return Response(ser.errors, status=400)
 
-    # Validate required questions answered
     questions = {q.id: q for q in form.questions.all()}
     answered  = {a['question_id'] for a in ser.validated_data['answers']}
     for qid, q in questions.items():
@@ -191,14 +168,6 @@ def submit_feedback(request, pk):
             return Response({'error': f'Question {qid} is required'}, status=400)
 
     resp = FeedbackResponse.objects.create(session=sess, form=form, user=request.user)
-
-    # Award leaderboard points for feedback
-    try:
-        from apps.leaderboard.utils import award_points
-        from apps.leaderboard.models import PointAction
-        award_points(request.user, PointAction.FEEDBACK, f'Feedback: {sess.title[:50]}')
-    except Exception:
-        pass  # Silent fail — points are bonus, not critical
     for ans in ser.validated_data['answers']:
         qid = ans['question_id']
         if qid not in questions:
@@ -220,10 +189,44 @@ def _require_admin(user):
     return user.is_authenticated and user.role in ('super_admin', 'mgmt_admin', 'team_head', 'staff')
 
 
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def admin_subsession_add(request, pk):
+    if not _require_admin(request.user):
+        return Response({'error': 'Forbidden'}, status=403)
+    try:
+        sess = ScheduleSession.objects.get(pk=pk)
+    except ScheduleSession.DoesNotExist:
+        return Response({'error': 'Not found'}, status=404)
+    from .models import ScheduleSubSession
+    data = request.data
+    sub = ScheduleSubSession.objects.create(
+        parent=sess,
+        title=data.get('title', '').strip(),
+        start_datetime=_parse_dt(data.get('start_datetime')) if data.get('start_datetime') else None,
+        end_datetime=_parse_dt(data.get('end_datetime')) if data.get('end_datetime') else None,
+        description=data.get('description', ''),
+        display_order=int(data.get('display_order') or sess.sub_sessions.count() + 1),
+    )
+    return Response({'success': True, 'id': sub.id, 'title': sub.title}, status=201)
+
+
+@api_view(['DELETE'])
+@permission_classes([IsAuthenticated])
+def admin_subsession_delete(request, pk):
+    if not _require_admin(request.user):
+        return Response({'error': 'Forbidden'}, status=403)
+    from .models import ScheduleSubSession
+    try:
+        ScheduleSubSession.objects.get(pk=pk).delete()
+    except ScheduleSubSession.DoesNotExist:
+        return Response({'error': 'Not found'}, status=404)
+    return Response({'success': True})
+
+
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def admin_session_list(request):
-    """GET /api/v1/schedule/admin/sessions/ — all sessions including unpublished."""
     if not _require_admin(request.user):
         return Response({'error': 'Forbidden'}, status=403)
     qs = ScheduleSession.objects.prefetch_related('sub_sessions').all()
@@ -236,7 +239,6 @@ def admin_session_list(request):
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def admin_session_create(request):
-    """POST /api/v1/schedule/admin/sessions/"""
     if not _require_admin(request.user):
         return Response({'error': 'Forbidden'}, status=403)
     data = request.data
@@ -264,7 +266,6 @@ def admin_session_create(request):
 @api_view(['PATCH'])
 @permission_classes([IsAuthenticated])
 def admin_session_update(request, pk):
-    """PATCH /api/v1/schedule/admin/sessions/<pk>/"""
     if not _require_admin(request.user):
         return Response({'error': 'Forbidden'}, status=403)
     try:
@@ -291,7 +292,6 @@ def admin_session_update(request, pk):
 @api_view(['DELETE'])
 @permission_classes([IsAuthenticated])
 def admin_session_delete(request, pk):
-    """DELETE /api/v1/schedule/admin/sessions/<pk>/"""
     if not _require_admin(request.user):
         return Response({'error': 'Forbidden'}, status=403)
     try:
@@ -304,10 +304,6 @@ def admin_session_delete(request, pk):
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def admin_toggle_feedback(request, pk):
-    """
-    POST /api/v1/schedule/admin/sessions/<pk>/feedback-toggle/
-    Manually open or close feedback.
-    """
     if not _require_admin(request.user):
         return Response({'error': 'Forbidden'}, status=403)
     try:
@@ -322,10 +318,6 @@ def admin_toggle_feedback(request, pk):
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def admin_feedback_analytics(request, pk):
-    """
-    GET /api/v1/schedule/admin/sessions/<pk>/feedback-analytics/
-    Returns aggregate stats + individual responses.
-    """
     if not _require_admin(request.user):
         return Response({'error': 'Forbidden'}, status=403)
     try:
@@ -336,7 +328,6 @@ def admin_feedback_analytics(request, pk):
     responses = FeedbackResponse.objects.filter(session=sess).prefetch_related('answers__question')
     total = responses.count()
 
-    # Per-question aggregates
     try:
         questions = sess.feedback_form.questions.all()
     except FeedbackForm.DoesNotExist:

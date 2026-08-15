@@ -1,4 +1,6 @@
-import logging, requests
+import logging, requests, ssl
+import urllib3
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 from django.utils import timezone
 from django.conf import settings
 from .models import DeviceToken, UserNotification
@@ -54,7 +56,15 @@ def _send_expo(tokens,title,body,data,img=None):
             m["data"]["cover_image"]=img
         msgs.append(m)
     try:
-        r=requests.post(EXPO_URL,json=msgs,headers={'Accept':'application/json','Content-Type':'application/json'},timeout=10).json()
+        # IITD proxy with SSL verification disabled (proxy does SSL inspection)
+        import os
+        proxies = {
+            'http':  'http://proxy21.iitd.ac.in:3128',
+            'https': 'http://proxy21.iitd.ac.in:3128',
+        }
+        session = requests.Session()
+        session.verify = False  # IITD proxy intercepts + re-encrypts
+        r=session.post(EXPO_URL,json=msgs,headers={'Accept':'application/json','Content-Type':'application/json'},proxies=proxies,timeout=30).json()
         # Expo returns array of receipts
         success=sum(1 for x in r.get('data',r) if isinstance(x,dict) and x.get('status')=='ok') if isinstance(r,dict) else len(tokens)
         return success, len(tokens)-success, []

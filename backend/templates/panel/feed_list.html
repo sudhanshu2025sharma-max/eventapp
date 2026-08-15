@@ -1,0 +1,153 @@
+{% extends 'panel/base.html' %}
+{% block title %}Feed — ETD 2026 Admin{% endblock %}
+{% block page_title %}Posts & Feed{% endblock %}
+{% block page_subtitle %}Manage announcements, updates and alerts{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div style="display:flex;gap:10px;flex-wrap:wrap;">
+        <a href="?tab=published" class="btn {% if tab == 'published' %}btn-primary{% else %}btn-secondary{% endif %} btn-sm">
+            Published <span style="opacity:.7;">({{ stats.published }})</span>
+        </a>
+        <a href="?tab=scheduled" class="btn {% if tab == 'scheduled' %}btn-primary{% else %}btn-secondary{% endif %} btn-sm">
+            Scheduled <span style="opacity:.7;">({{ stats.scheduled }})</span>
+        </a>
+        <a href="?tab=draft" class="btn {% if tab == 'draft' %}btn-primary{% else %}btn-secondary{% endif %} btn-sm">
+            Draft <span style="opacity:.7;">({{ stats.draft }})</span>
+        </a>
+    </div>
+    <a href="{% url 'feed_create' %}" class="btn btn-primary">
+        <i class="fas fa-plus"></i> New Post
+    </a>
+</div>
+
+{% if messages %}{% for m in messages %}
+<div class="alert alert-{% if m.tags == 'error' %}error{% elif m.tags == 'success' %}success{% else %}warning{% endif %}">
+    <i class="fas fa-circle-check"></i> {{ m }}
+</div>{% endfor %}{% endif %}
+
+<!-- Stats -->
+<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:24px;">
+    <div class="stat-card" style="padding:16px;">
+        <div style="font-size:24px;font-weight:800;color:var(--text);">{{ stats.total }}</div>
+        <div style="font-size:12px;color:var(--text-tertiary);margin-top:2px;">Total Posts</div>
+    </div>
+    <div class="stat-card" style="padding:16px;">
+        <div style="font-size:24px;font-weight:800;color:var(--success);">{{ stats.published }}</div>
+        <div style="font-size:12px;color:var(--text-tertiary);margin-top:2px;">Published</div>
+    </div>
+    <div class="stat-card" style="padding:16px;">
+        <div style="font-size:24px;font-weight:800;color:var(--warning);">{{ stats.scheduled }}</div>
+        <div style="font-size:12px;color:var(--text-tertiary);margin-top:2px;">Scheduled</div>
+    </div>
+    <div class="stat-card" style="padding:16px;">
+        <div style="font-size:24px;font-weight:800;color:var(--text-tertiary);">{{ stats.draft }}</div>
+        <div style="font-size:12px;color:var(--text-tertiary);margin-top:2px;">Draft</div>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-body" style="padding:0;">
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Post</th>
+                    <th>Type</th>
+                    <th>Author</th>
+                    <th>Status</th>
+                    <th>Reactions</th>
+                    <th>Comments</th>
+                    <th>Flags</th>
+                    <th style="text-align:right;">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+            {% for post in posts %}
+            <tr>
+                <td style="max-width:280px;">
+                    <div style="font-weight:600;font-size:14px;">
+                        {% if post.pinned %}<span style="color:#f59e0b;margin-right:4px;">📌</span>{% endif %}
+                        {{ post.title }}
+                    </div>
+                    <div style="font-size:12px;color:var(--text-tertiary);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:260px;">
+                        {{ post.body|truncatechars:80 }}
+                    </div>
+                    {% if post.session %}
+                    <div style="font-size:11px;color:var(--primary);margin-top:3px;">
+                        <i class="fas fa-calendar-alt"></i> {{ post.session.title|truncatechars:40 }}
+                    </div>
+                    {% endif %}
+                </td>
+                <td>
+                    <span class="badge
+                        {% if post.post_type == 'alert' %}badge-danger
+                        {% elif post.post_type == 'announcement' %}badge-info
+                        {% elif post.post_type == 'update' %}badge-warning
+                        {% else %}badge-success{% endif %}">
+                        {{ post.get_post_type_display }}
+                    </span>
+                </td>
+                <td style="font-size:13px;color:var(--text-secondary);">
+                    {{ post.author.get_full_name|default:post.author.email|default:"—" }}
+                </td>
+                <td>
+                    {% if post.published_at and post.is_live %}
+                        <span class="badge badge-success">Live</span>
+                        <div style="font-size:11px;color:var(--text-tertiary);margin-top:2px;">{{ post.published_at|date:"d M, H:i" }}</div>
+                    {% elif post.scheduled_at %}
+                        <span class="badge badge-warning">Scheduled</span>
+                        <div style="font-size:11px;color:var(--text-tertiary);margin-top:2px;">{{ post.scheduled_at|date:"d M, H:i" }}</div>
+                    {% else %}
+                        <span class="badge" style="background:#f3f4f6;color:#6b7280;">Draft</span>
+                    {% endif %}
+                </td>
+                <td style="font-weight:700;color:var(--primary);">{{ post.reaction_count }}</td>
+                <td>
+                    {% if post.allow_comments %}
+                    <a href="{% url 'feed_comments' post.pk %}" style="font-weight:700;color:var(--primary);text-decoration:none;">
+                        {{ post.comment_count }}
+                    </a>
+                    {% else %}
+                    <span style="color:var(--text-tertiary);font-size:12px;">off</span>
+                    {% endif %}
+                </td>
+                <td style="font-size:11px;">
+                    {% if post.pinned %}<span class="badge badge-warning">Pinned</span>{% endif %}
+                    {% if post.send_push %}<span class="badge badge-info">Push</span>{% endif %}
+                    {% if post.image %}<span class="badge badge-success">Img</span>{% endif %}
+                </td>
+                <td style="text-align:right;white-space:nowrap;">
+                    <div style="display:flex;gap:6px;justify-content:flex-end;">
+                        <form method="post" action="{% url 'feed_pin_toggle' post.pk %}">
+                            {% csrf_token %}
+                            <button type="submit" class="btn btn-secondary btn-sm" title="{% if post.pinned %}Unpin{% else %}Pin{% endif %}">
+                                <i class="fas fa-thumbtack" style="{% if post.pinned %}color:var(--warning);{% endif %}"></i>
+                            </button>
+                        </form>
+                        <a href="{% url 'feed_edit' post.pk %}" class="btn btn-secondary btn-sm">
+                            <i class="fas fa-pen"></i>
+                        </a>
+                        <form method="post" action="{% url 'feed_delete' post.pk %}"
+                              onsubmit="return confirm('Delete this post?')">
+                            {% csrf_token %}
+                            <button type="submit" class="btn btn-danger btn-sm">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                        </form>
+                    </div>
+                </td>
+            </tr>
+            {% empty %}
+            <tr><td colspan="8">
+                <div class="empty-state">
+                    <i class="fas fa-newspaper"></i>
+                    <h3>No posts here</h3>
+                    <a href="{% url 'feed_create' %}" class="btn btn-primary">Create First Post</a>
+                </div>
+            </td></tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

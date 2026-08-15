@@ -12,6 +12,9 @@ ngrok http 8000
 # 4. Expo
 cd /workspaces/eventapp/mobile && npx expo start --tunnel --port 8081 --clear
 
+# 5 Kill Port
+kill -9 $(lsof -t -i:<PORT>)
+
 Context Gen: Okay its working Now give me the full context to start a new chat with new feature to be build it must cover everything till now and i give you early. 
 Now fundamentally everything is working fine we wont polishing so give me a full detailed context window in which you have to write everything that has done so far form first chat to last so that new chat have context of everything also mention the custom template folder how its link how other files are linked and how everything is working and wired up so give me context window for new chat.
 

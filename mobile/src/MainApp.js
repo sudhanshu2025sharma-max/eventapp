@@ -19,6 +19,7 @@ import ChatRoomScreen from './screens/ChatRoomScreen';
 import ConnectionRequestsScreen from './screens/ConnectionRequestsScreen';
 import LeaderboardScreen from './screens/LeaderboardScreen';
 import PhotosScreen from './screens/PhotosScreen';
+import FeedScreen from './screens/FeedScreen';
 
 const BASE_TABS = [
   { key: 'home',     iconOn: 'home',     iconOff: 'home-outline',     label: 'Home' },
@@ -164,6 +165,35 @@ export default function MainApp({
       setSubParams({});
       setSubScreen('connection_requests');
       if (clearNotificationRoute) clearNotificationRoute();
+      return;
+    }
+
+    if (notificationRoute.type === 'schedule') {
+      setTab('schedule');
+      setSubScreen(null);
+      if (clearNotificationRoute) clearNotificationRoute();
+      return;
+    }
+
+    if (notificationRoute.type === 'qr') {
+      setTab('qr');
+      setSubScreen(null);
+      if (clearNotificationRoute) clearNotificationRoute();
+      return;
+    }
+
+    if (notificationRoute.type === 'notifications') {
+      setSubParams({});
+      setSubScreen('notifications');
+      if (clearNotificationRoute) clearNotificationRoute();
+      return;
+    }
+
+    if (notificationRoute.type === 'feed') {
+      setTab('feed');
+      setSubScreen(null);
+      if (clearNotificationRoute) clearNotificationRoute();
+      return;
     }
   }, [notificationRoute]);
 
@@ -232,6 +262,7 @@ export default function MainApp({
     return <PhotosScreen onBack={() => setSubScreen(null)} />;
   }
 
+
   const SCREENS = {
     home: (
       <HomeTab
@@ -245,6 +276,8 @@ export default function MainApp({
         onOpenSchedule={() => setTab('schedule')}
         onOpenLeaderboard={() => openSubScreen('leaderboard')}
         onOpenPhotos={() => openSubScreen('photos')}
+        onOpenFeed={() => setTab('feed')}
+        onOpenProfile={() => setTab('profile')}
         chatBadge={pendingRequests + chatUnread}
       />
     ),
@@ -271,6 +304,7 @@ export default function MainApp({
       />
     ),
     admin: <AdminTab user={user} tokens={tokens} onLogout={onLogout} />,
+    feed: <FeedScreen onBack={() => setTab('home')} />,
   };
 
   return (

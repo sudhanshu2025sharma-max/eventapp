@@ -13,14 +13,14 @@ const PAD = SPACE.xl;
 const TIMELINE_WINDOW = 3;
 
 const QUICK = [
-  { icon: 'calendar-outline',    label: 'Schedule',    color: COLORS.brand,   bg: COLORS.brandLight,  action: 'schedule' },
-  { icon: 'ribbon-outline',      label: 'Sponsors',    color: COLORS.brand,   bg: COLORS.brandLight,  action: 'sponsors' },
-  { icon: 'mic-outline',         label: 'Speakers',    color: COLORS.purple,  bg: COLORS.purpleLight, action: 'speakers' },
+  { icon: 'calendar-outline',    label: 'Schedule',    color: COLORS.brand,   bg: COLORS.brandLight,   action: 'schedule' },
+  { icon: 'ribbon-outline',      label: 'Sponsors',    color: COLORS.brand,   bg: COLORS.brandLight,   action: 'sponsors' },
+  { icon: 'mic-outline',         label: 'Speakers',    color: COLORS.purple,  bg: COLORS.purpleLight,  action: 'speakers' },
   { icon: 'camera-outline',      label: 'Photos',      color: COLORS.success, bg: COLORS.successLight, action: 'photos' },
-  { icon: 'stats-chart-outline', label: 'Polls',       color: COLORS.accent,  bg: COLORS.accentLight  },
-  { icon: 'newspaper-outline',   label: 'Feed',        color: COLORS.purple,  bg: COLORS.purpleLight  },
-  { icon: 'people-outline',      label: 'Directory',   color: COLORS.teal,    bg: COLORS.tealLight    },
-  { icon: 'trophy-outline',      label: 'Leaderboard', color: COLORS.rose,    bg: COLORS.roseLight,   action: 'leaderboard' },
+  { icon: 'newspaper-outline',   label: 'Feed',        color: COLORS.purple,  bg: COLORS.purpleLight,  action: 'feed' },
+  { icon: 'people-outline',      label: 'Directory',   color: COLORS.teal,    bg: COLORS.tealLight     },
+  { icon: 'stats-chart-outline', label: 'Polls',       color: COLORS.accent,  bg: COLORS.accentLight   },
+  { icon: 'trophy-outline',      label: 'Leaderboard', color: COLORS.rose,    bg: COLORS.roseLight,    action: 'leaderboard' },
 ];
 
 const TYPE_STYLE = {
@@ -64,10 +64,22 @@ function getEventDate(ev, which = 'start') {
 
 function formatTime(d) {
   if (!d) return '';
-  const h = d.getHours(); const m = d.getMinutes();
-  const ampm = h >= 12 ? 'PM' : 'AM';
-  const h12 = h % 12 || 12;
-  return `${h12}:${String(m).padStart(2, '0')} ${ampm}`;
+  try {
+    return d.toLocaleTimeString('en-IN', {
+      hour: 'numeric',
+      minute: '2-digit',
+      hour12: true,
+      timeZone: 'Asia/Kolkata',
+    });
+  } catch {
+    const total = d.getUTCHours() * 60 + d.getUTCMinutes() + 330; // +05:30
+    const mins = ((total % 1440) + 1440) % 1440;
+    const h24 = Math.floor(mins / 60);
+    const m = mins % 60;
+    const ampm = h24 >= 12 ? 'PM' : 'AM';
+    const h12 = h24 % 12 || 12;
+    return `${h12}:${String(m).padStart(2, '0')} ${ampm}`;
+  }
 }
 
 function formatRange(ev) {
@@ -96,11 +108,8 @@ function classifyAndSort(events) {
 
 function smartWindow(sorted, max) {
   if (sorted.length <= max) return sorted;
-  // Find first current or next
   const anchor = sorted.findIndex(e => e.status === 'current' || e.status === 'next');
-  // All past → show last 3
   if (anchor === -1) return sorted.slice(-max);
-  // Show anchor and next items, but include 1 before if possible for context
   const start = Math.max(0, Math.min(anchor, sorted.length - max));
   return sorted.slice(start, start + max);
 }
@@ -114,7 +123,6 @@ function timeAgo(dateStr) {
   return `${Math.floor(diff / 86400)}d ago`;
 }
 
-/* ─── Animated Timeline Card ─────────────────────────────────────── */
 function TimelineCard({ ev, index, total, expanded, onToggle, anim }) {
   const ts = TYPE_STYLE[ev.session_type || ev.event_type] || TYPE_STYLE.other;
   const isCurrent = ev.status === 'current';
@@ -147,9 +155,7 @@ function TimelineCard({ ev, index, total, expanded, onToggle, anim }) {
           {isPast && <View style={s.doneBadge}><Text style={s.doneBadgeText}>DONE</Text></View>}
         </View>
       </View>
-
       <Text style={s.titleFeatured} numberOfLines={expanded ? 4 : 2}>{ev.title}</Text>
-
       <View style={s.metaRow}>
         <View style={s.metaItem}>
           <Ionicons name="time-outline" size={14} color="rgba(255,255,255,0.7)" />
@@ -162,13 +168,11 @@ function TimelineCard({ ev, index, total, expanded, onToggle, anim }) {
           </View>
         )}
       </View>
-
       <View style={s.badgeRow}>
         <View style={s.ghostBadge}><Ionicons name="star" size={10} color="#fde68a" /><Text style={s.ghostBadgeText}>Featured</Text></View>
         {ev.is_parallel && <View style={s.ghostBadge}><Text style={s.ghostBadgeText}>Parallel</Text></View>}
         <View style={s.ghostBadge}><Text style={s.ghostBadgeText}>Day {ev.day}</Text></View>
       </View>
-
       {expanded && (
         <Animated.View style={s.expandedWrap}>
           <View style={s.expandDividerFeatured} />
@@ -187,7 +191,6 @@ function TimelineCard({ ev, index, total, expanded, onToggle, anim }) {
           )}
         </Animated.View>
       )}
-
       <View style={s.chevronRow}>
         <Ionicons name={expanded ? 'chevron-up' : 'chevron-down'} size={18} color="rgba(255,255,255,0.5)" />
       </View>
@@ -195,7 +198,6 @@ function TimelineCard({ ev, index, total, expanded, onToggle, anim }) {
   ) : (
     <View style={[s.card, isCurrent && s.currentCard, isPast && s.pastCard]}>
       <View style={[s.accentBar, { backgroundColor: ts.color }]} />
-
       <View style={s.cardTopRow}>
         <View style={[s.typePill, { backgroundColor: ts.bg }]}>
           <Ionicons name={ts.icon} size={13} color={ts.color} />
@@ -211,9 +213,7 @@ function TimelineCard({ ev, index, total, expanded, onToggle, anim }) {
           {isPast && <View style={s.doneBadge}><Text style={s.doneBadgeText}>DONE</Text></View>}
         </View>
       </View>
-
       <Text style={s.title} numberOfLines={expanded ? 4 : 2}>{ev.title}</Text>
-
       <View style={s.metaRow}>
         <View style={s.metaItem}>
           <Ionicons name="time-outline" size={14} color={COLORS.textTer} />
@@ -226,13 +226,11 @@ function TimelineCard({ ev, index, total, expanded, onToggle, anim }) {
           </View>
         )}
       </View>
-
       <View style={s.badgeRow}>
         <View style={s.softBadge}><Text style={s.softBadgeText}>Day {ev.day}</Text></View>
         {ev.is_parallel && <View style={s.softBadge}><Text style={s.softBadgeText}>Parallel</Text></View>}
         {ev.feedback_enabled && <View style={s.softBadge}><Ionicons name="chatbox-ellipses-outline" size={10} color={COLORS.textSec} /><Text style={s.softBadgeText}>Feedback</Text></View>}
       </View>
-
       {expanded && (
         <Animated.View style={s.expandedWrap}>
           <View style={s.expandDivider} />
@@ -245,7 +243,6 @@ function TimelineCard({ ev, index, total, expanded, onToggle, anim }) {
           {!!ev.description && <Text style={s.expandDesc}>{ev.description}</Text>}
         </Animated.View>
       )}
-
       <View style={s.chevronRow}>
         <Ionicons name={expanded ? 'chevron-up' : 'chevron-down'} size={18} color={COLORS.textTer} />
       </View>
@@ -255,7 +252,6 @@ function TimelineCard({ ev, index, total, expanded, onToggle, anim }) {
   return (
     <Animated.View style={{ opacity: anim, transform: [{ translateX: slideX }, { scale }, { rotate: rotateZ }] }}>
       <View style={s.timelineRow}>
-        {/* Rail */}
         <View style={s.rail}>
           <Text style={[s.railTime, isPast && s.railTimePast]}>{formatTime(getEventDate(ev))}</Text>
           <View style={s.railTrack}>
@@ -269,8 +265,6 @@ function TimelineCard({ ev, index, total, expanded, onToggle, anim }) {
             {!isLast && <View style={[s.railLine, isPast && s.railLinePast]} />}
           </View>
         </View>
-
-        {/* Card */}
         <TouchableOpacity style={{ flex: 1 }} activeOpacity={0.9} onPress={onToggle}>
           {cardInner}
         </TouchableOpacity>
@@ -279,11 +273,12 @@ function TimelineCard({ ev, index, total, expanded, onToggle, anim }) {
   );
 }
 
-/* ─── Main Component ─────────────────────────────────────────────── */
 export default function HomeTab({
   user, tokens,
   onOpenNotifications, onOpenSponsors, onOpenSpeakers,
-  onOpenChats, onOpenQR, onOpenSchedule, onOpenLeaderboard, onOpenPhotos, chatBadge,
+  onOpenChats, onOpenQR, onOpenSchedule, onOpenLeaderboard, onOpenPhotos,
+  onOpenFeed, onOpenProfile,
+  chatBadge,
 }) {
   const [unread, setUnread] = useState(0);
   const [points, setPoints] = useState(0);
@@ -340,7 +335,6 @@ export default function HomeTab({
   const liveSession = allSorted.find(e => e.status === 'current');
   const remainingCount = Math.max(0, dayEvents.length - windowEvents.length);
 
-  // Animate cards on day change or window change
   useEffect(() => {
     cardAnims.forEach(a => a.setValue(0));
     Animated.stagger(120, windowEvents.map((_, i) =>
@@ -352,6 +346,15 @@ export default function HomeTab({
   const dayLabel = selectedDay === day
     ? (allPast ? "That's a wrap for today!" : 'Happening now')
     : selectedDay < day ? 'Completed' : 'Coming up';
+
+  const handleQuickAction = (action) => {
+    if (action === 'schedule' && onOpenSchedule) onOpenSchedule();
+    else if (action === 'sponsors' && onOpenSponsors) onOpenSponsors();
+    else if (action === 'speakers' && onOpenSpeakers) onOpenSpeakers();
+    else if (action === 'leaderboard' && onOpenLeaderboard) onOpenLeaderboard();
+    else if (action === 'photos' && onOpenPhotos) onOpenPhotos();
+    else if (action === 'feed' && onOpenFeed) onOpenFeed();
+  };
 
   return (
     <View style={{ flex: 1, backgroundColor: '#f0f4f9' }}>
@@ -365,9 +368,12 @@ export default function HomeTab({
             <Ionicons name="notifications-outline" size={26} color={COLORS.text} />
             {unread > 0 && <View style={g.notifBadge}><Text style={g.notifBadgeText}>{unread > 9 ? '9+' : unread}</Text></View>}
           </TouchableOpacity>
-          {user.profile_photo_url
-            ? <Image source={{ uri: fixMediaUrl(user.profile_photo_url) }} style={g.avatar} />
-            : <GradientAvatar name={user.first_name || user.email} size={40} radius={20} />}
+          {/* Profile avatar — tappable */}
+          <TouchableOpacity onPress={onOpenProfile} activeOpacity={0.8}>
+            {user.profile_photo_url
+              ? <Image source={{ uri: fixMediaUrl(user.profile_photo_url) }} style={g.avatar} />
+              : <GradientAvatar name={user.first_name || user.email} size={40} radius={20} />}
+          </TouchableOpacity>
         </View>
       </View>
 
@@ -415,13 +421,7 @@ export default function HomeTab({
           style={{ marginBottom: SPACE.xl }}>
           {QUICK.map(q => (
             <TouchableOpacity key={q.label} style={g.quickCard} activeOpacity={0.75}
-              onPress={() => {
-                if (q.action === 'schedule' && onOpenSchedule) onOpenSchedule();
-                if (q.action === 'sponsors' && onOpenSponsors) onOpenSponsors();
-                if (q.action === 'speakers' && onOpenSpeakers) onOpenSpeakers();
-                if (q.action === 'leaderboard' && onOpenLeaderboard) onOpenLeaderboard();
-                if (q.action === 'photos' && onOpenPhotos) onOpenPhotos();
-              }}>
+              onPress={() => handleQuickAction(q.action)}>
               <View style={[g.quickIcon, { backgroundColor: q.bg }]}><Ionicons name={q.icon} size={22} color={q.color} /></View>
               <Text style={g.quickLabel}>{q.label}</Text>
             </TouchableOpacity>
@@ -449,16 +449,19 @@ export default function HomeTab({
           contentContainerStyle={{ paddingHorizontal: PAD, gap: SPACE.md, paddingBottom: SPACE.xs }}
           style={{ marginBottom: SPACE.xl }}>
           {[
-            { label: 'RANK', value: rank > 0 ? `#${rank}` : '—' },
-            { label: 'POINTS', value: points >= 1000 ? `${(points / 1000).toFixed(1)}k` : String(points) },
-            { label: 'DAY', value: `${day}/${total}` },
+            { label: 'RANK',    value: rank > 0 ? `#${rank}` : '—' },
+            { label: 'POINTS',  value: points >= 1000 ? `${(points / 1000).toFixed(1)}k` : String(points) },
+            { label: 'DAY',     value: `${day}/${total}` },
             { label: 'PROFILE', value: user.profile_complete ? '✓ Done' : 'Pending' },
           ].map(st => (
-            <View key={st.label} style={g.statusPill}><Text style={g.statusPillLabel}>{st.label}</Text><Text style={g.statusPillValue}>{st.value}</Text></View>
+            <View key={st.label} style={g.statusPill}>
+              <Text style={g.statusPillLabel}>{st.label}</Text>
+              <Text style={g.statusPillValue}>{st.value}</Text>
+            </View>
           ))}
         </ScrollView>
 
-        {/* ═══ TIMELINE ═══ */}
+        {/* TIMELINE */}
         <View style={[g.sectionRow, { paddingHorizontal: PAD }]}>
           <Text style={g.sectionTitle}>Timeline</Text>
           <TouchableOpacity onPress={onOpenSchedule} activeOpacity={0.8}>
@@ -528,7 +531,7 @@ export default function HomeTab({
           ))}
         </View>
 
-        {/* More sessions prompt */}
+        {/* More sessions */}
         {remainingCount > 0 && (
           <TouchableOpacity style={[g.moreBtn, { marginHorizontal: PAD, marginBottom: SPACE.xl }]} activeOpacity={0.85} onPress={onOpenSchedule}>
             <LinearGradient colors={['rgba(24,86,255,0.06)', 'rgba(24,86,255,0.02)']} style={g.moreBtnInner}>
@@ -566,7 +569,6 @@ export default function HomeTab({
   );
 }
 
-/* ─── Timeline Card Styles ───────────────────────────────────────── */
 const s = StyleSheet.create({
   timelineRow: { flexDirection: 'row', gap: SPACE.md, alignItems: 'stretch' },
   rail: { width: 64, alignItems: 'center' },
@@ -577,48 +579,33 @@ const s = StyleSheet.create({
   railDotLive: { width: 20, height: 20, borderRadius: 10, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(239,68,68,0.12)' },
   railLine: { width: 3, flex: 1, marginTop: SPACE.sm, borderRadius: 4, backgroundColor: 'rgba(24,86,255,0.14)' },
   railLinePast: { backgroundColor: 'rgba(148,163,184,0.2)' },
-
-  card: {
-    backgroundColor: 'rgba(255,255,255,0.88)', borderRadius: 24, borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.96)', padding: SPACE.lg, overflow: 'hidden',
-    ...Platform.select({
-      ios: { shadowColor: '#002182', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.07, shadowRadius: 20 },
-      android: { elevation: 2 },
-    }),
-  },
+  card: { backgroundColor: 'rgba(255,255,255,0.88)', borderRadius: 24, borderWidth: 1, borderColor: 'rgba(255,255,255,0.96)', padding: SPACE.lg, overflow: 'hidden', ...Platform.select({ ios: { shadowColor: '#002182', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.07, shadowRadius: 20 }, android: { elevation: 2 } }) },
   featuredCard: { borderWidth: 0, padding: SPACE.xl },
   currentCard: { borderColor: 'rgba(24,86,255,0.2)', borderWidth: 1.5 },
   pastCard: { opacity: 0.55 },
   accentBar: { position: 'absolute', left: 0, top: 16, bottom: 16, width: 4, borderTopRightRadius: 4, borderBottomRightRadius: 4 },
-
   cardTopRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: SPACE.md },
   cardTopRight: { flexDirection: 'row', gap: SPACE.xs },
   typePill: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: SPACE.md, paddingVertical: 6, borderRadius: RADIUS.full },
   typePillText: { fontSize: 11, fontWeight: FONT.w8, letterSpacing: 0.3 },
   typePillFeatured: { backgroundColor: 'rgba(255,255,255,0.15)' },
   typePillFeaturedText: { fontSize: 11, fontWeight: FONT.w8, letterSpacing: 0.3, color: '#fff' },
-
   liveBadge: { flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: COLORS.error, paddingHorizontal: SPACE.sm, paddingVertical: 5, borderRadius: RADIUS.full },
   liveBadgeText: { fontSize: 9, fontWeight: FONT.w8, color: '#fff', letterSpacing: 0.8 },
   doneBadge: { backgroundColor: '#e2e8f0', paddingHorizontal: SPACE.sm, paddingVertical: 5, borderRadius: RADIUS.full },
   doneBadgeText: { fontSize: 9, fontWeight: FONT.w8, color: COLORS.textTer, letterSpacing: 0.8 },
-
   title: { fontSize: FONT.lg, fontWeight: FONT.w9, color: COLORS.text, lineHeight: 24, letterSpacing: -0.2 },
   titleFeatured: { fontSize: FONT.xl, fontWeight: FONT.w9, color: '#fff', lineHeight: 28, letterSpacing: -0.3 },
-
   metaRow: { flexDirection: 'row', flexWrap: 'wrap', gap: SPACE.md, marginTop: SPACE.sm },
   metaItem: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   metaText: { fontSize: FONT.xs, color: COLORS.textTer, fontWeight: FONT.w6 },
   metaTextFeatured: { fontSize: FONT.xs, color: 'rgba(255,255,255,0.72)', fontWeight: FONT.w6 },
-
   badgeRow: { flexDirection: 'row', flexWrap: 'wrap', gap: SPACE.xs, marginTop: SPACE.md },
   softBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: SPACE.sm, paddingVertical: 5, borderRadius: RADIUS.full, backgroundColor: '#eef3f8' },
   softBadgeText: { fontSize: 10, fontWeight: FONT.w7, color: COLORS.textSec, letterSpacing: 0.3 },
   ghostBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: SPACE.sm, paddingVertical: 5, borderRadius: RADIUS.full, backgroundColor: 'rgba(255,255,255,0.14)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.18)' },
   ghostBadgeText: { fontSize: 10, fontWeight: FONT.w7, color: '#fff', letterSpacing: 0.3 },
-
   chevronRow: { alignItems: 'center', marginTop: SPACE.sm },
-
   expandedWrap: { marginTop: SPACE.sm },
   expandDivider: { height: 1, backgroundColor: 'rgba(148,163,184,0.18)', marginBottom: SPACE.md },
   expandDividerFeatured: { height: 1, backgroundColor: 'rgba(255,255,255,0.14)', marginBottom: SPACE.md },
@@ -629,23 +616,13 @@ const s = StyleSheet.create({
   expandDescFeatured: { fontSize: FONT.sm, color: 'rgba(255,255,255,0.8)', lineHeight: 20 },
 });
 
-/* ─── Global Styles ──────────────────────────────────────────────── */
 const g = StyleSheet.create({
-  topbar: {
-    position: 'absolute', top: 0, left: 0, right: 0, zIndex: 50,
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingTop: Platform.OS === 'ios' ? 54 : 44,
-    paddingBottom: SPACE.md, paddingHorizontal: PAD, backgroundColor: 'rgba(240,244,249,0.92)',
-  },
+  topbar: { position: 'absolute', top: 0, left: 0, right: 0, zIndex: 50, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingTop: Platform.OS === 'ios' ? 54 : 44, paddingBottom: SPACE.md, paddingHorizontal: PAD, backgroundColor: 'rgba(240,244,249,0.92)' },
   topbarBrand: { fontSize: FONT.xxl, fontWeight: FONT.w8, color: COLORS.brand, letterSpacing: -0.3 },
   notifBadge: { position: 'absolute', top: -3, right: -3, minWidth: 16, height: 16, borderRadius: 8, backgroundColor: COLORS.error, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 3, borderWidth: 2, borderColor: '#f0f4f9' },
   notifBadgeText: { fontSize: 9, fontWeight: FONT.w8, color: '#fff' },
   avatar: { width: 40, height: 40, borderRadius: 20, borderWidth: 2, borderColor: COLORS.border },
-
-  heroCard: {
-    backgroundColor: COLORS.brand, borderRadius: 32, padding: SPACE.xxl, overflow: 'hidden',
-    ...Platform.select({ ios: { shadowColor: COLORS.brand, shadowOffset: { width: 0, height: 12 }, shadowOpacity: 0.4, shadowRadius: 24 }, android: { elevation: 8 } }),
-  },
+  heroCard: { backgroundColor: COLORS.brand, borderRadius: 32, padding: SPACE.xxl, overflow: 'hidden', ...Platform.select({ ios: { shadowColor: COLORS.brand, shadowOffset: { width: 0, height: 12 }, shadowOpacity: 0.4, shadowRadius: 24 }, android: { elevation: 8 } }) },
   blob1: { position: 'absolute', width: 220, height: 220, borderRadius: 110, backgroundColor: 'rgba(255,255,255,0.06)', top: -80, right: -60 },
   blob2: { position: 'absolute', width: 160, height: 160, borderRadius: 80, backgroundColor: 'rgba(245,158,11,0.08)', bottom: -40, left: -40 },
   heroTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: SPACE.xl },
@@ -660,11 +637,7 @@ const g = StyleSheet.create({
   progressPct: { fontSize: 10, fontWeight: FONT.w8, color: 'rgba(255,255,255,0.7)' },
   progressTrack: { height: 4, backgroundColor: 'rgba(255,255,255,0.12)', borderRadius: 2, overflow: 'hidden' },
   progressFill: { height: '100%', borderRadius: 2, backgroundColor: '#fff' },
-
-  glassCard: {
-    backgroundColor: 'rgba(255,255,255,0.72)', borderRadius: 28, borderWidth: 1, borderColor: 'rgba(255,255,255,0.9)', padding: SPACE.xl,
-    ...Platform.select({ ios: { shadowColor: '#002182', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.06, shadowRadius: 16 }, android: { elevation: 0 } }),
-  },
+  glassCard: { backgroundColor: 'rgba(255,255,255,0.72)', borderRadius: 28, borderWidth: 1, borderColor: 'rgba(255,255,255,0.9)', padding: SPACE.xl, ...Platform.select({ ios: { shadowColor: '#002182', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.06, shadowRadius: 16 }, android: { elevation: 0 } }) },
   liveTopRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: SPACE.md },
   livePill: { flexDirection: 'row', alignItems: 'center', gap: SPACE.sm, backgroundColor: COLORS.error, paddingHorizontal: SPACE.md, paddingVertical: 6, borderRadius: RADIUS.full },
   livePillText: { fontSize: 10, fontWeight: FONT.w8, color: '#fff', letterSpacing: 1 },
@@ -672,28 +645,20 @@ const g = StyleSheet.create({
   liveTitle: { fontSize: FONT.xl + 2, fontWeight: FONT.w9, color: COLORS.brand, letterSpacing: -0.3, marginBottom: SPACE.xs },
   liveMeta: { fontSize: FONT.sm, color: COLORS.textTer, marginBottom: 2 },
   liveSpeaker: { fontSize: FONT.base, color: COLORS.textSec },
-
   sectionTitle: { fontSize: 28, fontWeight: FONT.w9, color: COLORS.brand, letterSpacing: -0.5, marginBottom: SPACE.md },
   sectionRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end' },
   seeFullBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: COLORS.brandLight, paddingHorizontal: SPACE.md, paddingVertical: SPACE.sm, borderRadius: RADIUS.full, marginBottom: SPACE.md },
   seeFullText: { fontSize: FONT.xs, fontWeight: FONT.w8, color: COLORS.brand, letterSpacing: 0.5 },
-
   quickCard: { borderRadius: 24, paddingHorizontal: SPACE.lg, paddingVertical: SPACE.lg, alignItems: 'flex-start', gap: SPACE.md, minWidth: 100, backgroundColor: 'rgba(255,255,255,0.6)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.9)' },
   quickIcon: { width: 42, height: 42, borderRadius: 21, alignItems: 'center', justifyContent: 'center' },
   quickLabel: { fontSize: FONT.sm, fontWeight: FONT.w6, color: COLORS.text },
-
-  dualBtn: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: SPACE.sm, paddingVertical: SPACE.lg + 2, borderRadius: 20,
-    ...Platform.select({ ios: { shadowColor: COLORS.text, shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.18, shadowRadius: 12 }, android: { elevation: 4 } }),
-  },
+  dualBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: SPACE.sm, paddingVertical: SPACE.lg + 2, borderRadius: 20, ...Platform.select({ ios: { shadowColor: COLORS.text, shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.18, shadowRadius: 12 }, android: { elevation: 4 } }) },
   dualBtnText: { fontSize: FONT.sm, fontWeight: FONT.w8, color: '#fff', letterSpacing: 0.2 },
   chatBadge: { position: 'absolute', top: -6, right: -4, minWidth: 22, height: 22, borderRadius: 11, backgroundColor: COLORS.error, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 4, borderWidth: 2.5, borderColor: '#f0f4f9' },
   chatBadgeText: { fontSize: 10, fontWeight: FONT.w8, color: '#fff' },
-
   statusPill: { flexDirection: 'row', alignItems: 'center', gap: SPACE.md, backgroundColor: 'rgba(255,255,255,0.72)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.9)', paddingHorizontal: SPACE.lg, paddingVertical: SPACE.md, borderRadius: RADIUS.full },
   statusPillLabel: { fontSize: 10, fontWeight: FONT.w8, color: COLORS.textTer, letterSpacing: 1.5 },
   statusPillValue: { fontSize: FONT.xl, fontWeight: FONT.w9, color: COLORS.text },
-
   dayChip: { flexDirection: 'row', alignItems: 'center', gap: SPACE.xs, paddingHorizontal: SPACE.lg, paddingVertical: SPACE.md, borderRadius: RADIUS.full, backgroundColor: 'rgba(255,255,255,0.75)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.95)' },
   dayChipText: { fontSize: FONT.sm, fontWeight: FONT.w7, color: COLORS.text },
   dayChipCount: { backgroundColor: '#eef3f8', width: 22, height: 22, borderRadius: 11, alignItems: 'center', justifyContent: 'center' },
@@ -706,18 +671,15 @@ const g = StyleSheet.create({
   dayChipCountActiveText: { fontSize: 10, fontWeight: FONT.w8, color: '#fff' },
   autoIndicator: { width: 8, height: 8, borderRadius: 4, backgroundColor: 'rgba(255,255,255,0.3)', alignItems: 'center', justifyContent: 'center' },
   autoDot: { width: 4, height: 4, borderRadius: 2, backgroundColor: '#fff' },
-
   dayContextRow: { flexDirection: 'row', alignItems: 'center' },
   dayContextDot: { width: 8, height: 8, borderRadius: 4, marginRight: SPACE.sm },
   dayContextText: { fontSize: FONT.md, fontWeight: FONT.w8, color: COLORS.text },
   dayContextSub: { fontSize: FONT.md, fontWeight: FONT.w6, color: COLORS.textTer },
-
   moreBtn: { borderRadius: 20, overflow: 'hidden' },
   moreBtnInner: { flexDirection: 'row', alignItems: 'center', gap: SPACE.md, paddingVertical: SPACE.lg, paddingHorizontal: SPACE.xl, borderRadius: 20, borderWidth: 1, borderColor: 'rgba(24,86,255,0.12)' },
   moreBtnIcon: { width: 40, height: 40, borderRadius: 20, backgroundColor: COLORS.brandLight, alignItems: 'center', justifyContent: 'center' },
   moreBtnTitle: { fontSize: FONT.sm, fontWeight: FONT.w8, color: COLORS.brand },
   moreBtnSub: { fontSize: FONT.xs, color: COLORS.textTer, marginTop: 2 },
-
   annCard: { borderRadius: 32, overflow: 'hidden', marginTop: SPACE.sm, ...SHADOW.lg },
   annTop: { height: 120, alignItems: 'center', justifyContent: 'center' },
   annBottom: { backgroundColor: COLORS.text, padding: SPACE.xl },

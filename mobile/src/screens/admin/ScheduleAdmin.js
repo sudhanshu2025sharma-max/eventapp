@@ -51,7 +51,18 @@ function pad(n) { return n.toString().padStart(2, '0'); }
 function fmtTime(dt) {
   if (!dt) return '';
   const d = new Date(dt);
-  return pad(d.getHours()) + ':' + pad(d.getMinutes());
+  try {
+    return d.toLocaleTimeString('en-IN', {
+      hour: '2-digit', minute: '2-digit', hour12: false,
+      timeZone: 'Asia/Kolkata',
+    });
+  } catch {
+    const h = d.getUTCHours() + 5;
+    const m = d.getUTCMinutes() + 30;
+    const adjH = m >= 60 ? h + 1 : h;
+    const adjM = m >= 60 ? m - 60 : m;
+    return `${String(adjH % 24).padStart(2, '0')}:${String(adjM).padStart(2, '0')}`;
+  }
 }
 function authH(tokens) {
   return { ...API_HEADERS, Authorization: `Bearer ${tokens.access}` };
@@ -125,7 +136,8 @@ function DateTimePickerModal({ visible, value, onSelect, onClose, label }) {
 
   const confirm = () => {
     const h24 = to24(hour12, ampm);
-    const iso = `${dateStr}T${pad(h24)}:${pad(minute)}:00`;
+    // Append +05:30 so JavaScript and backend both know this is IST
+    const iso = `${dateStr}T${pad(h24)}:${pad(minute)}:00+05:30`;
     onSelect(iso);
   };
 

@@ -2,6 +2,16 @@ from django.db import models
 
 
 class Speaker(models.Model):
+
+    user = models.OneToOneField(
+    'accounts.User',
+    on_delete=models.SET_NULL,
+    null=True,
+    blank=True,
+    related_name='speaker_profile',
+    help_text='Link to user account for chat/login'
+    )
+    
     TITLE_CHOICES = [
         ('prof', 'Prof.'),
         ('dr',   'Dr.'),

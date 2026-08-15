@@ -94,7 +94,8 @@ export const TOP = Platform.OS === 'ios' ? 54 : 44;
 
 // Phone → ngrok
 // Web   → Codespaces public port
-const NGROK      = 'https://bauble-aftermost-buffalo.ngrok-free.dev/api/v1';
+// const NGROK      = 'https://bauble-aftermost-buffalo.ngrok-free.dev/api/v1';
+const NGROK = 'http://10.17.9.48:8000/api/v1'; // Use the VM IP
 const CODESPACES = 'https://cautious-eureka-jj56xxggr9vpcq9qj-8000.app.github.dev/api/v1';
 
 export const API_URL  = NGROK; // both web + native use ngrok

@@ -14,6 +14,8 @@ import CheckInScreen        from './CheckInScreen';
 import ScheduleAdmin        from './ScheduleAdmin';
 import LeaderboardAdmin     from '../LeaderboardScreen';
 import PhotosAdmin          from './PhotosAdmin';
+import PollsAdmin           from './PollsAdmin';
+import IdeathonAdmin        from './IdeathonAdmin';
 
 const CARD_SIZE = (Dimensions.get('window').width - SPACE.xl * 2 - SPACE.md) / 2;
 
@@ -67,6 +69,20 @@ const FEATURES = [
     sub:  'Moderate uploads & wall',
     grad: ['#059669', '#047857'],
   },
+  {
+    key:  'polls_admin',
+    icon: 'stats-chart',
+    label:'Live Polls',
+    sub:  'Create, start & monitor polls',
+    grad: [COLORS.accent, '#b45309'],
+  },
+  {
+    key:  'ideathon_admin',
+    icon: 'bulb',
+    label:'Ideathon',
+    sub:  'Teams & audience voting',
+    grad: ['#667eea', '#764ba2'],
+  },
 ];
 
 function FeatureCube({ feat, onPress }) {
@@ -105,7 +121,9 @@ export default function AdminTab({ user, tokens, onLogout }) {
   if (screen === 'schedule')        return <ScheduleAdmin        tokens={tokens} onBack={() => setScreen(null)} />;
 
   
-  if (screen === 'leaderboard') return <LeaderboardAdmin onBack={() => setScreen(null)} />;
+  if (screen === 'leaderboard')   return <LeaderboardAdmin onBack={() => setScreen(null)} />;
+  if (screen === 'polls_admin')   return <PollsAdmin    tokens={tokens} onBack={() => setScreen(null)} />;
+  if (screen === 'ideathon_admin') return <IdeathonAdmin tokens={tokens} onBack={() => setScreen(null)} />;
   if (screen === 'photos') return <PhotosAdmin onBack={() => setScreen(null)} />;
 return (
     <View style={{ flex: 1, backgroundColor: COLORS.bg }}>

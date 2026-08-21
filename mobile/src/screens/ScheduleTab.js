@@ -1,12 +1,31 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View, Text, TouchableOpacity, ScrollView, StyleSheet, Platform,
-  Animated, ActivityIndicator, Modal, TextInput, Alert,
+  Animated, ActivityIndicator, Modal, TextInput, Alert, KeyboardAvoidingView,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, FONT, SPACE, RADIUS, SHADOW, TOP, API_URL, API_HEADERS } from '../theme';
+import { useKeyboardHeight } from '../useKeyboard';
 import { FadeIn, PulsingDot, Badge } from '../components';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
+/* ── Schedule cache (1-hour TTL, bypasses cache.js 5-min default) ── */
+const CACHE_TTL = 3600000; // 1 hour
+async function readScheduleCache(day) {
+  try {
+    const raw = await AsyncStorage.getItem(`etd2026_schedule_day_${day}`);
+    if (!raw) return null;
+    const { data, ts } = JSON.parse(raw);
+    // return stale data regardless of age — caller decides freshness
+    return { data, stale: Date.now() - ts > CACHE_TTL };
+  } catch { return null; }
+}
+async function writeScheduleCache(day, data) {
+  try {
+    await AsyncStorage.setItem(`etd2026_schedule_day_${day}`, JSON.stringify({ data, ts: Date.now() }));
+  } catch { /* silent */ }
+}
 
 /* ── Skeleton Loading ───────────────────────────────────────────────────── */
 function Skeleton({ width, height = 14, radius = 6, style }) {
@@ -339,6 +358,8 @@ function SessionCard({ session, onBookmark, onFeedback }) {
 
 /* ── Feedback Modal ────────────────────────────────────────────────────── */
 function FeedbackModal({ visible, session, tokens, onClose }) {
+  const kbHeight = useKeyboardHeight();
+  const scrollRef = useRef(null);
   const [form, setForm] = useState(null);
   const [answers, setAnswers] = useState({});
   const [loading, setLoading] = useState(true);
@@ -399,7 +420,8 @@ function FeedbackModal({ visible, session, tokens, onClose }) {
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={() => onClose(false)}>
       <View style={f.overlay}>
-        <View style={f.modal}>
+        <TouchableOpacity style={{ flex: 1 }} onPress={() => onClose(false)} />
+        <View style={[f.modal, kbHeight > 0 && { height: '85%' }]}>
           {/* Header */}
           <View style={f.header}>
             <View style={{ flex: 1 }}>
@@ -411,7 +433,13 @@ function FeedbackModal({ visible, session, tokens, onClose }) {
             </TouchableOpacity>
           </View>
 
-          <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: SPACE.xl }} showsVerticalScrollIndicator={false}>
+          <ScrollView
+            ref={scrollRef}
+            style={{ flex: 1 }}
+            contentContainerStyle={{ padding: SPACE.xl, paddingBottom: kbHeight > 0 ? kbHeight + 20 : 30 }}
+            showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+          >
             {loading && <ActivityIndicator color={COLORS.brand} style={{ marginTop: SPACE.xxl }} />}
             {!!error && (
               <View style={f.errBox}>
@@ -469,6 +497,7 @@ function FeedbackModal({ visible, session, tokens, onClose }) {
                     value={answers[q.id]?.text_value || ''}
                     onChangeText={v => setAnswer(q.id, 'text_value', v)}
                     maxLength={500}
+                    onFocus={() => setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 350)}
                   />
                 )}
               </View>
@@ -485,7 +514,6 @@ function FeedbackModal({ visible, session, tokens, onClose }) {
                 </LinearGradient>
               </TouchableOpacity>
             )}
-            <View style={{ height: 40 }} />
           </ScrollView>
         </View>
       </View>
@@ -564,6 +592,8 @@ export default function ScheduleTab({ tokens }) {
   const [loading, setLoading] = useState(true);
   const [feedbackSession, setFeedbackSession] = useState(null);
   const [reminderSession, setReminderSession] = useState(null);
+  const [offline, setOffline] = useState(false);          // day tabs from cache
+  const [bookmarkOffline, setBookmarkOffline] = useState(false); // bookmarks need connection
   const scrollRef = useRef(null);
 
   const auth = tokens?.access
@@ -574,30 +604,60 @@ export default function ScheduleTab({ tokens }) {
     try {
       const res = await fetch(`${API_URL}/schedule/sessions/?day=${day}`, { headers: auth });
       const data = await res.json();
-      return data.sessions || [];
-    } catch { return []; }
+      const sessions = data.sessions || [];
+      writeScheduleCache(day, sessions); // always refresh cache on success
+      return { sessions, fromCache: false };
+    } catch {
+      // network failed — fall back to cache (stale or fresh)
+      const cached = await readScheduleCache(day);
+      if (cached) return { sessions: cached.data, fromCache: true };
+      return { sessions: [], fromCache: false };
+    }
   }, [tokens]);
 
   const fetchBookmarks = useCallback(async () => {
-    if (!tokens?.access) return [];
+    if (!tokens?.access) { setBookmarkOffline(true); return []; }
     try {
       const res = await fetch(`${API_URL}/schedule/bookmarks/`, { headers: auth });
       const data = await res.json();
+      setBookmarkOffline(false);
       return (data.bookmarks || []).map(b => ({ ...b.session, is_bookmarked: true, bookmark_reminder: b.reminder_minutes }));
-    } catch { return []; }
+    } catch { setBookmarkOffline(true); return []; }
   }, [tokens]);
 
-  const fetchAll = useCallback(async () => {
-    setLoading(true);
-    const [d1, d2, d3, bm] = await Promise.all([
+  // Seed UI from cache immediately, no skeleton shown if cache exists
+  const seedFromCache = useCallback(async () => {
+    const [c1, c2, c3] = await Promise.all([
+      readScheduleCache(1), readScheduleCache(2), readScheduleCache(3),
+    ]);
+    if (c1 || c2 || c3) {
+      setSessions({
+        1: c1?.data || [],
+        2: c2?.data || [],
+        3: c3?.data || [],
+      });
+      setLoading(false); // show cached data immediately, no skeleton
+    }
+  }, []);
+
+  const fetchAll = useCallback(async (silent = false) => {
+    if (!silent) setLoading(true);
+    const [r1, r2, r3, bm] = await Promise.all([
       fetchDay(1), fetchDay(2), fetchDay(3), fetchBookmarks(),
     ]);
-    setSessions({ 1: d1, 2: d2, 3: d3 });
+    setSessions({ 1: r1.sessions, 2: r2.sessions, 3: r3.sessions });
     setBookmarks(bm);
+    setOffline(r1.fromCache || r2.fromCache || r3.fromCache);
     setLoading(false);
   }, [fetchDay, fetchBookmarks]);
 
-  useEffect(() => { fetchAll(); }, [fetchAll]);
+  useEffect(() => {
+    // 1. Paint from cache instantly
+    seedFromCache().then(() => {
+      // 2. Refresh from network silently in background
+      fetchAll(true);
+    });
+  }, []);  // run once on mount — fetchAll via ref avoids stale closure
 
   // Find detail for expanded sessions
   const fetchDetail = async (id) => {
@@ -639,6 +699,27 @@ export default function ScheduleTab({ tokens }) {
         <TabBar active={activeTab} onTab={setActiveTab} />
       </View>
 
+      {/* Offline banner */}
+      {!loading && offline && (
+        <View style={{ backgroundColor: '#7c3aed22', borderBottomWidth: 1, borderColor: '#7c3aed44',
+          paddingHorizontal: SPACE.xl, paddingVertical: SPACE.sm,
+          flexDirection: 'row', alignItems: 'center', gap: SPACE.sm }}>
+          <Ionicons name="cloud-offline-outline" size={15} color={COLORS.purple} />
+          <Text style={{ fontSize: FONT.xs, color: COLORS.purple, fontWeight: FONT.w6 }}>
+            Offline — showing cached schedule
+          </Text>
+        </View>
+      )}
+      {!loading && bookmarkOffline && activeTab === 'bookmarks' && (
+        <View style={{ backgroundColor: '#f59e0b22', borderBottomWidth: 1, borderColor: '#f59e0b44',
+          paddingHorizontal: SPACE.xl, paddingVertical: SPACE.sm,
+          flexDirection: 'row', alignItems: 'center', gap: SPACE.sm }}>
+          <Ionicons name="wifi-outline" size={15} color={COLORS.warning} />
+          <Text style={{ fontSize: FONT.xs, color: COLORS.warning, fontWeight: FONT.w6 }}>
+            Bookmarks need a connection
+          </Text>
+        </View>
+      )}
       {loading ? (
         <ScheduleSkeleton />
       ) : (
@@ -813,7 +894,7 @@ const f = StyleSheet.create({
   overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
   modal: {
     backgroundColor: COLORS.surface, borderTopLeftRadius: 28, borderTopRightRadius: 28,
-    maxHeight: '85%', minHeight: 300,
+    height: '55%',
   },
   header: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',

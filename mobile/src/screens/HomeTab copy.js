@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import {
   View, Text, TouchableOpacity, ScrollView, Image,
-  StyleSheet, Platform, StatusBar, Animated, Easing, PanResponder,
+  StyleSheet, Platform, StatusBar, Animated, Easing,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
@@ -12,16 +12,16 @@ import { PulsingDot, GradientAvatar } from '../components';
 const PAD = SPACE.xl;
 const TIMELINE_WINDOW = 3;
 
-// Quick actions — 8 items in an organized grid
 const QUICK = [
-  { icon: 'ribbon-outline',      label: 'Sponsors',     grad: [COLORS.brand,   COLORS.brandDark],  action: 'sponsors' },
-  { icon: 'mic-outline',         label: 'Speakers',     grad: ['#7c3aed',      '#6d28d9'],          action: 'speakers' },
-  { icon: 'camera-outline',      label: 'Photos',       grad: [COLORS.success, '#059669'],          action: 'photos' },
-  { icon: 'location-outline',    label: 'Selfie Spots', grad: ['#ec4899',      '#be185d'],          action: 'selfie_spots' },
-  { icon: 'stats-chart-outline', label: 'Live Polls',   grad: [COLORS.accent,  COLORS.accentDark], action: 'polls' },
-  { icon: 'bulb-outline',        label: 'Ideathon',     grad: ['#0ea5e9',      '#0284c7'],          action: 'ideathon' },
-  { icon: 'trophy-outline',      label: 'Leaderboard',  grad: [COLORS.rose,    '#e11d48'],          action: 'leaderboard' },
-  { icon: 'time-outline',        label: 'Schedule',     grad: ['#3b82f6',      '#1d4ed8'],          action: 'schedule' },
+  { icon: 'calendar-outline',    label: 'Schedule',    color: COLORS.brand,   bg: COLORS.brandLight,   action: 'schedule' },
+  { icon: 'ribbon-outline',      label: 'Sponsors',    color: COLORS.brand,   bg: COLORS.brandLight,   action: 'sponsors' },
+  { icon: 'mic-outline',         label: 'Speakers',    color: COLORS.purple,  bg: COLORS.purpleLight,  action: 'speakers' },
+  { icon: 'camera-outline',      label: 'Photos',      color: COLORS.success, bg: COLORS.successLight, action: 'photos' },
+  { icon: 'newspaper-outline',   label: 'Feed',        color: COLORS.purple,  bg: COLORS.purpleLight,  action: 'feed' },
+  { icon: 'people-outline',      label: 'Directory',   color: COLORS.teal,    bg: COLORS.tealLight     },
+  { icon: 'stats-chart-outline', label: 'Polls',       color: COLORS.accent,  bg: COLORS.accentLight,  action: 'polls' },
+  { icon: 'bulb-outline',         label: 'Ideathon',    color: COLORS.purple,  bg: COLORS.purpleLight,  action: 'ideathon' },
+  { icon: 'trophy-outline',      label: 'Leaderboard', color: COLORS.rose,    bg: COLORS.roseLight,    action: 'leaderboard' },
 ];
 
 const TYPE_STYLE = {
@@ -73,7 +73,7 @@ function formatTime(d) {
       timeZone: 'Asia/Kolkata',
     });
   } catch {
-    const total = d.getUTCHours() * 60 + d.getUTCMinutes() + 330;
+    const total = d.getUTCHours() * 60 + d.getUTCMinutes() + 330; // +05:30
     const mins = ((total % 1440) + 1440) % 1440;
     const h24 = Math.floor(mins / 60);
     const m = mins % 60;
@@ -274,123 +274,11 @@ function TimelineCard({ ev, index, total, expanded, onToggle, anim }) {
   );
 }
 
-// ── Quick Action Card ────────────────────────────────────────────────────────
-function QuickCard({ item, onPress }) {
-  return (
-    <TouchableOpacity style={qc.cell} onPress={onPress} activeOpacity={0.8}>
-      <LinearGradient colors={item.grad || [COLORS.brand, COLORS.brandDark]} style={qc.grad} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}>
-        <View style={qc.iconWrap}>
-          <Ionicons name={item.icon} size={20} color="#fff" />
-        </View>
-        <Text style={qc.label} numberOfLines={1}>{item.label}</Text>
-      </LinearGradient>
-    </TouchableOpacity>
-  );
-}
-
-const qc = StyleSheet.create({
-  cell: { width: '23.5%', borderRadius: 16, overflow: 'hidden', marginBottom: SPACE.sm },
-  grad: { paddingVertical: SPACE.md, alignItems: 'center', gap: 4, minHeight: 74 },
-  iconWrap: { width: 34, height: 34, borderRadius: 17, backgroundColor: 'rgba(255,255,255,0.22)', alignItems: 'center', justifyContent: 'center' },
-  label: { fontSize: 9.5, fontWeight: FONT.w7, color: '#fff', textAlign: 'center' },
-});
-
-// ── Announcement Deck ───────────────────────
-const ANN_GRADS = [
-  [COLORS.brand, COLORS.brandDark], ['#7c3aed','#6d28d9'], ['#0ea5e9','#0284c7'],
-  [COLORS.success,'#059669'], [COLORS.rose,'#e11d48'],
-];
-
-function AnnouncementDeck({ notifications, onOpenNotifications }) {
-  const total = notifications.length;
-  const idxRef = useRef(0);
-  const [displayIdx, setDisplayIdx] = useState(0);
-  const tx = useRef(new Animated.Value(0)).current;
-
-  const swipe = useCallback((dir) => {
-    const cur = idxRef.current;
-    const next = cur + dir;
-    if (next < 0) return;
-    if (next >= total) {
-      onOpenNotifications();
-      return;
-    }
-    Animated.timing(tx, { toValue: -dir * 360, duration: 200, useNativeDriver: true }).start(() => {
-      idxRef.current = next;
-      setDisplayIdx(next);
-      tx.setValue(dir * 360);
-      Animated.spring(tx, { toValue: 0, useNativeDriver: true, tension: 180, friction: 14 }).start();
-    });
-  }, [total, onOpenNotifications, tx]);
-
-  const pan = useRef(
-    PanResponder.create({
-      onMoveShouldSetPanResponder: (_, g) => Math.abs(g.dx) > 10 && Math.abs(g.dy) < 50,
-      onPanResponderMove: (_, g) => tx.setValue(g.dx * 0.4),
-      onPanResponderRelease: (_, g) => {
-        if      (g.dx < -40) swipe(1);
-        else if (g.dx >  40) swipe(-1);
-        else Animated.spring(tx, { toValue: 0, useNativeDriver: true, tension: 200 }).start();
-      },
-    })
-  ).current;
-
-  const n = notifications[displayIdx];
-  if (!n) return null;
-  const grad = ANN_GRADS[displayIdx % ANN_GRADS.length];
-
-  return (
-    <View style={dk.wrap}>
-      {displayIdx + 2 < total && <View style={[dk.bg, dk.bg3]} />}
-      {displayIdx + 1 < total && <View style={[dk.bg, dk.bg2]} />}
-      <Animated.View style={[dk.card, { transform: [{ translateX: tx }] }]} {...pan.panHandlers}>
-        <LinearGradient colors={grad} style={dk.grad} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}>
-          <View style={dk.row}>
-            <View style={dk.iconBox}><Ionicons name="megaphone" size={16} color="rgba(255,255,255,0.9)" /></View>
-            <Text style={dk.time}>{timeAgo(n.delivered_at || n.created_at)}</Text>
-          </View>
-          <Text style={dk.title} numberOfLines={2}>{n.title}</Text>
-          <Text style={dk.body}  numberOfLines={2}>{n.body}</Text>
-          <View style={dk.foot}>
-            <View style={dk.dots}>
-              {notifications.map((_, i) => <View key={i} style={[dk.dot, i === displayIdx && dk.dotOn]} />)}
-            </View>
-            <Text style={dk.hint}>{displayIdx === total - 1 ? 'swipe → all' : `${displayIdx + 1}/${total}`}</Text>
-          </View>
-        </LinearGradient>
-      </Animated.View>
-    </View>
-  );
-}
-
-const dk = StyleSheet.create({
-  wrap: { position: 'relative', height: 168, marginTop: SPACE.sm },
-  bg:   { position: 'absolute', left: 4, right: 4, borderRadius: 22 },
-  bg2:  { top: 6, bottom: -6, backgroundColor: 'rgba(3,51,182,0.18)' },
-  bg3:  { top: 12, bottom: -12, backgroundColor: 'rgba(3,51,182,0.09)' },
-  card: {
-    position: 'absolute', left: 0, right: 0, top: 0, bottom: 0,
-    borderRadius: 22, overflow: 'hidden',
-    ...Platform.select({ ios: { shadowColor: '#002182', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.18, shadowRadius: 14 }, android: { elevation: 4 }, default: {} }),
-  },
-  grad:    { flex: 1, padding: SPACE.lg, gap: SPACE.sm },
-  row:     { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  iconBox: { width: 30, height: 30, borderRadius: 15, backgroundColor: 'rgba(255,255,255,0.18)', alignItems: 'center', justifyContent: 'center' },
-  time:    { fontSize: 10, color: 'rgba(255,255,255,0.55)', fontWeight: FONT.w6 },
-  title:   { fontSize: FONT.md, fontWeight: FONT.w9, color: '#fff', lineHeight: 21 },
-  body:    { flex: 1, fontSize: FONT.xs, color: 'rgba(255,255,255,0.78)', lineHeight: 17 },
-  foot:    { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  dots:    { flexDirection: 'row', gap: 4 },
-  dot:     { width: 5, height: 5, borderRadius: 3, backgroundColor: 'rgba(255,255,255,0.3)' },
-  dotOn:   { width: 14, height: 5, borderRadius: 3, backgroundColor: '#fff' },
-  hint:    { fontSize: 9, color: 'rgba(255,255,255,0.45)', fontWeight: FONT.w6 },
-});
-
 export default function HomeTab({
   user, tokens,
   onOpenNotifications, onOpenSponsors, onOpenSpeakers,
   onOpenChats, onOpenQR, onOpenSchedule, onOpenLeaderboard, onOpenPhotos,
-  onOpenFeed, onOpenProfile, onOpenPolls, onOpenIdeathon, onOpenSelfieSpots,
+  onOpenFeed, onOpenProfile, onOpenPolls, onOpenIdeathon,
   chatBadge,
 }) {
   const [unread, setUnread] = useState(0);
@@ -398,7 +286,7 @@ export default function HomeTab({
   const [rank, setRank] = useState(0);
   const [conf, setConf] = useState(DEFAULT_CONF);
   const [allEvents, setAllEvents] = useState([]);
-  const [recentNotifs, setRecentNotifs] = useState([]);
+  const [latestNotif, setLatestNotif] = useState(null);
   const [selectedDay, setSelectedDay] = useState(1);
   const [expandedId, setExpandedId] = useState(null);
   const tokensRef = useRef(null);
@@ -425,9 +313,7 @@ export default function HomeTab({
     if (p) { setPoints(p.total_points || 0); setRank(p.rank || 0); }
     if (c) setConf(prev => ({ ...prev, ...c }));
     if (ev?.sessions) setAllEvents(ev.sessions);
-    if (notif?.notifications?.length) {
-      setRecentNotifs(notif.notifications.slice(0, 5));
-    }
+    if (notif?.notifications?.length) setLatestNotif(notif.notifications[0]);
   }, [tokens]);
 
   useEffect(() => {
@@ -463,17 +349,14 @@ export default function HomeTab({
     : selectedDay < day ? 'Completed' : 'Coming up';
 
   const handleQuickAction = (action) => {
-    if (action === 'schedule'        && onOpenSchedule)    onOpenSchedule();
-    else if (action === 'sponsors'   && onOpenSponsors)    onOpenSponsors();
-    else if (action === 'speakers'   && onOpenSpeakers)    onOpenSpeakers();
-    else if (action === 'leaderboard'&& onOpenLeaderboard) onOpenLeaderboard();
-    else if (action === 'photos'     && onOpenPhotos)      onOpenPhotos();
-    else if (action === 'selfie_spots' && onOpenSelfieSpots) onOpenSelfieSpots();
-    else if (action === 'feed'       && onOpenFeed)        onOpenFeed();
-    else if (action === 'polls'      && onOpenPolls)       onOpenPolls();
-    else if (action === 'ideathon'   && onOpenIdeathon)    onOpenIdeathon();
-    else if (action === 'qr'         && onOpenQR)          onOpenQR();
-    else if (action === 'chats'      && onOpenChats)       onOpenChats();
+    if (action === 'schedule' && onOpenSchedule) onOpenSchedule();
+    else if (action === 'sponsors' && onOpenSponsors) onOpenSponsors();
+    else if (action === 'speakers' && onOpenSpeakers) onOpenSpeakers();
+    else if (action === 'leaderboard' && onOpenLeaderboard) onOpenLeaderboard();
+    else if (action === 'photos' && onOpenPhotos) onOpenPhotos();
+    else if (action === 'feed' && onOpenFeed) onOpenFeed();
+    else if (action === 'polls' && onOpenPolls) onOpenPolls();
+    else if (action === 'ideathon' && onOpenIdeathon) onOpenIdeathon();
   };
 
   return (
@@ -488,6 +371,7 @@ export default function HomeTab({
             <Ionicons name="notifications-outline" size={26} color={COLORS.text} />
             {unread > 0 && <View style={g.notifBadge}><Text style={g.notifBadgeText}>{unread > 9 ? '9+' : unread}</Text></View>}
           </TouchableOpacity>
+          {/* Profile avatar — tappable */}
           <TouchableOpacity onPress={onOpenProfile} activeOpacity={0.8}>
             {user.profile_photo_url
               ? <Image source={{ uri: fixMediaUrl(user.profile_photo_url) }} style={g.avatar} />
@@ -533,15 +417,19 @@ export default function HomeTab({
           </View>
         )}
 
-        {/* Quick Actions 4x2 Grid */}
-        <View style={{ paddingHorizontal: PAD, marginBottom: SPACE.xl }}>
-          <Text style={g.sectionTitle}>Quick Access</Text>
-          <View style={g.quickGrid}>
-            {QUICK.map((q) => (
-              <QuickCard key={q.label} item={q} onPress={() => handleQuickAction(q.action)} />
-            ))}
-          </View>
-        </View>
+        {/* Quick Actions */}
+        <Text style={[g.sectionTitle, { paddingHorizontal: PAD }]}>Quick Actions</Text>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false}
+          contentContainerStyle={{ paddingHorizontal: PAD, gap: SPACE.md, paddingBottom: SPACE.xs }}
+          style={{ marginBottom: SPACE.xl }}>
+          {QUICK.map(q => (
+            <TouchableOpacity key={q.label} style={g.quickCard} activeOpacity={0.75}
+              onPress={() => handleQuickAction(q.action)}>
+              <View style={[g.quickIcon, { backgroundColor: q.bg }]}><Ionicons name={q.icon} size={22} color={q.color} /></View>
+              <Text style={g.quickLabel}>{q.label}</Text>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
 
         {/* QR + Chats */}
         <View style={{ paddingHorizontal: PAD, marginBottom: SPACE.xl, flexDirection: 'row', gap: SPACE.md }}>
@@ -558,32 +446,23 @@ export default function HomeTab({
           </TouchableOpacity>
         </View>
 
-        {/* My Status — compact strip */}
-        <View style={{ paddingHorizontal: PAD, marginBottom: SPACE.lg }}>
-          <View style={g.statusStrip}>
-            <View style={g.statusItem}>
-              <Text style={g.statusVal}>{rank > 0 ? `#${rank}` : '—'}</Text>
-              <Text style={g.statusKey}>Rank</Text>
+        {/* My Status */}
+        <Text style={[g.sectionTitle, { paddingHorizontal: PAD }]}>My Status</Text>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false}
+          contentContainerStyle={{ paddingHorizontal: PAD, gap: SPACE.md, paddingBottom: SPACE.xs }}
+          style={{ marginBottom: SPACE.xl }}>
+          {[
+            { label: 'RANK',    value: rank > 0 ? `#${rank}` : '—' },
+            { label: 'POINTS',  value: points >= 1000 ? `${(points / 1000).toFixed(1)}k` : String(points) },
+            { label: 'DAY',     value: `${day}/${total}` },
+            { label: 'PROFILE', value: user.profile_complete ? '✓ Done' : 'Pending' },
+          ].map(st => (
+            <View key={st.label} style={g.statusPill}>
+              <Text style={g.statusPillLabel}>{st.label}</Text>
+              <Text style={g.statusPillValue}>{st.value}</Text>
             </View>
-            <View style={g.statusDiv} />
-            <View style={g.statusItem}>
-              <Text style={g.statusVal}>{points >= 1000 ? `${(points/1000).toFixed(1)}k` : String(points)}</Text>
-              <Text style={g.statusKey}>Points</Text>
-            </View>
-            <View style={g.statusDiv} />
-            <View style={g.statusItem}>
-              <Text style={g.statusVal}>{day}/{total}</Text>
-              <Text style={g.statusKey}>Day</Text>
-            </View>
-            <View style={g.statusDiv} />
-            <View style={g.statusItem}>
-              <Text style={[g.statusVal, { color: user.profile_complete ? COLORS.success : COLORS.error }]}>
-                {user.profile_complete ? '✓' : '!'}
-              </Text>
-              <Text style={g.statusKey}>Profile</Text>
-            </View>
-          </View>
-        </View>
+          ))}
+        </ScrollView>
 
         {/* TIMELINE */}
         <View style={[g.sectionRow, { paddingHorizontal: PAD }]}>
@@ -671,20 +550,20 @@ export default function HomeTab({
           </TouchableOpacity>
         )}
 
-        {/* Announcements */}
-        {recentNotifs.length > 0 && (
+        {/* Latest notification */}
+        {latestNotif && (
           <View style={{ paddingHorizontal: PAD, marginBottom: SPACE.xl }}>
-            <View style={g.sectionRow}>
-              <Text style={g.sectionTitle}>Announcements</Text>
-              <TouchableOpacity onPress={onOpenNotifications} style={g.seeFullBtn}>
-                <Text style={g.seeFullText}>See All</Text>
-                <Ionicons name="arrow-forward" size={14} color={COLORS.brand} />
-              </TouchableOpacity>
-            </View>
-            <AnnouncementDeck
-              notifications={recentNotifs}
-              onOpenNotifications={onOpenNotifications}
-            />
+            <View style={[g.sectionRow, { marginBottom: 0 }]}><Text style={g.sectionTitle}>Latest</Text></View>
+            <TouchableOpacity style={g.annCard} activeOpacity={0.85} onPress={onOpenNotifications}>
+              <LinearGradient colors={[COLORS.brand, COLORS.brandDark]} style={g.annTop}>
+                <Ionicons name="megaphone" size={44} color="rgba(255,255,255,0.12)" />
+              </LinearGradient>
+              <View style={g.annBottom}>
+                <Text style={g.annTime}>{timeAgo(latestNotif.delivered_at || latestNotif.created_at)}</Text>
+                <Text style={g.annTitle} numberOfLines={2}>{latestNotif.title}</Text>
+                <Text style={g.annBody} numberOfLines={3}>{latestNotif.body}</Text>
+              </View>
+            </TouchableOpacity>
           </View>
         )}
 
@@ -703,7 +582,7 @@ const s = StyleSheet.create({
   railDotLive: { width: 20, height: 20, borderRadius: 10, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(239,68,68,0.12)' },
   railLine: { width: 3, flex: 1, marginTop: SPACE.sm, borderRadius: 4, backgroundColor: 'rgba(24,86,255,0.14)' },
   railLinePast: { backgroundColor: 'rgba(148,163,184,0.2)' },
-  card: { backgroundColor: 'rgba(255,255,255,0.88)', borderRadius: 24, borderWidth: 1, borderColor: 'rgba(255,255,255,0.96)', padding: SPACE.lg, overflow: 'hidden', ...Platform.select({ ios: {shadowColor: '#002182', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.07, shadowRadius: 20 }, android: { elevation: 2 } }) },
+  card: { backgroundColor: 'rgba(255,255,255,0.88)', borderRadius: 24, borderWidth: 1, borderColor: 'rgba(255,255,255,0.96)', padding: SPACE.lg, overflow: 'hidden', ...Platform.select({ ios: { shadowColor: '#002182', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.07, shadowRadius: 20 }, android: { elevation: 2 } }) },
   featuredCard: { borderWidth: 0, padding: SPACE.xl },
   currentCard: { borderColor: 'rgba(24,86,255,0.2)', borderWidth: 1.5 },
   pastCard: { opacity: 0.55 },
@@ -750,15 +629,15 @@ const g = StyleSheet.create({
   blob1: { position: 'absolute', width: 220, height: 220, borderRadius: 110, backgroundColor: 'rgba(255,255,255,0.06)', top: -80, right: -60 },
   blob2: { position: 'absolute', width: 160, height: 160, borderRadius: 80, backgroundColor: 'rgba(245,158,11,0.08)', bottom: -40, left: -40 },
   heroTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: SPACE.xl },
-  heroLabel: { fontSize: 9, fontWeight: FONT.w8, color: '#fff', letterSpacing: 1.5, marginBottom: SPACE.xs },
+  heroLabel: { fontSize: 9, fontWeight: FONT.w8, color: 'rgba(255,255,255,0.45)', letterSpacing: 1.5, marginBottom: SPACE.xs },
   heroDayPill: { flexDirection: 'row', alignItems: 'center', gap: SPACE.sm, backgroundColor: 'rgba(255,255,255,0.12)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.2)', paddingHorizontal: SPACE.md, paddingVertical: SPACE.xs, borderRadius: RADIUS.full },
   heroDayDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: '#fde68a' },
-  heroDayText: { fontSize: FONT.sm, fontWeight: FONT.w7, color: '#fff' },
-  heroVenue: { fontSize: FONT.sm, fontWeight: FONT.w6, color: '#fff' },
+  heroDayText: { fontSize: FONT.xs, fontWeight: FONT.w6, color: '#fff' },
+  heroVenue: { fontSize: FONT.sm, fontWeight: FONT.w6, color: 'rgba(255,255,255,0.85)' },
   heroGreeting: { fontSize: 34, fontWeight: FONT.w9, color: '#fff', lineHeight: 40, letterSpacing: -0.5 },
   progressRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: SPACE.sm },
-  progressLbl: { fontSize: 10, fontWeight: FONT.w6, color: '#fff', letterSpacing: 0.5 },
-  progressPct: { fontSize: 10, fontWeight: FONT.w8, color: '#fff' },
+  progressLbl: { fontSize: 10, fontWeight: FONT.w6, color: 'rgba(255,255,255,0.55)', letterSpacing: 0.5 },
+  progressPct: { fontSize: 10, fontWeight: FONT.w8, color: 'rgba(255,255,255,0.7)' },
   progressTrack: { height: 4, backgroundColor: 'rgba(255,255,255,0.12)', borderRadius: 2, overflow: 'hidden' },
   progressFill: { height: '100%', borderRadius: 2, backgroundColor: '#fff' },
   glassCard: { backgroundColor: 'rgba(255,255,255,0.72)', borderRadius: 28, borderWidth: 1, borderColor: 'rgba(255,255,255,0.9)', padding: SPACE.xl, ...Platform.select({ ios: { shadowColor: '#002182', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.06, shadowRadius: 16 }, android: { elevation: 0 } }) },
@@ -773,10 +652,16 @@ const g = StyleSheet.create({
   sectionRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end' },
   seeFullBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: COLORS.brandLight, paddingHorizontal: SPACE.md, paddingVertical: SPACE.sm, borderRadius: RADIUS.full, marginBottom: SPACE.md },
   seeFullText: { fontSize: FONT.xs, fontWeight: FONT.w8, color: COLORS.brand, letterSpacing: 0.5 },
+  quickCard: { borderRadius: 24, paddingHorizontal: SPACE.lg, paddingVertical: SPACE.lg, alignItems: 'flex-start', gap: SPACE.md, minWidth: 100, backgroundColor: 'rgba(255,255,255,0.6)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.9)' },
+  quickIcon: { width: 42, height: 42, borderRadius: 21, alignItems: 'center', justifyContent: 'center' },
+  quickLabel: { fontSize: FONT.sm, fontWeight: FONT.w6, color: COLORS.text },
   dualBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: SPACE.sm, paddingVertical: SPACE.lg + 2, borderRadius: 20, ...Platform.select({ ios: { shadowColor: COLORS.text, shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.18, shadowRadius: 12 }, android: { elevation: 4 } }) },
   dualBtnText: { fontSize: FONT.sm, fontWeight: FONT.w8, color: '#fff', letterSpacing: 0.2 },
   chatBadge: { position: 'absolute', top: -6, right: -4, minWidth: 22, height: 22, borderRadius: 11, backgroundColor: COLORS.error, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 4, borderWidth: 2.5, borderColor: '#f0f4f9' },
   chatBadgeText: { fontSize: 10, fontWeight: FONT.w8, color: '#fff' },
+  statusPill: { flexDirection: 'row', alignItems: 'center', gap: SPACE.md, backgroundColor: 'rgba(255,255,255,0.72)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.9)', paddingHorizontal: SPACE.lg, paddingVertical: SPACE.md, borderRadius: RADIUS.full },
+  statusPillLabel: { fontSize: 10, fontWeight: FONT.w8, color: COLORS.textTer, letterSpacing: 1.5 },
+  statusPillValue: { fontSize: FONT.xl, fontWeight: FONT.w9, color: COLORS.text },
   dayChip: { flexDirection: 'row', alignItems: 'center', gap: SPACE.xs, paddingHorizontal: SPACE.lg, paddingVertical: SPACE.md, borderRadius: RADIUS.full, backgroundColor: 'rgba(255,255,255,0.75)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.95)' },
   dayChipText: { fontSize: FONT.sm, fontWeight: FONT.w7, color: COLORS.text },
   dayChipCount: { backgroundColor: '#eef3f8', width: 22, height: 22, borderRadius: 11, alignItems: 'center', justifyContent: 'center' },
@@ -798,15 +683,10 @@ const g = StyleSheet.create({
   moreBtnIcon: { width: 40, height: 40, borderRadius: 20, backgroundColor: COLORS.brandLight, alignItems: 'center', justifyContent: 'center' },
   moreBtnTitle: { fontSize: FONT.sm, fontWeight: FONT.w8, color: COLORS.brand },
   moreBtnSub: { fontSize: FONT.xs, color: COLORS.textTer, marginTop: 2 },
-  quickGrid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' },
-  statusStrip: {
-    flexDirection: 'row', alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.85)', borderRadius: RADIUS.xl,
-    paddingVertical: SPACE.md, paddingHorizontal: SPACE.sm,
-    borderWidth: 1, borderColor: 'rgba(255,255,255,0.95)',
-  },
-  statusItem: { flex: 1, alignItems: 'center', gap: 2 },
-  statusVal:  { fontSize: FONT.lg, fontWeight: FONT.w9, color: COLORS.text },
-  statusKey:  { fontSize: 9, fontWeight: FONT.w7, color: COLORS.textTer, letterSpacing: 0.3 },
-  statusDiv:  { width: 1, height: 24, backgroundColor: COLORS.border },
+  annCard: { borderRadius: 32, overflow: 'hidden', marginTop: SPACE.sm, ...SHADOW.lg },
+  annTop: { height: 120, alignItems: 'center', justifyContent: 'center' },
+  annBottom: { backgroundColor: COLORS.text, padding: SPACE.xl },
+  annTime: { fontSize: 10, fontWeight: FONT.w7, color: 'rgba(255,255,255,0.4)', letterSpacing: 1, marginBottom: SPACE.sm },
+  annTitle: { fontSize: FONT.xl, fontWeight: FONT.w9, color: '#fff', lineHeight: 26, marginBottom: SPACE.sm },
+  annBody: { fontSize: FONT.sm, color: 'rgba(255,255,255,0.7)', lineHeight: 20 },
 });

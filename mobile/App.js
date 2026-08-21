@@ -198,6 +198,12 @@ export default function App() {
         } else if (data.type === 'checkin_success' || data.type === 'meal_verified') {
           setNotificationRoute({ type: 'qr' });
           if (user && tokens) setScreen('app');
+        } else if (data.type === 'poll') {
+          setNotificationRoute({ type: 'poll' });
+          if (user && tokens) setScreen('app');
+        } else if (data.type === 'ideathon_invite' || data.type === 'ideathon_invite_accepted') {
+          setNotificationRoute({ type: 'ideathon' });
+          if (user && tokens) setScreen('app');
         } else {
           // Generic — open notifications list
           if (user && tokens) {

@@ -4,7 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { COLORS, FONT, SPACE, RADIUS, SHADOW, API_URL, API_HEADERS, fixMediaUrl } from '../theme';
 import { GradientAvatar, FadeIn, IconBox, Divider } from '../components';
 
-export default function ProfileTab({ user, tokens, onLogout, onEditProfile, onChangePassword, onOpenNotifications, onOpenChats }) {
+export default function ProfileTab({ user, tokens, onLogout, onEditProfile, onChangePassword, onOpenNotifications, onOpenChats, onOpenRecap }) {
   const [stats,       setStats]       = useState({ points: 0, rank: 0 });
   const [connections, setConnections] = useState(0);
 
@@ -32,6 +32,7 @@ export default function ProfileTab({ user, tokens, onLogout, onEditProfile, onCh
       { icon: 'lock-closed-outline',   label: 'Change Password',  sub: 'Update your password',    onPress: onChangePassword },
     ]},
     { section: 'Conference', items: [
+      { icon: 'sparkles-outline',      label: 'My Recap',      sub: 'Your conference memory',   onPress: onOpenRecap },
       { icon: 'bar-chart-outline',     label: 'My Activity',   sub: `${stats.points} points earned` },
       { icon: 'chatbubbles-outline',   label: 'My Connections', sub: 'Chats & requests',        onPress: onOpenChats },
       { icon: 'calendar-outline',      label: 'My Sessions',   sub: 'Bookmarked talks' },

@@ -7,9 +7,11 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
+import * as Haptics from 'expo-haptics';
 import { COLORS, FONT, SPACE, RADIUS, SHADOW, API_URL, fixMediaUrl } from '../theme';
 import { apiFetch } from '../api';
-import { PulsingDot, GradientAvatar } from '../components';
+import { useKeyboardHeight } from '../useKeyboard';
+import { PulsingDot } from '../components';
 
 const { width: W } = Dimensions.get('window');
 const PAD = SPACE.xl;
@@ -22,7 +24,6 @@ const SESSION_TYPE_COLOR = {
   other: COLORS.textSec,
 };
 
-/* ── helpers ─────────────────────────────────────────────────────── */
 function timeAgo(iso) {
   if (!iso) return '';
   const d = Math.floor((Date.now() - new Date(iso)) / 1000);
@@ -32,7 +33,6 @@ function timeAgo(iso) {
   return `${Math.floor(d / 86400)}d ago`;
 }
 
-/* ── Lightbox ────────────────────────────────────────────────────── */
 function Lightbox({ photo, onClose }) {
   const anim = useRef(new Animated.Value(0)).current;
   useEffect(() => {
@@ -74,8 +74,8 @@ function Lightbox({ photo, onClose }) {
   );
 }
 
-/* ── Upload Sheet ────────────────────────────────────────────────── */
 function UploadSheet({ sessions, onClose, onUploaded }) {
+  const kbHeight = useKeyboardHeight();
   const [image, setImage] = useState(null);
   const [caption, setCaption] = useState('');
   const [sessionId, setSessionId] = useState(null);
@@ -106,7 +106,7 @@ function UploadSheet({ sessions, onClose, onUploaded }) {
 
   const submit = async () => {
     if (!image) { Alert.alert('Pick a photo first'); return; }
-    if (uploading || submitRef.current) return; // Guard double-tap
+    if (uploading || submitRef.current) return;
     submitRef.current = true;
     setUploading(true);
 
@@ -141,9 +141,9 @@ function UploadSheet({ sessions, onClose, onUploaded }) {
         return;
       }
 
-      // Success — close modal first, then show alert
       onClose();
       onUploaded();
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
       setTimeout(() => {
         Alert.alert(
           data.auto_approved ? '✅ Photo Live!' : '📤 Submitted!',
@@ -162,69 +162,74 @@ function UploadSheet({ sessions, onClose, onUploaded }) {
       <View style={up.overlay}>
         <TouchableOpacity style={{ flex: 1 }} onPress={onClose} activeOpacity={1} />
         <Animated.View style={[up.sheet, { transform: [{ translateY: slideAnim }] }]}>
-          <View style={up.handle} />
-          <Text style={up.title}>Share a Photo</Text>
+          <ScrollView
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={{ paddingBottom: kbHeight > 0 ? kbHeight : SPACE.xl }}
+          >
+            <View style={up.handle} />
+            <Text style={up.title}>Share a Photo</Text>
 
-          <TouchableOpacity style={up.picker} onPress={pickImage} activeOpacity={0.85}>
-            {image ? (
-              <Image source={{ uri: image.uri }} style={up.preview} resizeMode="cover" />
-            ) : (
-              <View style={up.pickerEmpty}>
-                <Ionicons name="image-outline" size={36} color={COLORS.textTer} />
-                <Text style={up.pickerText}>Tap to pick a photo</Text>
-              </View>
-            )}
-            {image && (
-              <View style={up.pickerOverlay}>
-                <Ionicons name="pencil" size={20} color="#fff" />
-              </View>
-            )}
-          </TouchableOpacity>
-
-          <TextInput
-            style={up.input}
-            placeholder="Add a caption… (optional)"
-            placeholderTextColor={COLORS.textTer}
-            value={caption}
-            onChangeText={setCaption}
-            maxLength={300}
-            multiline
-          />
-
-          <Text style={up.label}>Tag a session (optional)</Text>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false}
-            contentContainerStyle={{ gap: SPACE.sm, paddingBottom: SPACE.xs }}>
-            <TouchableOpacity
-              style={[up.sessionChip, !sessionId && up.sessionChipActive]}
-              onPress={() => setSessionId(null)}>
-              <Text style={[up.sessionChipText, !sessionId && up.sessionChipTextActive]}>General Wall</Text>
+            <TouchableOpacity style={up.picker} onPress={pickImage} activeOpacity={0.85}>
+              {image ? (
+                <Image source={{ uri: image.uri }} style={up.preview} resizeMode="cover" />
+              ) : (
+                <View style={up.pickerEmpty}>
+                  <Ionicons name="image-outline" size={36} color={COLORS.textTer} />
+                  <Text style={up.pickerText}>Tap to pick a photo</Text>
+                </View>
+              )}
+              {image && (
+                <View style={up.pickerOverlay}>
+                  <Ionicons name="pencil" size={20} color="#fff" />
+                </View>
+              )}
             </TouchableOpacity>
-            {sessions.map(s => (
-              <TouchableOpacity
-                key={s.id}
-                style={[up.sessionChip, sessionId === s.id && up.sessionChipActive]}
-                onPress={() => setSessionId(s.id)}>
-                <Text style={[up.sessionChipText, sessionId === s.id && up.sessionChipTextActive]}
-                  numberOfLines={1}>{s.title}</Text>
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
 
-          <TouchableOpacity style={up.submitBtn} onPress={submit} activeOpacity={0.85} disabled={uploading}>
-            <LinearGradient colors={[COLORS.brand, COLORS.brandDark]} style={up.submitGrad}>
-              {uploading
-                ? <ActivityIndicator color="#fff" />
-                : <><Ionicons name="cloud-upload-outline" size={20} color="#fff" />
-                   <Text style={up.submitText}>Upload Photo</Text></>}
-            </LinearGradient>
-          </TouchableOpacity>
+            <TextInput
+              style={up.input}
+              placeholder="Add a caption… (optional)"
+              placeholderTextColor={COLORS.textTer}
+              value={caption}
+              onChangeText={setCaption}
+              maxLength={300}
+              multiline
+            />
+
+            <Text style={up.label}>Tag a session (optional)</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false}
+              contentContainerStyle={{ gap: SPACE.sm, paddingBottom: SPACE.xs }}>
+              <TouchableOpacity
+                style={[up.sessionChip, !sessionId && up.sessionChipActive]}
+                onPress={() => setSessionId(null)}>
+                <Text style={[up.sessionChipText, !sessionId && up.sessionChipTextActive]}>General Wall</Text>
+              </TouchableOpacity>
+              {sessions.map(s => (
+                <TouchableOpacity
+                  key={s.id}
+                  style={[up.sessionChip, sessionId === s.id && up.sessionChipActive]}
+                  onPress={() => setSessionId(s.id)}>
+                  <Text style={[up.sessionChipText, sessionId === s.id && up.sessionChipTextActive]}
+                    numberOfLines={1}>{s.title}</Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+
+            <TouchableOpacity style={up.submitBtn} onPress={submit} activeOpacity={0.85} disabled={uploading}>
+              <LinearGradient colors={[COLORS.brand, COLORS.brandDark]} style={up.submitGrad}>
+                {uploading
+                  ? <ActivityIndicator color="#fff" />
+                  : <><Ionicons name="cloud-upload-outline" size={20} color="#fff" />
+                     <Text style={up.submitText}>Upload Photo</Text></>}
+              </LinearGradient>
+            </TouchableOpacity>
+          </ScrollView>
         </Animated.View>
       </View>
     </Modal>
   );
 }
 
-/* ── Main Screen ─────────────────────────────────────────────────── */
 function PhotoThumb({ item, index, onPress, onDelete, showDelete }) {
   const anim = useRef(new Animated.Value(0)).current;
   useEffect(() => {
@@ -277,8 +282,8 @@ function PhotoThumb({ item, index, onPress, onDelete, showDelete }) {
   );
 }
 
-export default function PhotosScreen({ onBack }) {
-  const [tab, setTab] = useState('wall');       // 'wall' | 'sessions' | 'mine'
+export default function PhotosScreen({ onBack, onOpenSelfieSpots }) {
+  const [tab, setTab] = useState('wall');
   const [photos, setPhotos] = useState([]);
   const [sessions, setSessions] = useState([]);
   const [activeSession, setActiveSession] = useState(null);
@@ -403,6 +408,24 @@ export default function PhotosScreen({ onBack }) {
           <Text style={s.statusSep}>·</Text>
           <Text style={s.statusText}>{photos.length} photo{photos.length !== 1 ? 's' : ''}</Text>
         </View>
+
+        {/* Selfie Spots Challenge Pill Banner */}
+        {onOpenSelfieSpots && (
+          <TouchableOpacity
+            style={s.selfieChallengeBanner}
+            activeOpacity={0.88}
+            onPress={onOpenSelfieSpots}
+          >
+            <View style={s.selfieBannerLeft}>
+              <Ionicons name="sparkles" size={16} color="#fde68a" />
+              <Text style={s.selfieBannerTitle}>Campus Selfie Spots Challenge</Text>
+            </View>
+            <View style={s.selfieBannerRight}>
+              <Text style={s.selfieBannerAction}>Earn Points</Text>
+              <Ionicons name="chevron-forward" size={14} color="#fff" />
+            </View>
+          </TouchableOpacity>
+        )}
 
         <View style={s.tabRow}>
           {[
@@ -579,10 +602,23 @@ const s = StyleSheet.create({
   backBtn: { width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.12)', alignItems: 'center', justifyContent: 'center' },
   headerTitle: { fontSize: FONT.xl, fontWeight: FONT.w8, color: '#fff', letterSpacing: -0.2 },
   uploadBtn: { width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.18)', alignItems: 'center', justifyContent: 'center' },
-  statusRow: { flexDirection: 'row', alignItems: 'center', gap: SPACE.sm, paddingHorizontal: PAD, marginBottom: SPACE.md },
+  statusRow: { flexDirection: 'row', alignItems: 'center', gap: SPACE.sm, paddingHorizontal: PAD, marginBottom: SPACE.sm },
   statusDot: { width: 7, height: 7, borderRadius: 4 },
   statusText: { fontSize: FONT.xs, color: 'rgba(255,255,255,0.7)', fontWeight: FONT.w6 },
   statusSep: { color: 'rgba(255,255,255,0.3)' },
+
+  selfieChallengeBanner: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    backgroundColor: 'rgba(236,72,153,0.25)',
+    marginHorizontal: PAD, marginBottom: SPACE.md,
+    paddingVertical: 8, paddingHorizontal: SPACE.md,
+    borderRadius: RADIUS.lg, borderWidth: 1, borderColor: 'rgba(236,72,153,0.4)',
+  },
+  selfieBannerLeft: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  selfieBannerTitle: { fontSize: 11, fontWeight: FONT.w8, color: '#fff' },
+  selfieBannerRight: { flexDirection: 'row', alignItems: 'center', gap: 2 },
+  selfieBannerAction: { fontSize: 10, fontWeight: FONT.w7, color: '#fde68a' },
+
   tabRow: { flexDirection: 'row', gap: SPACE.sm, paddingHorizontal: PAD },
   tabBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5, paddingVertical: SPACE.md, borderRadius: RADIUS.full, backgroundColor: 'rgba(255,255,255,0.10)' },
   tabBtnOn: { backgroundColor: 'rgba(255,255,255,0.2)' },

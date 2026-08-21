@@ -4,6 +4,7 @@ import {
   RefreshControl, ActivityIndicator, Image, Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import * as Haptics from 'expo-haptics';
 import { COLORS, FONT, SPACE, RADIUS, TOP, API_URL, API_HEADERS, fixMediaUrl } from '../theme';
 import { GradientAvatar, FadeIn } from '../components';
 
@@ -50,8 +51,9 @@ export default function ConnectionRequestsScreen({ tokens, onBack, onOpenChat })
       const data = await res.json();
       if (data.success) {
         setReceived(prev => prev.filter(r => r.id !== requestId));
-        if (action === 'accepted' && data.conversation_id && onOpenChat) {
-          onOpenChat(data.conversation_id);
+        if (action === 'accepted') {
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+          if (data.conversation_id && onOpenChat) onOpenChat(data.conversation_id);
         }
       }
     } catch { /* silent */ }

@@ -9,6 +9,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, FONT, SPACE, RADIUS, SHADOW, W, H } from '../theme';
 import { apiFetch } from '../api';
+import { useKeyboardHeight } from '../useKeyboard';
 
 /* ── constants ── */
 const REACTIONS = [
@@ -305,6 +306,7 @@ export default function FeedScreen({ onBack }) {
   const [refreshing, setRefreshing]         = useState(false);
   const [modalOpen, setModalOpen]           = useState(false);
   const [activePost, setActivePost]         = useState(null);
+  const keyboardHeight = useKeyboardHeight();
   const [comments, setComments]             = useState([]);
   const [commentsLoading, setCommentsLoading] = useState(false);
   const [text, setText]                     = useState('');
@@ -460,7 +462,7 @@ export default function FeedScreen({ onBack }) {
       <Animated.FlatList
         data={posts}
         keyExtractor={i => String(i.id)}
-        contentContainerStyle={{ padding: SPACE.lg, paddingBottom: SPACE.huge }}
+        contentContainerStyle={{ padding: SPACE.lg, paddingBottom: 95 }}
         onScroll={Animated.event([{ nativeEvent: { contentOffset: { y: scrollY } } }], { useNativeDriver: false })}
         scrollEventThrottle={16}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor={COLORS.brand} />}
@@ -519,7 +521,7 @@ export default function FeedScreen({ onBack }) {
                 <Text style={s.sheetLoadingText}>Loading…</Text>
               </View>
             ) : (
-              <ScrollView contentContainerStyle={{ padding: SPACE.lg, paddingBottom: 120 }} showsVerticalScrollIndicator={false}>
+              <ScrollView contentContainerStyle={{ padding: SPACE.lg, paddingBottom: keyboardHeight > 0 ? keyboardHeight + 80 : 160 }} showsVerticalScrollIndicator={false}>
                 {comments.length ? comments.map((c, i) => (
                   <CommentItem key={c.id} item={c} onReply={setReplyTo} idx={i} />
                 )) : (
@@ -535,8 +537,7 @@ export default function FeedScreen({ onBack }) {
             )}
 
             {activePost?.allow_comments && (
-              <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-                <View style={s.inputBar}>
+              <View style={[s.inputBar, { marginBottom: keyboardHeight }]}>
                   {replyTo && (
                     <View style={s.replyBar}>
                       <View style={s.replyBarLeft}>
@@ -571,8 +572,7 @@ export default function FeedScreen({ onBack }) {
                       }
                     </TouchableOpacity>
                   </View>
-                </View>
-              </KeyboardAvoidingView>
+              </View>
             )}
           </Animated.View>
         </View>

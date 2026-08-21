@@ -55,7 +55,9 @@ function groupMessagesByDate(messages) {
   return groups;
 }
 
-export default function ChatRoomScreen({ tokens, conversationId, onBack }) {
+export default function ChatRoomScreen({ tokens, conversationId, onBack, onDisconnected }) {
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [disconnecting, setDisconnecting] = useState(false);
   const [conversation, setConversation]   = useState(null);
   const [messages,     setMessages]       = useState([]);
   const [myUserId,     setMyUserId]       = useState(null);
@@ -369,6 +371,42 @@ export default function ChatRoomScreen({ tokens, conversationId, onBack }) {
     );
   };
 
+  const handleDisconnect = () => {
+    if (!other?.id || disconnecting) return;
+    setMenuOpen(false);
+    Alert.alert(
+      'Remove Connection?',
+      `You will no longer be connected with ${other.name}. Your chat history will be deleted.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Remove',
+          style: 'destructive',
+          onPress: async () => {
+            setDisconnecting(true);
+            try {
+              const r = await fetch(`${API_URL}/chat/disconnect/`, {
+                method: 'POST',
+                headers: { ...API_HEADERS, Authorization: `Bearer ${tokens?.access}` },
+                body: JSON.stringify({ user_id: other.id }),
+              });
+              const d = await r.json();
+              if (d.success) {
+                onDisconnected?.();
+              } else {
+                Alert.alert('Error', d.error || 'Could not disconnect.');
+                setDisconnecting(false);
+              }
+            } catch {
+              Alert.alert('Error', 'Network error.');
+              setDisconnecting(false);
+            }
+          },
+        },
+      ]
+    );
+  };
+
   const other = conversation?.other_user;
 
   return (
@@ -399,7 +437,36 @@ export default function ChatRoomScreen({ tokens, conversationId, onBack }) {
             color={isMuted ? COLORS.accent : 'rgba(255,255,255,0.7)'}
           />
         </TouchableOpacity>
+        <TouchableOpacity style={s.muteBtn} onPress={() => setMenuOpen(true)} activeOpacity={0.75}>
+          <Ionicons name="ellipsis-vertical" size={18} color="rgba(255,255,255,0.85)" />
+        </TouchableOpacity>
       </LinearGradient>
+
+      {/* Disconnect menu modal */}
+      <Modal visible={menuOpen} transparent animationType="fade" onRequestClose={() => setMenuOpen(false)}>
+        <TouchableOpacity style={s.menuOverlay} activeOpacity={1} onPress={() => setMenuOpen(false)}>
+          <View style={s.menuCard}>
+            <View style={s.menuHeader}>
+              <Text style={s.menuHeaderT}>Conversation Options</Text>
+            </View>
+            <TouchableOpacity style={s.menuRow} onPress={handleDisconnect} activeOpacity={0.7}>
+              <View style={s.menuIconWrap}>
+                <Ionicons name="person-remove" size={18} color="#dc2626" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={s.menuRowT}>Remove Connection</Text>
+                <Text style={s.menuRowSub}>Delete chat and disconnect from this person</Text>
+              </View>
+            </TouchableOpacity>
+            <TouchableOpacity style={[s.menuRow, { borderBottomWidth: 0 }]} onPress={() => setMenuOpen(false)} activeOpacity={0.7}>
+              <View style={[s.menuIconWrap, { backgroundColor: '#f1f5f9' }]}>
+                <Ionicons name="close" size={18} color="#64748b" />
+              </View>
+              <Text style={[s.menuRowT, { color: '#64748b' }]}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        </TouchableOpacity>
+      </Modal>
 
       {/* Topic banner */}
       {conversation?.topic_display && (
@@ -782,4 +849,58 @@ const s = StyleSheet.create({
     alignItems: 'center', justifyContent: 'center', zIndex: 10,
   },
   imageViewerImg: { width: SW - 32, height: SH * 0.72 },
+
+  menuOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+    justifyContent: 'flex-end',
+  },
+  menuCard: {
+    backgroundColor: '#fff',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    paddingBottom: 30,
+    paddingTop: 8,
+  },
+  menuHeader: {
+    alignItems: 'center',
+    paddingVertical: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f1f5f9',
+  },
+  menuHeaderT: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#64748b',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  menuRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+    paddingVertical: 16,
+    paddingHorizontal: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f8fafc',
+  },
+  menuIconWrap: {
+    width: 40,
+    height: 40,
+    borderRadius: 13,
+    backgroundColor: '#fee2e2',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  menuRowT: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#0f172a',
+  },
+  menuRowSub: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: '#64748b',
+    marginTop: 3,
+  },
 });

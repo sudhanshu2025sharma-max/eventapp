@@ -70,19 +70,21 @@ def selfie_points_panel(request):
             cfg.updated_by = request.user
             cfg.save()
             
-            # Send Push Notification to all participants
+            # Broadcast Push Notification + In-App notification
             title = "📸 Selfie Spots Challenge"
             if cfg.selfie_upload_open:
-                body = "The organizers have opened the Selfie Spots challenge! Walk to the spots around campus, verify your GPS, and claim your points."
+                body = "The organizers have opened the Selfie Challenge! Walk to campus spots, verify your GPS, and claim points!"
             else:
-                body = "The Selfie Spots challenge has been closed by the organizers."
+                body = "The Selfie Challenge has been closed by the organizers."
                 
             try:
-                # Create the Notification database entry as expected by fcm.py
                 notif = Notification.objects.create(
                     title=title,
                     body=body,
-                    delivered_at=timezone.now()
+                    target_type='all',
+                    status='sent',
+                    sent_by=request.user,
+                    data={"type": "selfie_spots"}
                 )
                 send_to_all(title, body, {"type": "selfie_spots"}, notif)
             except Exception as e:
@@ -90,7 +92,7 @@ def selfie_points_panel(request):
 
             messages.success(
                 request,
-                f'Selfie challenge window {"OPENED" if cfg.selfie_upload_open else "CLOSED"} and notification sent.'
+                f'Selfie challenge window {"OPENED" if cfg.selfie_upload_open else "CLOSED"} and notifications broadcasted to attendees.'
             )
 
         # Create spot zone

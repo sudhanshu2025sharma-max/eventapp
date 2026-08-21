@@ -1,0 +1,231 @@
+{% extends "panel/base.html" %}
+{% block title %}{% if mode == 'create' %}Create Poll{% else %}Edit Poll{% endif %} — ETD 2026{% endblock %}
+{% block page_title %}{% if mode == 'create' %}Create Poll{% else %}Edit: {{ poll.title }}{% endif %}{% endblock %}
+{% block page_subtitle %}{% if mode == 'create' %}New conference poll{% else %}Modify poll settings and options{% endif %}{% endblock %}
+
+{% block content %}
+{% if messages %}
+  {% for m in messages %}
+    <div class="alert alert-{% if m.tags == 'error' %}error{% else %}success{% endif %}">{{ m }}</div>
+  {% endfor %}
+{% endif %}
+
+<form method="post" id="pollForm">
+  {% csrf_token %}
+  <div style="display:grid;grid-template-columns:1fr 360px;gap:24px;align-items:start;">
+
+    <!-- Left -->
+    <div style="display:flex;flex-direction:column;gap:20px;">
+
+      <div class="card">
+        <div class="card-header"><h3>Poll Details</h3></div>
+        <div class="card-body" style="display:flex;flex-direction:column;gap:16px;">
+          <div>
+            <label class="form-label">Title *</label>
+            <input class="form-control" name="title" required maxlength="200"
+              value="{% if poll %}{{ poll.title }}{% elif form.title %}{{ form.title }}{% endif %}" placeholder="e.g. Audience Choice — Ideathon 2026">
+          </div>
+          <div>
+            <label class="form-label">Question *</label>
+            <textarea class="form-control" name="question" required rows="2"
+              placeholder="What do you want to ask?">{% if poll %}{{ poll.question }}{% elif form.question %}{{ form.question }}{% endif %}</textarea>
+          </div>
+          <div>
+            <label class="form-label">Description / Instructions</label>
+            <textarea class="form-control" name="description" rows="2"
+              placeholder="Optional context for participants">{% if poll %}{{ poll.description }}{% endif %}</textarea>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+            <div>
+              <label class="form-label">Poll Type</label>
+              <select class="form-control" name="poll_type" id="pollType" onchange="onTypeChange()">
+                {% for val, lbl in poll_types %}
+                  <option value="{{ val }}" {% if poll and poll.poll_type == val %}selected{% elif form.poll_type == val %}selected{% endif %}>{{ lbl }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div>
+              <label class="form-label">Result Visibility</label>
+              <select class="form-control" name="result_vis">
+                {% for val, lbl in result_vis_choices %}
+                  <option value="{{ val }}" {% if poll and poll.result_vis == val %}selected{% endif %}>{{ lbl }}</option>
+                {% endfor %}
+              </select>
+            </div>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+            <div>
+              <label class="form-label">Starts At (IST)</label>
+              <input class="form-control" type="datetime-local" name="starts_at"
+                value="{% if poll.starts_at %}{{ poll.starts_at|date:'Y-m-d\TH:i' }}{% endif %}">
+            </div>
+            <div>
+              <label class="form-label">Ends At (IST)</label>
+              <input class="form-control" type="datetime-local" name="ends_at"
+                value="{% if poll.ends_at %}{{ poll.ends_at|date:'Y-m-d\TH:i' }}{% endif %}">
+            </div>
+          </div>
+          <div id="maxChoicesRow" style="display:none;">
+            <label class="form-label">Max Choices (0 = unlimited)</label>
+            <input class="form-control" type="number" name="max_choices" min="0" max="20"
+              value="{% if poll %}{{ poll.max_choices }}{% else %}1{% endif %}" style="width:120px;">
+          </div>
+          <div>
+            <label class="form-label">Link to Session (optional)</label>
+            <select class="form-control" name="session_id">
+              <option value="">— None —</option>
+              {% for sess in sessions %}
+                <option value="{{ sess.id }}" {% if poll and poll.session_id == sess.id %}selected{% endif %}>
+                  Day {{ sess.day }} — {{ sess.title }}
+                </option>
+              {% endfor %}
+            </select>
+          </div>
+          <div style="display:flex;gap:24px;flex-wrap:wrap;">
+            <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:14px;">
+              <input type="checkbox" name="award_points"
+                {% if mode == 'create' or poll.award_points %}checked{% endif %}>
+              Award +20 leaderboard points for voting
+            </label>
+            <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:14px;">
+              <input type="checkbox" name="is_ideathon" id="isIdeathon" onchange="onIdeathonChange()"
+                {% if poll and poll.is_ideathon %}checked{% endif %}>
+              🏆 This is an Ideathon voting poll
+            </label>
+          </div>
+        </div>
+      </div>
+
+      <!-- Options -->
+      <div class="card">
+        <div class="card-header">
+          <h3>Options</h3>
+          <button type="button" class="btn btn-secondary btn-sm" onclick="addOption()">
+            <i class="fas fa-plus"></i> Add Option
+          </button>
+        </div>
+        <div class="card-body">
+          <div id="optionsList" style="display:flex;flex-direction:column;gap:16px;">
+            {% if poll and poll.options.all %}
+              {% for opt in poll.options.all %}
+              <div class="option-block" style="border:1px solid var(--border);border-radius:12px;padding:16px;position:relative;">
+                <button type="button" onclick="removeOption(this)"
+                  style="position:absolute;top:10px;right:10px;background:none;border:none;cursor:pointer;color:var(--danger);font-size:16px;">
+                  <i class="fas fa-times"></i>
+                </button>
+                <div style="display:flex;flex-direction:column;gap:10px;">
+                  <div>
+                    <label class="form-label">Option Text *</label>
+                    <input class="form-control" name="option_text" required value="{{ opt.text }}" placeholder="Option label">
+                  </div>
+                  {% comment %}Ideathon team fields are auto-filled from registered teams via "Create Voting Poll" in the Ideathon panel{% endcomment %}
+                  {% if poll.is_ideathon %}
+                  <div style="background:var(--primary-light);border-radius:8px;padding:10px;font-size:12px;color:var(--primary);">
+                    <i class="fas fa-info-circle"></i>
+                    Team data (name, members, project) is auto-filled from the Ideathon Teams panel.
+                    Edit teams at <a href="/panel/ideathon/">Ideathon Teams</a>.
+                  </div>
+                  {% endif %}
+                </div>
+              </div>
+              {% endfor %}
+            {% else %}
+              {% for i in "ab" %}
+              <div class="option-block" style="border:1px solid var(--border);border-radius:12px;padding:16px;position:relative;">
+                <button type="button" onclick="removeOption(this)"
+                  style="position:absolute;top:10px;right:10px;background:none;border:none;cursor:pointer;color:var(--danger);font-size:16px;">
+                  <i class="fas fa-times"></i>
+                </button>
+                <div style="display:flex;flex-direction:column;gap:10px;">
+                  <div>
+                    <label class="form-label">Option Text *</label>
+                    <input class="form-control" name="option_text" required placeholder="Option label">
+                  </div>
+                  {% comment %}No manual ideathon fields for new options — use Ideathon panel{% endcomment %}
+                </div>
+              </div>
+              {% endfor %}
+            {% endif %}
+          </div>
+          <p style="font-size:12px;color:var(--text-tertiary);margin-top:12px;">
+            For Yes/No polls, add exactly two options: "Yes" and "No".<br>
+            For Rating polls, options represent score labels (e.g. 1-Star … 5-Star).
+          </p>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Right sidebar -->
+    <div style="display:flex;flex-direction:column;gap:16px;position:sticky;top:80px;">
+      <div class="card">
+        <div class="card-header"><h3>Save</h3></div>
+        <div class="card-body" style="display:flex;flex-direction:column;gap:10px;">
+          <button type="submit" class="btn btn-primary" style="width:100%;">
+            <i class="fas fa-save"></i>
+            {% if mode == 'create' %}Create Poll{% else %}Save Changes{% endif %}
+          </button>
+          <a href="{% url 'polls_panel' %}" class="btn btn-secondary" style="width:100%;text-align:center;">Cancel</a>
+        </div>
+      </div>
+      {% if poll %}
+      <div class="card">
+        <div class="card-header"><h3>Quick Actions</h3></div>
+        <div class="card-body" style="display:flex;flex-direction:column;gap:8px;">
+          {% if poll.status == 'draft' %}
+            <form method="post" action="{% url 'polls_start' poll.pk %}">{% csrf_token %}
+              <button class="btn btn-primary btn-sm" style="width:100%;" type="submit">
+                <i class="fas fa-play"></i> Start Poll Now
+              </button>
+            </form>
+          {% elif poll.status == 'live' %}
+            <form method="post" action="{% url 'polls_close' poll.pk %}">{% csrf_token %}
+              <button class="btn btn-danger btn-sm" style="width:100%;" type="submit">
+                <i class="fas fa-stop"></i> Close Poll
+              </button>
+            </form>
+          {% endif %}
+          <a href="{% url 'polls_results' poll.pk %}" class="btn btn-secondary btn-sm" style="width:100%;text-align:center;">
+            <i class="fas fa-chart-bar"></i> View Results
+          </a>
+        </div>
+      </div>
+      {% endif %}
+    </div>
+
+  </div>
+</form>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function onTypeChange() {
+  var t = document.getElementById('pollType').value;
+  document.getElementById('maxChoicesRow').style.display = t === 'multiple' ? 'block' : 'none';
+}
+function onIdeathonChange() {
+  var on = document.getElementById('isIdeathon').checked;
+  document.querySelectorAll('.ideathon-fields').forEach(function(el) {
+    el.style.display = on ? 'grid' : 'none';
+  });
+}
+function addOption() {
+  var isIdeathon = document.getElementById('isIdeathon').checked;
+  var div = document.createElement('div');
+  div.className = 'option-block';
+  div.style.cssText = 'border:1px solid var(--border);border-radius:12px;padding:16px;position:relative;';
+  div.innerHTML = '<button type="button" onclick="removeOption(this)" style="position:absolute;top:10px;right:10px;background:none;border:none;cursor:pointer;color:var(--danger);font-size:16px;"><i class="fas fa-times"></i></button>' +
+    '<div style="display:flex;flex-direction:column;gap:10px;">' +
+    '<div><label class="form-label">Option Text *</label><input class="form-control" name="option_text" required placeholder="Option label"></div>' +
+    (isIdeathon ? '<div style=\"background:var(--primary-light);border-radius:8px;padding:8px;font-size:12px;color:var(--primary);margin-top:6px;\"><i class=\"fas fa-info-circle\"></i> Team data auto-filled from Ideathon panel.</div>' : '') +
+    '</div>';
+  document.getElementById('optionsList').appendChild(div);
+}
+function removeOption(btn) {
+  var blocks = document.querySelectorAll('.option-block');
+  if (blocks.length <= 2) { alert('Minimum 2 options required.'); return; }
+  btn.closest('.option-block').remove();
+}
+onTypeChange();
+</script>
+{% endblock %}

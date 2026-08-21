@@ -28,7 +28,11 @@ urlpatterns = [
     path('conversations/<uuid:conversation_id>/messages/<uuid:message_id>/react/',  views.toggle_reaction, name='chat_toggle_reaction'),
     path('conversations/<uuid:conversation_id>/messages/<uuid:message_id>/report/', views.report_message,  name='chat_report_message'),
 
+    # Shake to Connect
+    path('shake/', views.shake_connect, name='chat_shake_connect'),
+
     # Block
+    path('disconnect/', views.disconnect_user, name='chat_disconnect'),
     path('block/',    views.block_user,   name='chat_block_user'),
     path('unblock/',  views.unblock_user, name='chat_unblock_user'),
     path('blocked/',  views.blocked_list, name='chat_blocked_list'),

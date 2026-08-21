@@ -3,13 +3,13 @@ from django.utils import timezone
 from .models import PointEntry, UserPoints, POINT_VALUES, PointAction
 
 
-def award_points(user, action, note=''):
+def award_points(user, action, note='', points_override=None):
     """
     Award points to a user for an action.
     Creates PointEntry + updates UserPoints total.
-    Returns (point_entry, user_points) or None if action unknown or duplicate daily.
+    Supports points_override for custom amounts (e.g., custom selfie spot points).
     """
-    pts = POINT_VALUES.get(action)
+    pts = points_override if points_override is not None else POINT_VALUES.get(action)
     if pts is None:
         return None
 

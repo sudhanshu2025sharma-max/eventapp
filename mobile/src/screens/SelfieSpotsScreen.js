@@ -40,7 +40,9 @@ export default function SelfieSpotsScreen({ tokens, onBack }) {
       if (res.ok) {
         const data = await res.json();
         setSpots(data.points || []);
-        if (data.selfie_upload_open !== undefined) setSelfieOpen(data.selfie_upload_open);
+        if (data.selfie_upload_open !== undefined) {
+          setSelfieOpen(data.selfie_upload_open);
+        }
       }
     } catch (e) {
       console.log('Error fetching selfie spots:', e);
@@ -65,7 +67,10 @@ export default function SelfieSpotsScreen({ tokens, onBack }) {
   const startLocationTracking = useCallback(async () => {
     try {
       const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== 'granted') { setGpsStatus('denied'); return; }
+      if (status !== 'granted') {
+        setGpsStatus('denied');
+        return;
+      }
       const initial = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
       if (initial?.coords) {
         const sm = smoothLocation(initial.coords) || initial.coords;
@@ -89,13 +94,17 @@ export default function SelfieSpotsScreen({ tokens, onBack }) {
           }
         }
       );
-    } catch (err) { setGpsStatus('error'); }
+    } catch (err) {
+      setGpsStatus('error');
+    }
   }, []);
 
   useEffect(() => {
     fetchSpots();
     startLocationTracking();
-    return () => { if (locSubscriptionRef.current) locSubscriptionRef.current.remove(); };
+    return () => {
+      if (locSubscriptionRef.current) locSubscriptionRef.current.remove();
+    };
   }, [fetchSpots, startLocationTracking]);
 
   const selectedSpot = useMemo(() => {
@@ -106,15 +115,19 @@ export default function SelfieSpotsScreen({ tokens, onBack }) {
   const leafletHTML = useMemo(() => {
     const spotsJson = JSON.stringify(
       spots.map((s) => ({
-        id: s.id, name: s.name, lat: s.latitude, lng: s.longitude,
-        radius: s.radius_meters, completed: s.completed,
+        id: s.id,
+        name: s.name,
+        lat: s.latitude,
+        lng: s.longitude,
+        radius: s.radius_meters,
+        completed: s.completed,
       }))
     );
     return `<!DOCTYPE html>
 <html><head>
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"/>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"><\/script>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <style>
 html,body,#map{height:100%;width:100%;margin:0;padding:0;}
 .leaflet-control-attribution{display:none!important;}
@@ -143,7 +156,7 @@ window.updateUserLocation=function(lat,lng){
     userMarker=L.marker([lat,lng],{icon:L.divIcon({html:u,className:'',iconSize:[16,16],iconAnchor:[8,8]})}).addTo(map);
   }else{userMarker.setLatLng([lat,lng]);}
 };
-<\/script></body></html>`;
+</script></body></html>`;
   }, [spots]);
 
   const onMapMessage = (event) => {
@@ -157,8 +170,14 @@ window.updateUserLocation=function(lat,lng){
   };
 
   const handleTakeSelfie = async (spot) => {
-    if (!selfieOpen) { Alert.alert('Challenges Closed', 'Selfie challenges are currently closed by the organizers.'); return; }
-    if (!userLocation) { Alert.alert('GPS Required', 'Waiting for GPS. Enable location services.'); return; }
+    if (!selfieOpen) {
+      Alert.alert('Challenges Closed', 'Selfie challenges are currently closed by the organizers.');
+      return;
+    }
+    if (!userLocation) {
+      Alert.alert('GPS Required', 'Waiting for GPS. Enable location services.');
+      return;
+    }
     const dist = getHaversineDistanceMeters(userLocation.latitude, userLocation.longitude, spot.latitude, spot.longitude);
     if (dist != null && dist > spot.radius_meters) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(() => {});
@@ -166,9 +185,15 @@ window.updateUserLocation=function(lat,lng){
       return;
     }
     const perm = await ImagePicker.requestCameraPermissionsAsync();
-    if (!perm.granted) { Alert.alert('Camera Required', 'Allow camera access.'); return; }
+    if (!perm.granted) {
+      Alert.alert('Camera Required', 'Allow camera access.');
+      return;
+    }
     const result = await ImagePicker.launchCameraAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images, quality: 0.8, allowsEditing: true, aspect: [1, 1],
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      quality: 0.8,
+      allowsEditing: true,
+      aspect: [1, 1],
     });
     if (result.canceled || !result.assets?.[0]) return;
     const asset = result.assets[0];
@@ -249,8 +274,7 @@ window.updateUserLocation=function(lat,lng){
         </View>
       ) : (
         <View style={{ flex: 1 }}>
-
-          {/* MAP — fixed container */}
+          {/* MAP */}
           {spots.length > 0 && (
             <View style={s.mapWrapper}>
               <WebView
@@ -271,20 +295,21 @@ window.updateUserLocation=function(lat,lng){
             </View>
           )}
 
-          {/* POPUP CARD — shown when map pin is tapped */}
+          {/* POPUP CARD */}
           {selectedSpot && (
             <View style={s.popupCard}>
               <View style={s.popupHeader}>
                 <View style={{ flex: 1 }}>
                   <Text style={s.popupTitle}>{selectedSpot.name}</Text>
-                  {!!selectedSpot.description && <Text style={s.popupDesc} numberOfLines={2}>{selectedSpot.description}</Text>}
+                  {!!selectedSpot.description && (
+                    <Text style={s.popupDesc} numberOfLines={2}>{selectedSpot.description}</Text>
+                  )}
                 </View>
                 <TouchableOpacity onPress={() => setSelectedSpotId(null)} style={s.popupClose}>
                   <Ionicons name="close-circle" size={24} color={COLORS.textTer} />
                 </TouchableOpacity>
               </View>
 
-              {/* Photo + Info Row */}
               <View style={s.popupInfoRow}>
                 {selectedSpot.sample_photo_url && (
                   <Image source={{ uri: fixMediaUrl(selectedSpot.sample_photo_url) }} style={s.popupPhoto} resizeMode="cover" />
@@ -298,9 +323,9 @@ window.updateUserLocation=function(lat,lng){
                     const d = getDistance(selectedSpot);
                     const inside = d != null && d <= selectedSpot.radius_meters;
                     return (
-                      <View style={[s.popupDistBadge, inside && { backgroundColor: COLORS.successLight }]}>
+                      <View style={[s.popupDistBadge, inside ? { backgroundColor: COLORS.successLight } : null]}>
                         <Ionicons name={inside ? 'checkmark-circle' : 'navigate-circle'} size={13} color={inside ? COLORS.success : COLORS.brand} />
-                        <Text style={[s.popupDistText, inside && { color: COLORS.success }]}>
+                        <Text style={[s.popupDistText, inside ? { color: COLORS.success } : null]}>
                           {d != null ? (inside ? `In Range (${Math.round(d)}m)` : formatDistance(d)) : 'Measuring...'}
                         </Text>
                       </View>
@@ -310,7 +335,6 @@ window.updateUserLocation=function(lat,lng){
                 </View>
               </View>
 
-              {/* Popup Action Buttons */}
               <View style={s.popupActions}>
                 <TouchableOpacity
                   style={s.popupDirBtn}
@@ -321,10 +345,19 @@ window.updateUserLocation=function(lat,lng){
                 </TouchableOpacity>
 
                 {!selectedSpot.completed ? (
-                  <TouchableOpacity style={s.popupCaptureBtn} onPress={() => handleTakeSelfie(selectedSpot)} disabled={uploadingId === selectedSpot.id}>
+                  <TouchableOpacity
+                    style={s.popupCaptureBtn}
+                    onPress={() => handleTakeSelfie(selectedSpot)}
+                    disabled={uploadingId === selectedSpot.id}
+                  >
                     <LinearGradient colors={[COLORS.brand, COLORS.brandDark]} style={s.popupCaptureGrad}>
-                      {uploadingId === selectedSpot.id ? <ActivityIndicator color="#fff" size="small" /> : (
-                        <><Ionicons name="camera" size={15} color="#fff" /><Text style={s.popupCaptureText}>Take Selfie</Text></>
+                      {uploadingId === selectedSpot.id ? (
+                        <ActivityIndicator color="#fff" size="small" />
+                      ) : (
+                        <>
+                          <Ionicons name="camera" size={15} color="#fff" />
+                          <Text style={s.popupCaptureText}>Take Selfie</Text>
+                        </>
                       )}
                     </LinearGradient>
                   </TouchableOpacity>
@@ -358,6 +391,7 @@ window.updateUserLocation=function(lat,lng){
                   const distance = getDistance(spot);
                   const isInside = distance != null && distance <= spot.radius_meters;
                   const isUploading = uploadingId === spot.id;
+                  const btnGradient = isInside ? [COLORS.brand, COLORS.brandDark] : ['#94a3b8', '#64748b'];
 
                   return (
                     <View key={spot.id} style={[s.spotCard, spot.completed && s.spotCardCompleted]}>
@@ -398,7 +432,7 @@ window.updateUserLocation=function(lat,lng){
                       <View style={s.radarStrip}>
                         <View style={s.radarLeft}>
                           <Ionicons name={isInside ? 'radio-button-on' : 'navigate-circle-outline'} size={18} color={isInside ? COLORS.success : COLORS.textTer} />
-                          <Text style={[s.distanceText, isInside && { color: COLORS.success, fontWeight: FONT.w8 }]}>
+                          <Text style={[s.distanceText, isInside ? { color: COLORS.success, fontWeight: FONT.w8 } : null]}>
                             {distance != null ? (isInside ? `In Range (${Math.round(distance)}m)` : formatDistance(distance)) : 'Calculating...'}
                           </Text>
                         </View>
@@ -416,10 +450,19 @@ window.updateUserLocation=function(lat,lng){
                         </TouchableOpacity>
 
                         {!spot.completed ? (
-                          <TouchableOpacity style={[s.captureBtn, (!isInside || isUploading) && s.captureBtnDisabled]} disabled={!isInside || isUploading} onPress={() => handleTakeSelfie(spot)}>
-                            <LinearGradient colors={isInside ? [COLORS.brand, COLORS.brandDark] : ['#94a3b8', '#64748b']} style={s.captureBtnGrad}>
-                              {isUploading ? <ActivityIndicator color="#fff" size="small" /> : (
-                                <><Ionicons name="camera" size={16} color="#fff" /><Text style={s.captureBtnText}>{isInside ? 'Take Selfie' : 'Get Closer'}</Text></>
+                          <TouchableOpacity
+                            style={[s.captureBtn, (!isInside || isUploading) ? s.captureBtnDisabled : null]}
+                            disabled={!isInside || isUploading}
+                            onPress={() => handleTakeSelfie(spot)}
+                          >
+                            <LinearGradient colors={btnGradient} style={s.captureBtnGrad}>
+                              {isUploading ? (
+                                <ActivityIndicator color="#fff" size="small" />
+                              ) : (
+                                <>
+                                  <Ionicons name="camera" size={16} color="#fff" />
+                                  <Text style={s.captureBtnText}>{isInside ? 'Take Selfie' : 'Get Closer'}</Text>
+                                </>
                               )}
                             </LinearGradient>
                           </TouchableOpacity>
@@ -441,7 +484,7 @@ window.updateUserLocation=function(lat,lng){
 
       {/* Lightbox Modal */}
       {previewModal && (
-        <Modal transparent animationType="fade" visible={!!previewModal} onRequestClose={() => setPreviewModal(null)}>
+        <Modal transparent animationType="fade" visible={Boolean(previewModal)} onRequestClose={() => setPreviewModal(null)}>
           <View style={s.modalOverlay}>
             <TouchableOpacity style={StyleSheet.absoluteFill} activeOpacity={1} onPress={() => setPreviewModal(null)} />
             <View style={s.modalCard}>
@@ -459,16 +502,27 @@ window.updateUserLocation=function(lat,lng){
                     </View>
                     <Image source={{ uri: fixMediaUrl(imgUrl) }} style={s.modalImage} resizeMode="contain" />
                     <View style={s.modalNavBar}>
-                      <TouchableOpacity style={[s.modalNavBtn, previewModal.spotIndex === 0 && { opacity: 0.3 }]} disabled={previewModal.spotIndex === 0} onPress={() => setPreviewModal((p) => ({ ...p, spotIndex: p.spotIndex - 1 }))}>
+                      <TouchableOpacity
+                        style={[s.modalNavBtn, previewModal.spotIndex === 0 ? { opacity: 0.3 } : null]}
+                        disabled={previewModal.spotIndex === 0}
+                        onPress={() => setPreviewModal((p) => ({ ...p, spotIndex: p.spotIndex - 1 }))}
+                      >
                         <Ionicons name="chevron-back" size={20} color="#fff" />
                         <Text style={s.modalNavBtnText}>Prev</Text>
                       </TouchableOpacity>
                       {spot.sample_photo_url && spot.submission?.photo_url && (
-                        <TouchableOpacity style={s.modalToggleBtn} onPress={() => setPreviewModal((p) => ({ ...p, mode: p.mode === 'sample' ? 'submission' : 'sample' }))}>
+                        <TouchableOpacity
+                          style={s.modalToggleBtn}
+                          onPress={() => setPreviewModal((p) => ({ ...p, mode: p.mode === 'sample' ? 'submission' : 'sample' }))}
+                        >
                           <Text style={s.modalToggleText}>{previewModal.mode === 'sample' ? 'My Selfie' : 'Reference'}</Text>
                         </TouchableOpacity>
                       )}
-                      <TouchableOpacity style={[s.modalNavBtn, previewModal.spotIndex === spots.length - 1 && { opacity: 0.3 }]} disabled={previewModal.spotIndex === spots.length - 1} onPress={() => setPreviewModal((p) => ({ ...p, spotIndex: p.spotIndex + 1 }))}>
+                      <TouchableOpacity
+                        style={[s.modalNavBtn, previewModal.spotIndex === spots.length - 1 ? { opacity: 0.3 } : null]}
+                        disabled={previewModal.spotIndex === spots.length - 1}
+                        onPress={() => setPreviewModal((p) => ({ ...p, spotIndex: p.spotIndex + 1 }))}
+                      >
                         <Text style={s.modalNavBtnText}>Next</Text>
                         <Ionicons name="chevron-forward" size={20} color="#fff" />
                       </TouchableOpacity>
@@ -483,7 +537,7 @@ window.updateUserLocation=function(lat,lng){
 
       {/* IN-APP DIRECTIONS WEBVIEW MODAL */}
       {directionsUrl && (
-        <Modal animationType="slide" visible={!!directionsUrl} onRequestClose={() => setDirectionsUrl(null)}>
+        <Modal animationType="slide" visible={Boolean(directionsUrl)} onRequestClose={() => setDirectionsUrl(null)}>
           <View style={{ flex: 1, backgroundColor: '#fff' }}>
             <View style={s.dirTopBar}>
               <TouchableOpacity onPress={() => setDirectionsUrl(null)} style={s.dirBackBtn}>
@@ -520,7 +574,6 @@ const s = StyleSheet.create({
   mapHint: { position: 'absolute', bottom: 8, alignSelf: 'center', backgroundColor: 'rgba(15,23,42,0.7)', paddingHorizontal: 12, paddingVertical: 4, borderRadius: 20, flexDirection: 'row', alignItems: 'center', gap: 4 },
   mapHintText: { fontSize: 10, color: '#fff', fontWeight: FONT.w7 },
 
-  /* Popup Card */
   popupCard: { backgroundColor: '#fff', marginHorizontal: PAD, marginTop: 12, borderRadius: RADIUS.xxl, padding: SPACE.lg, borderWidth: 1, borderColor: 'rgba(0,0,0,0.06)', ...SHADOW.lg },
   popupHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: SPACE.sm },
   popupTitle: { fontSize: FONT.md, fontWeight: FONT.w9, color: COLORS.text },

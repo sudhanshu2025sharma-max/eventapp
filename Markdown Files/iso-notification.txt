@@ -26,3 +26,22 @@ iOS (Expo Go):     Uses APNs certificates held by Expo
                    → Requires valid Expo push token
                    → Token format: ExponentPushToken[xxxxx]
                    → ONLY works if the token was registered correctly
+
+
+
+
+Progress bar functiality working
+
+progress = (current_day / total_days) * 100. On Day 1 of 3 = 33%, Day 2 = 67%, Day 3 = 100%. It advances by calendar day, not by sessions completed. Since conference dates are 2026-10-23 to 2026-10-25 (3 days), today (Aug 16 2026) is before the conference → confDay returns a large number capped by currentConferenceDay → which clamps to total (3) → shows 100%.
+
+This means during development before the conference dates, progress always shows 100%. That's expected — it'll work correctly during the actual conference.
+
+
+Full implemented set of haptics feedback
+Poll vote submitted ✅
+Meal pass generated ✅
+Ideathon invite accepted ✅
+Photo upload success ✅
+Connection request accepted ✅
+Tab bar press ✅
+Admin check-in haptics already existed ✅

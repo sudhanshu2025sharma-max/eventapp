@@ -1,0 +1,638 @@
+{% extends 'panel/base.html' %}
+
+{% block title %}Selfie Points & Geofencing — ETD 2026 Admin{% endblock %}
+{% block page_title %}Selfie Spots & Geofence Verification{% endblock %}
+{% block page_subtitle %}Manage campus photo spots, set GPS geofence radius, and review attendee selfie uploads.{% endblock %}
+
+{% block content %}
+
+<style>
+    /* Window Control Banner */
+    .window-control-banner {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 16px;
+        padding: 20px 24px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 24px;
+        box-shadow: 0 4px 6px -1px rgba(0,0,0,0.03);
+    }
+    .status-pill-large {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 8px 16px;
+        border-radius: 30px;
+        font-weight: 700;
+        font-size: 13px;
+        letter-spacing: 0.5px;
+    }
+    .status-open { background: rgba(16, 185, 129, 0.12); color: #059669; border: 1px solid rgba(16, 185, 129, 0.2); }
+    .status-closed { background: rgba(239, 68, 68, 0.12); color: #dc2626; border: 1px solid rgba(239, 68, 68, 0.2); }
+
+    /* Dashboard Stats */
+    .dashboard-stats-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+        gap: 20px;
+        margin-bottom: 30px;
+    }
+    .stat-card-premium {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 16px;
+        padding: 22px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        position: relative;
+        overflow: hidden;
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        box-shadow: 0 4px 6px -1px rgba(0,0,0,0.03);
+    }
+    .stat-card-premium:hover {
+        transform: translateY(-3px);
+        border-color: var(--primary);
+    }
+    .stat-card-premium::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 4px;
+        height: 100%;
+        background: var(--primary);
+    }
+    .stat-card-premium.success-accent::before { background: var(--success); }
+    .stat-card-premium.warning-accent::before { background: var(--warning); }
+
+    .stat-icon-wrapper {
+        width: 50px;
+        height: 50px;
+        border-radius: 12px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 20px;
+        background: rgba(99, 102, 241, 0.1);
+        color: var(--primary);
+    }
+    .success-accent .stat-icon-wrapper { background: rgba(46, 204, 113, 0.1); color: var(--success); }
+    .warning-accent .stat-icon-wrapper { background: rgba(241, 196, 15, 0.1); color: var(--warning); }
+
+    /* Layout Panel */
+    .panel-container {
+        display: grid;
+        grid-template-columns: 380px 1fr;
+        gap: 30px;
+        margin-bottom: 40px;
+    }
+    @media (max-width: 1024px) {
+        .panel-container { grid-template-columns: 1fr; }
+    }
+
+    .form-section-card {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 16px;
+        box-shadow: 0 4px 6px -1px rgba(0,0,0,0.03);
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+    }
+    .form-group-premium { margin-bottom: 16px; }
+    .form-label-premium {
+        display: block;
+        font-size: 12px;
+        font-weight: 700;
+        color: var(--text);
+        margin-bottom: 6px;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+    .form-control-premium {
+        width: 100%;
+        padding: 12px 14px;
+        border-radius: 10px;
+        border: 1px solid var(--border);
+        background: var(--bg);
+        color: var(--text);
+        font-size: 14px;
+    }
+    .form-control-premium:focus {
+        border-color: var(--primary);
+        outline: none;
+    }
+
+    /* Table */
+    .premium-table-card {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 16px;
+        box-shadow: 0 4px 6px -1px rgba(0,0,0,0.03);
+        overflow: hidden;
+        margin-bottom: 40px;
+    }
+    .table-premium {
+        width: 100%;
+        border-collapse: separate;
+        border-spacing: 0;
+    }
+    .table-premium th {
+        background: var(--bg);
+        color: var(--text-sec);
+        font-weight: 600;
+        font-size: 12px;
+        text-transform: uppercase;
+        padding: 16px 20px;
+        letter-spacing: 0.5px;
+        border-bottom: 1px solid var(--border);
+    }
+    .table-premium td {
+        padding: 16px 20px;
+        border-bottom: 1px solid var(--border);
+        color: var(--text);
+        vertical-align: middle;
+        font-size: 14px;
+    }
+    .table-premium tr:last-child td { border-bottom: none; }
+    .table-premium tr:hover td { background: rgba(0, 0, 0, 0.01); }
+
+    /* Thumbnails */
+    .selfie-thumbnail-container {
+        width: 44px;
+        height: 44px;
+        border-radius: 10px;
+        overflow: hidden;
+        border: 2px solid var(--border);
+        transition: all 0.2s ease;
+        cursor: pointer;
+    }
+    .selfie-thumbnail-container:hover {
+        transform: scale(1.1);
+        border-color: var(--primary);
+    }
+    .selfie-thumbnail { width: 100%; height: 100%; object-fit: cover; }
+
+    /* Modal */
+    .premium-modal {
+        display: none;
+        position: fixed;
+        top: 0; left: 0; width: 100%; height: 100%;
+        background: rgba(15, 23, 42, 0.85);
+        backdrop-filter: blur(8px);
+        z-index: 10000;
+        justify-content: center;
+        align-items: center;
+    }
+    .premium-modal.show { display: flex; }
+    .modal-content-wrapper {
+        background: var(--surface);
+        padding: 16px;
+        border-radius: 20px;
+        max-width: 500px;
+        width: 90%;
+        position: relative;
+    }
+    .modal-close-btn {
+        position: absolute;
+        top: -15px; right: -15px;
+        width: 36px; height: 36px;
+        border-radius: 50%;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        color: var(--text);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+    }
+
+    .custom-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 6px 12px;
+        border-radius: 20px;
+        font-size: 12px;
+        font-weight: 600;
+    }
+    .pill-indigo { background: rgba(99, 102, 241, 0.1); color: #4f46e5; }
+    .pill-amber { background: rgba(245, 158, 11, 0.1); color: #d97706; }
+    .pill-green { background: rgba(16, 185, 129, 0.1); color: #059669; }
+</style>
+
+{% if messages %}
+    {% for m in messages %}
+        <div class="alert alert-{% if m.tags == 'error' %}error{% elif m.tags == 'success' %}success{% else %}warning{% endif %}" style="border-radius:12px; margin-bottom:20px;">
+            <i class="fas fa-{% if m.tags == 'error' %}circle-exclamation{% else %}circle-check{% endif %}"></i>
+            {{ m }}
+        </div>
+    {% endfor %}
+{% endif %}
+
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+<!-- Global Challenge Window Control Strip -->
+<div class="window-control-banner">
+    <div>
+        <div style="font-size: 13px; font-weight: 700; color: var(--text-sec); text-transform: uppercase;">
+            Attendee Challenge Status
+        </div>
+        <div style="margin-top: 4px;">
+            {% if cfg.selfie_upload_open %}
+                <span class="status-pill-large status-open">
+                    <i class="fas fa-circle-dot"></i> Challenge Active (Attendees Can Upload)
+                </span>
+            {% else %}
+                <span class="status-pill-large status-closed">
+                    <i class="fas fa-lock"></i> Challenge Closed (Uploads Blocked)
+                </span>
+            {% endif %}
+        </div>
+    </div>
+    <form method="post" style="margin: 0;">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="toggle_window">
+        <button type="submit" class="btn {% if cfg.selfie_upload_open %}btn-danger{% else %}btn-success{% endif %}" style="padding: 10px 20px; border-radius: 12px; font-weight: 700;">
+            {% if cfg.selfie_upload_open %}
+                <i class="fas fa-lock"></i> Close Challenge Window
+            {% else %}
+                <i class="fas fa-lock-open"></i> Open Challenge Window
+            {% endif %}
+        </button>
+    </form>
+</div>
+
+<!-- Stats Strip -->
+<div class="dashboard-stats-grid">
+    <div class="stat-card-premium">
+        <div>
+            <div style="font-size: 12px; color: var(--text-sec); font-weight: 700; letter-spacing: 0.5px; text-transform: uppercase;">Active Spots</div>
+            <div style="font-size: 32px; font-weight: 800; color: var(--text); margin-top: 4px;">{{ points|length }}</div>
+        </div>
+        <div class="stat-icon-wrapper">
+            <i class="fas fa-map-pin"></i>
+        </div>
+    </div>
+    <div class="stat-card-premium warning-accent">
+        <div>
+            <div style="font-size: 12px; color: var(--text-sec); font-weight: 700; letter-spacing: 0.5px; text-transform: uppercase;">Total Submissions</div>
+            <div style="font-size: 32px; font-weight: 800; color: var(--text); margin-top: 4px;">{{ total_submissions }}</div>
+        </div>
+        <div class="stat-icon-wrapper">
+            <i class="fas fa-camera"></i>
+        </div>
+    </div>
+    <div class="stat-card-premium success-accent">
+        <div>
+            <div style="font-size: 12px; color: var(--text-sec); font-weight: 700; letter-spacing: 0.5px; text-transform: uppercase;">Geofence Verified</div>
+            <div style="font-size: 32px; font-weight: 800; color: var(--success); margin-top: 4px;">{{ verified_count }}</div>
+        </div>
+        <div class="stat-icon-wrapper">
+            <i class="fas fa-shield-halved"></i>
+        </div>
+    </div>
+</div>
+
+<!-- Split Form + Map Panel -->
+<div class="panel-container">
+    <div class="form-section-card">
+        <div class="card-header" style="border-bottom: 1px solid var(--border); padding: 20px;">
+            <h3 style="font-size:18px; font-weight:800; display:flex; align-items:center; gap:8px;">
+                <i class="fas fa-circle-plus" style="color:var(--primary);"></i> Add Selfie Spot
+            </h3>
+        </div>
+        <div class="card-body" style="padding: 20px;">
+            <form method="post" enctype="multipart/form-data">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="create">
+
+                <div class="form-group-premium">
+                    <label class="form-label-premium">Spot Name *</label>
+                    <input class="form-control-premium" name="name" required placeholder="e.g. Dogra Hall Columns">
+                </div>
+
+                <div class="form-group-premium">
+                    <label class="form-label-premium">Description / Task Details</label>
+                    <textarea class="form-control-premium" name="description" rows="2" placeholder="Pose with the main foyer glass archway visible behind you."></textarea>
+                </div>
+
+                <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;" class="form-group-premium">
+                    <div>
+                        <label class="form-label-premium">Latitude *</label>
+                        <input class="form-control-premium" id="sf_lat" name="latitude" type="number" step="any" required placeholder="28.5455" oninput="syncSelfieInputs()">
+                    </div>
+                    <div>
+                        <label class="form-label-premium">Longitude *</label>
+                        <input class="form-control-premium" id="sf_lng" name="longitude" type="number" step="any" required placeholder="77.1930" oninput="syncSelfieInputs()">
+                    </div>
+                </div>
+
+                <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;" class="form-group-premium">
+                    <div>
+                        <label class="form-label-premium">Radius (Meters)</label>
+                        <input class="form-control-premium" name="radius_meters" type="number" value="20" required>
+                    </div>
+                    <div>
+                        <label class="form-label-premium">Completion Pts</label>
+                        <input class="form-control-premium" name="points" type="number" value="10" required>
+                    </div>
+                </div>
+
+                <div class="form-group-premium">
+                    <label class="form-label-premium">Sample Reference Photo</label>
+                    <input type="file" class="form-control-premium" name="sample_photo" accept="image/*" style="padding: 8px 12px;">
+                </div>
+
+                <div style="margin: 20px 0 24px 0;">
+                    <label style="display:flex; align-items:center; gap:10px; cursor:pointer; font-weight:600; font-size:14px; color:var(--text);">
+                        <input type="checkbox" name="is_active" checked style="width:18px; height:18px; accent-color:var(--primary); cursor:pointer;"> 
+                        Activate this spot immediately
+                    </label>
+                </div>
+
+                <button type="submit" class="btn btn-primary" style="width:100%; padding:14px; border-radius:12px; font-weight:700; font-size:15px; display:flex; align-items:center; justify-content:center; gap:8px;">
+                    <i class="fas fa-location-arrow"></i> Establish Spot Zone
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Map Card Panel -->
+    <div class="form-section-card">
+        <div class="card-header" style="border-bottom: 1px solid var(--border); padding: 20px; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px;">
+            <h3 style="font-size:18px; font-weight:800; display:flex; align-items:center; gap:8px;">
+                <i class="fas fa-map-location-dot" style="color:var(--primary);"></i> Campus Pinpointer
+            </h3>
+            <button type="button" class="btn btn-sm btn-secondary" onclick="useCurrentGps('sf_lat', 'sf_lng', updateSelfieMarker)" style="border-radius:8px; font-weight:600; display:flex; align-items:center; gap:6px; padding: 8px 14px;">
+                <i class="fas fa-crosshairs"></i> Use GPS
+            </button>
+        </div>
+        <div class="card-body" style="padding:16px; background:var(--bg);">
+            <div id="selfie_map" style="height:480px; width:100%; border-radius:12px; border:1px solid var(--border); z-index:1;"></div>
+        </div>
+    </div>
+</div>
+
+<!-- Active Selfie Spots Table -->
+<div class="premium-table-card">
+    <div class="card-header" style="border-bottom: 1px solid var(--border); padding: 20px;">
+        <h3 style="font-size:18px; font-weight:800; display:flex; align-items:center; gap:8px;">
+            <i class="fas fa-location-dot" style="color:var(--primary);"></i> Active Selfie Points
+        </h3>
+    </div>
+    <div style="overflow-x: auto;">
+        <table class="table-premium">
+            <thead>
+                <tr>
+                    <th>Spot details</th>
+                    <th>Reference</th>
+                    <th>Coordinates</th>
+                    <th>Radius</th>
+                    <th>Points Value</th>
+                    <th>Status</th>
+                    <th style="text-align: right;">Management Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for sp in points %}
+                <tr>
+                    <td>
+                        <div style="font-weight: 700; color: var(--text); font-size:15px;">{{ sp.name }}</div>
+                        {% if sp.description %}
+                            <div style="color: var(--text-sec); font-size: 13px; margin-top: 4px; max-width: 320px; line-height: 1.4;">{{ sp.description }}</div>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if sp.sample_photo %}
+                            <div class="selfie-thumbnail-container" onclick="openPhotoModal('{{ sp.sample_photo.url }}')">
+                                <img src="{{ sp.sample_photo.url }}" class="selfie-thumbnail" alt="Sample Reference">
+                            </div>
+                        {% else %}
+                            <span style="font-size: 12px; color:var(--text-sec); font-style: italic;">No reference photo</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <span style="font-family: monospace; font-size: 13px; color: var(--text-sec); background: var(--bg); padding: 4px 8px; border-radius: 6px; border: 1px solid var(--border);">
+                            {{ sp.latitude|slice:":9" }}, {{ sp.longitude|slice:":9" }}
+                        </span>
+                    </td>
+                    <td>
+                        <span class="custom-pill pill-indigo">
+                            <i class="fas fa-circle-notch"></i> {{ sp.radius_meters }}m
+                        </span>
+                    </td>
+                    <td>
+                        <span class="custom-pill pill-amber">
+                            <i class="fas fa-award"></i> +{{ sp.points }} pts
+                        </span>
+                    </td>
+                    <td>
+                        {% if sp.is_active %}
+                            <span class="badge badge-success" style="padding: 5px 10px; border-radius: 20px;">Active</span>
+                        {% else %}
+                            <span class="badge badge-secondary" style="padding: 5px 10px; border-radius: 20px; opacity:0.6;">Disabled</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <div style="display:flex; gap:8px; justify-content: flex-end;">
+                            <form method="post" style="display:inline;">
+                                {% csrf_token %}
+                                <input type="hidden" name="action" value="toggle">
+                                <input type="hidden" name="pk" value="{{ sp.pk }}">
+                                <button type="submit" class="btn btn-sm btn-secondary" style="border-radius: 8px; font-weight: 600;">
+                                    {% if sp.is_active %}Deactivate{% else %}Activate{% endif %}
+                                </button>
+                            </form>
+                            <form method="post" style="display:inline;" onsubmit="return confirm('Delete this selfie spot?');">
+                                {% csrf_token %}
+                                <input type="hidden" name="action" value="delete">
+                                <input type="hidden" name="pk" value="{{ sp.pk }}">
+                                <button type="submit" class="btn btn-sm btn-danger" style="border-radius: 8px; padding: 6px 12px;"><i class="fas fa-trash"></i></button>
+                            </form>
+                        </div>
+                    </td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="7" style="text-align:center; padding:48px; color:var(--text-sec);">
+                        <i class="fas fa-map-location" style="font-size: 36px; color:var(--border); margin-bottom: 12px; display:block;"></i>
+                        No selfie points established on campus yet. Add one using the panel above.
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Attendee Submissions Table -->
+<div class="premium-table-card">
+    <div class="card-header" style="border-bottom: 1px solid var(--border); padding: 20px; display:flex; align-items:center; justify-content:space-between;">
+        <h3 style="font-size:18px; font-weight:800; display:flex; align-items:center; gap:8px;">
+            <i class="fas fa-images" style="color:var(--primary);"></i> Attendee Selfie Submissions
+        </h3>
+        <span class="custom-pill pill-green" style="font-size:13px;">
+            <i class="fas fa-circle-check"></i> {{ submissions|length }} Submissions
+        </span>
+    </div>
+    <div style="overflow-x: auto;">
+        <table class="table-premium">
+            <thead>
+                <tr>
+                    <th>Attendee</th>
+                    <th>Selfie Spot</th>
+                    <th>Selfie Upload</th>
+                    <th>Proximity</th>
+                    <th>Verification</th>
+                    <th>Date & Time</th>
+                    <th style="text-align: right;">Action</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for sub in submissions %}
+                <tr>
+                    <td>
+                        <div style="font-weight: 700; color: var(--text); font-size:14px;">{{ sub.user.get_full_name|default:sub.user.email }}</div>
+                        <div style="font-size:12px; color:var(--text-sec); margin-top:2px;">{{ sub.user.email }}</div>
+                    </td>
+                    <td style="font-weight: 600; color: var(--text);">
+                        {{ sub.selfie_point.name }}
+                    </td>
+                    <td>
+                        {% if sub.photo %}
+                            <div class="selfie-thumbnail-container" onclick="openPhotoModal('{{ sub.photo.url }}')">
+                                <img src="{{ sub.photo.url }}" class="selfie-thumbnail" alt="Attendee Selfie">
+                            </div>
+                        {% else %}
+                            <span style="font-size: 12px; color:var(--text-sec); font-style: italic;">No file</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <span style="font-family: monospace; font-size: 13px; font-weight:600; color: var(--text); background: var(--bg); padding: 4px 8px; border-radius: 6px; border: 1px solid var(--border);">
+                            {{ sub.distance_meters|floatformat:1 }}m away
+                        </span>
+                    </td>
+                    <td>
+                        {% if sub.verified_in_geofence %}
+                            <span class="custom-pill pill-green">
+                                <i class="fas fa-circle-check"></i> Verified Inside
+                            </span>
+                        {% else %}
+                            <span class="custom-pill pill-amber" style="background:rgba(239, 68, 68, 0.1); color:#ef4444;">
+                                <i class="fas fa-circle-xmark"></i> Out of Bounds
+                            </span>
+                        {% endif %}
+                    </td>
+                    <td style="font-size: 13px; color: var(--text-sec); font-weight: 500;">
+                        {{ sub.created_at|date:"M d, Y @ H:i" }}
+                    </td>
+                    <td style="text-align: right;">
+                        <form method="post" style="display:inline;" onsubmit="return confirm('Delete this attendee submission?');">
+                            {% csrf_token %}
+                            <input type="hidden" name="action" value="delete_submission">
+                            <input type="hidden" name="pk" value="{{ sub.pk }}">
+                            <button type="submit" class="btn btn-sm btn-danger" style="border-radius: 8px; padding: 6px 12px;">
+                                <i class="fas fa-trash"></i> Delete
+                            </button>
+                        </form>
+                    </td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="7" style="text-align:center; padding:48px; color:var(--text-sec);">
+                        <i class="fas fa-images-slash" style="font-size: 36px; color:var(--border); margin-bottom: 12px; display:block;"></i>
+                        No selfie uploads submitted by attendees yet.
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Modal -->
+<div class="premium-modal" id="photo_enlarger_modal" onclick="closePhotoModal()">
+    <div class="modal-content-wrapper" onclick="event.stopPropagation()">
+        <div class="modal-close-btn" onclick="closePhotoModal()">
+            <i class="fas fa-times"></i>
+        </div>
+        <img id="modal_large_img" src="" style="width: 100%; border-radius: 12px; object-fit: contain; max-height: 70vh;" alt="Enlarged Reference">
+    </div>
+</div>
+
+<script>
+(function() {
+    var initLat = 28.5456, initLng = 77.1923;
+    var map = L.map('selfie_map').setView([initLat, initLng], 17);
+    
+    L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        maxZoom: 19,
+        attribution: '&copy; OpenStreetMap contributors'
+    }).addTo(map);
+
+    var marker = L.marker([initLat, initLng], { draggable: true }).addTo(map);
+
+    function setCoords(lat, lng) {
+        document.getElementById('sf_lat').value = lat.toFixed(7);
+        document.getElementById('sf_lng').value = lng.toFixed(7);
+    }
+
+    marker.on('dragend', function(e) {
+        var pt = marker.getLatLng();
+        setCoords(pt.lat, pt.lng);
+    });
+
+    map.on('click', function(e) {
+        marker.setLatLng(e.latlng);
+        setCoords(e.latlng.lat, e.latlng.lng);
+    });
+
+    window.updateSelfieMarker = function(lat, lng) {
+        marker.setLatLng([lat, lng]);
+        map.setView([lat, lng], 18);
+        setCoords(lat, lng);
+    };
+
+    window.syncSelfieInputs = function() {
+        var lat = parseFloat(document.getElementById('sf_lat').value);
+        var lng = parseFloat(document.getElementById('sf_lng').value);
+        if (!isNaN(lat) && !isNaN(lng)) {
+            marker.setLatLng([lat, lng]);
+            map.panTo([lat, lng]);
+        }
+    };
+})();
+
+function useCurrentGps(latId, lngId, cb) {
+    if (!navigator.geolocation) {
+        alert('Geolocation is not supported by your browser.');
+        return;
+    }
+    navigator.geolocation.getCurrentPosition(function(pos) {
+        var lat = pos.coords.latitude;
+        var lng = pos.coords.longitude;
+        cb(lat, lng);
+    }, function(err) {
+        alert('Error getting location: ' + err.message);
+    }, { enableHighAccuracy: true });
+}
+
+function openPhotoModal(imgUrl) {
+    var modal = document.getElementById('photo_enlarger_modal');
+    var modalImg = document.getElementById('modal_large_img');
+    modalImg.src = imgUrl;
+    modal.classList.add('show');
+}
+
+function closePhotoModal() {
+    var modal = document.getElementById('photo_enlarger_modal');
+    modal.classList.remove('show');
+}
+</script>
+
+{% endblock %}

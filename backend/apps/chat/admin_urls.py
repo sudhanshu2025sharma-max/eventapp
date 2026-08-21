@@ -8,5 +8,6 @@ urlpatterns = [
     path('chat/reports/',                             admin_views.chat_reports_panel,  name='chat_reports_panel'),
     path('chat/reports/<uuid:report_id>/action/',     admin_views.chat_report_action,  name='chat_report_action'),
     path('chat/analytics/',                           admin_views.chat_analytics,      name='chat_analytics'),
+    path('chat/shakes/',                               admin_views.chat_shakes_panel,   name='chat_shakes_panel'),
     path('chat/export/',                              admin_views.chat_export,         name='chat_export'),
 ]

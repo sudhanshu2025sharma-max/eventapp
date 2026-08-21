@@ -1,0 +1,197 @@
+{% extends "panel/base.html" %}
+{% block title %}Ideathon — ETD 2026{% endblock %}
+{% block page_title %}Ideathon 2026{% endblock %}
+{% block page_subtitle %}Manage team registration and audience voting{% endblock %}
+
+{% block content %}
+{% if messages %}
+  {% for m in messages %}
+    <div class="alert alert-{% if m.tags == 'error' %}error{% elif m.tags == 'warning' %}warning{% else %}success{% endif %}">
+      <i class="fas fa-{% if m.tags == 'error' %}exclamation-circle{% else %}check-circle{% endif %}"></i> {{ m }}
+    </div>
+  {% endfor %}
+{% endif %}
+
+<!-- Stats -->
+<div class="stats-grid" style="grid-template-columns:repeat(3,1fr);margin-bottom:24px;">
+  <div class="stat-card">
+    <div class="stat-card-header">
+      <div class="stat-icon" style="background:{% if cfg.is_open %}var(--success-light){% else %}var(--danger-light){% endif %};">
+        <i class="fas fa-door-{% if cfg.is_open %}open{% else %}closed{% endif %}" style="color:{% if cfg.is_open %}var(--success){% else %}var(--danger){% endif %};"></i>
+      </div>
+      <span class="badge {% if cfg.is_open %}badge-success{% else %}badge-danger{% endif %}">
+        {% if cfg.is_open %}OPEN{% else %}CLOSED{% endif %}
+      </span>
+    </div>
+    <div class="stat-value">Registration</div>
+    <div class="stat-label">Team sign-up window</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-card-header">
+      <div class="stat-icon" style="background:var(--primary-light);"><i class="fas fa-people-group" style="color:var(--primary);"></i></div>
+    </div>
+    <div class="stat-value">{{ total_teams }}</div>
+    <div class="stat-label">Teams Registered</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-card-header">
+      <div class="stat-icon" style="background:var(--warning-light);"><i class="fas fa-users" style="color:var(--warning);"></i></div>
+    </div>
+    <div class="stat-value">{{ total_members }}</div>
+    <div class="stat-label">Total Participants</div>
+  </div>
+</div>
+
+<div style="display:grid;grid-template-columns:1fr 360px;gap:24px;align-items:start;">
+
+  <!-- Left: Teams -->
+  <div style="display:flex;flex-direction:column;gap:20px;">
+
+    <div class="page-header" style="margin-bottom:0;">
+      <h1 style="font-size:20px;">Registered Teams</h1>
+      <div style="display:flex;gap:8px;">
+        <form method="post" style="display:inline;">{% csrf_token %}
+          <input type="hidden" name="action" value="toggle_registration">
+          <button class="btn {% if cfg.is_open %}btn-danger{% else %}btn-primary{% endif %}" type="submit">
+            <i class="fas fa-{% if cfg.is_open %}lock{% else %}lock-open{% endif %}"></i>
+            {% if cfg.is_open %}Close Registration{% else %}Open Registration{% endif %}
+          </button>
+        </form>
+        {% if total_teams >= 2 %}
+        <form method="post" style="display:inline;" onsubmit="return confirm('This will create a draft voting poll with all {{ total_teams }} teams as options. Continue?');">
+          {% csrf_token %}
+          <input type="hidden" name="action" value="create_voting_poll">
+          <button class="btn btn-primary" type="submit" style="background:var(--warning);border-color:var(--warning);">
+            <i class="fas fa-trophy"></i> Create Voting Poll
+          </button>
+        </form>
+        {% endif %}
+      </div>
+    </div>
+
+    {% if teams %}
+    {% for team in teams %}
+    <div class="card">
+      <div class="card-header">
+        <div>
+          <h3 style="display:flex;align-items:center;gap:8px;">
+            {{ team.name }}
+            <span class="badge badge-info">{{ team.member_count }} member{{ team.member_count|pluralize }}</span>
+          </h3>
+          {% if team.project_title %}
+          <div style="font-size:13px;color:var(--text-secondary);margin-top:4px;">{{ team.project_title }}</div>
+          {% endif %}
+        </div>
+        <form method="post" onsubmit="return confirm('Delete team {{ team.name }}? All members will be removed.');">
+          {% csrf_token %}
+          <input type="hidden" name="action" value="delete_team">
+          <input type="hidden" name="team_id" value="{{ team.pk }}">
+          <button class="btn btn-danger btn-sm" type="submit"><i class="fas fa-trash"></i></button>
+        </form>
+      </div>
+      <div class="card-body">
+        {% if team.project_desc %}
+        <p style="font-size:13px;color:var(--text-tertiary);margin-bottom:12px;">{{ team.project_desc }}</p>
+        {% endif %}
+        <table class="data-table">
+          <thead>
+            <tr><th>Member</th><th>Email</th><th>Role</th><th></th></tr>
+          </thead>
+          <tbody>
+            {% for mem in team.members.all %}
+            <tr>
+              <td style="font-weight:600;">{{ mem.user.get_full_name|default:mem.user.email }}</td>
+              <td style="font-size:12px;color:var(--text-tertiary);">{{ mem.user.email }}</td>
+              <td>
+                {% if mem.user_id == team.leader_id %}
+                <span class="badge badge-warning">Leader</span>
+                {% else %}
+                <span class="badge" style="background:#f1f5f9;color:#64748b;">Member</span>
+                {% endif %}
+              </td>
+              <td>
+                <form method="post" style="display:inline;" onsubmit="return confirm('Remove {{ mem.user.get_full_name }} from team?');">
+                  {% csrf_token %}
+                  <input type="hidden" name="action" value="remove_member">
+                  <input type="hidden" name="member_user_id" value="{{ mem.user_id }}">
+                  <button class="btn btn-secondary btn-sm" type="submit"><i class="fas fa-user-minus"></i></button>
+                </form>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+    {% endfor %}
+    {% else %}
+    <div class="card">
+      <div class="card-body">
+        <div class="empty-state">
+          <i class="fas fa-people-group"></i>
+          <h3>No teams yet</h3>
+          <p>Open registration so participants can form teams in the app.</p>
+        </div>
+      </div>
+    </div>
+    {% endif %}
+  </div>
+
+  <!-- Right: Settings -->
+  <div style="display:flex;flex-direction:column;gap:16px;position:sticky;top:80px;">
+    <div class="card">
+      <div class="card-header"><h3>Registration Settings</h3></div>
+      <div class="card-body">
+        <form method="post">
+          {% csrf_token %}
+          <input type="hidden" name="action" value="save_config">
+          <div style="display:flex;flex-direction:column;gap:14px;">
+            <label style="display:flex;align-items:center;gap:8px;font-size:14px;cursor:pointer;">
+              <input type="checkbox" name="registration_open" {% if cfg.registration_open %}checked{% endif %}>
+              Registration Window Open
+            </label>
+            <div>
+              <label class="form-label">Opens At (IST)</label>
+              <input class="form-control" type="datetime-local" name="reg_starts_at"
+                value="{% if cfg.reg_starts_at %}{{ cfg.reg_starts_at|date:'Y-m-d\TH:i' }}{% endif %}">
+            </div>
+            <div>
+              <label class="form-label">Closes At (IST)</label>
+              <input class="form-control" type="datetime-local" name="reg_ends_at"
+                value="{% if cfg.reg_ends_at %}{{ cfg.reg_ends_at|date:'Y-m-d\TH:i' }}{% endif %}">
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+              <div>
+                <label class="form-label">Min Team Size</label>
+                <input class="form-control" type="number" name="min_team_size" min="1" max="10" value="{{ cfg.min_team_size }}">
+              </div>
+              <div>
+                <label class="form-label">Max Team Size</label>
+                <input class="form-control" type="number" name="max_team_size" min="2" max="10" value="{{ cfg.max_team_size }}">
+              </div>
+            </div>
+            <div>
+              <label class="form-label">Description</label>
+              <textarea class="form-control" name="description" rows="3">{{ cfg.description }}</textarea>
+            </div>
+            <button type="submit" class="btn btn-primary" style="width:100%;"><i class="fas fa-save"></i> Save Settings</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header"><h3>Workflow</h3></div>
+      <div class="card-body" style="font-size:13px;color:var(--text-secondary);line-height:1.8;">
+        <strong>1.</strong> Open registration window<br>
+        <strong>2.</strong> Participants form teams in app (2-5 members)<br>
+        <strong>3.</strong> Close registration when ready<br>
+        <strong>4.</strong> Click "Create Voting Poll" above<br>
+        <strong>5.</strong> Go to Polls → Start the poll live<br>
+        <strong>6.</strong> Audience votes → Close poll → Reveal results
+      </div>
+    </div>
+  </div>
+
+</div>
+{% endblock %}

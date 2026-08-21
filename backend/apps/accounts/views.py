@@ -383,3 +383,204 @@ def participant_create_view(request):
         'registration_id': reg_id,
         'email':           email,
     }, status=201)
+
+# Add to bottom of backend/apps/accounts/views.py
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def discover_view(request):
+    """
+    GET /api/v1/accounts/discover/
+    Returns checked-in attendees sorted by research interest overlap
+    with the requesting user. Also returns interest_cloud.
+    """
+    from django.db.models import Q
+    from apps.checkins.models import CheckIn
+
+    me = request.user
+    my_tags = {t.strip().lower() for t in (me.research_interests or '').split(',') if t.strip()}
+
+    # Checked-in non-admin participants (same queryset logic as network_list)
+    checked_in_ids = CheckIn.objects.filter(
+        checkin_type='conference'
+    ).values_list('user_id', flat=True)
+
+    qs = User.objects.filter(
+        is_active=True,
+        id__in=checked_in_ids,
+    ).exclude(
+        id=me.id
+    ).exclude(
+        role__in=['super_admin', 'mgmt_admin']
+    ).only(
+        'id', 'first_name', 'last_name', 'affiliation',
+        'designation', 'profile_photo', 'research_interests', 'role',
+    )
+
+    # Build interest cloud (all interests → count of people)
+    cloud = {}
+    matches = []
+
+    for u in qs:
+        their_tags = {t.strip().lower() for t in (u.research_interests or '').split(',') if t.strip()}
+
+        # Populate cloud regardless of overlap
+        for tag in their_tags:
+            cloud[tag] = cloud.get(tag, 0) + 1
+
+        if not their_tags:
+            continue
+
+        common = sorted(my_tags & their_tags)   # sorted for stable output
+        if not common:
+            continue
+
+        photo = None
+        if u.profile_photo:
+            try:
+                photo = request.build_absolute_uri(u.profile_photo.url)
+            except Exception:
+                pass
+
+        matches.append({
+            'id':               str(u.id),
+            'name':             u.get_full_name(),
+            'affiliation':      u.affiliation or '',
+            'designation':      u.designation or '',
+            'profile_photo_url': photo,
+            'role':             u.role,
+            'common_interests': common,
+            'all_interests':    sorted(their_tags),
+            'match_score':      len(common),
+        })
+
+    matches.sort(key=lambda x: x['match_score'], reverse=True)
+
+    return Response({
+        'my_interests':    sorted(my_tags),
+        'matches':         matches,
+        'match_count':     len(matches),
+        'interest_cloud':  sorted(cloud.items(), key=lambda x: x[1], reverse=True),
+        'has_interests':   bool(my_tags),
+    })
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def my_recap_view(request):
+    from django.utils import timezone
+    from apps.leaderboard.models import PointEntry, UserPoints, PointAction
+    from apps.photos.models import Photo
+    from apps.polls.models import Vote
+    from apps.polls.ideathon_models import IdeathonMember
+    from apps.schedule.models import SessionBookmark
+
+    user = request.user
+
+    # ── Determine conference day ──────────────────────────────────────
+    day_param = request.GET.get('day')
+    if day_param and day_param in ('1', '2', '3'):
+        day = int(day_param)
+    else:
+        # Auto-detect from conference dates
+        from datetime import date
+        DAY_MAP = {
+            date(2026, 10, 23): 1,
+            date(2026, 10, 24): 2,
+            date(2026, 10, 25): 3,
+        }
+        today = timezone.localdate()
+        day = DAY_MAP.get(today, 1)
+
+    # ── Date range for selected day (IST) ────────────────────────────
+    from datetime import date, timedelta
+    from django.utils.timezone import make_aware
+    import datetime as dt
+    DAY_DATES = {1: date(2026, 10, 23), 2: date(2026, 10, 24), 3: date(2026, 10, 25)}
+    day_date  = DAY_DATES[day]
+    ist_offset = dt.timezone(dt.timedelta(hours=5, minutes=30))
+    day_start = dt.datetime(day_date.year, day_date.month, day_date.day, 0, 0, 0, tzinfo=ist_offset)
+    day_end   = day_start + dt.timedelta(days=1)
+
+    # ── Point entries for today ───────────────────────────────────────
+    entries_today = PointEntry.objects.filter(
+        user=user,
+        created_at__gte=day_start,
+        created_at__lt=day_end,
+    )
+    points_today = sum(e.points for e in entries_today)
+    connections_today = entries_today.filter(action=PointAction.NETWORKING).count()
+
+    # ── Total points + rank ───────────────────────────────────────────
+    try:
+        up = UserPoints.objects.get(user=user)
+        total_points = up.total_points
+        rank = up.rank
+    except UserPoints.DoesNotExist:
+        total_points = 0
+        rank = None
+
+    # ── Bookmarked sessions for this day ─────────────────────────────
+    bookmarks = SessionBookmark.objects.filter(
+        user=user,
+        session__day=day,
+    ).select_related('session').order_by('session__start_datetime')
+
+    bookmarked = []
+    for b in bookmarks:
+        s = b.session
+        bookmarked.append({
+            'title': s.title,
+            'time': s.start_datetime.astimezone(ist_offset).strftime('%H:%M') if s.start_datetime else '',
+            'session_type': s.session_type,
+        })
+
+    # ── Photos uploaded today ─────────────────────────────────────────
+    photos_today = Photo.objects.filter(
+        uploader=user,
+        created_at__gte=day_start,
+        created_at__lt=day_end,
+    ).count()
+
+    # ── Polls voted today ─────────────────────────────────────────────
+    polls_today = Vote.objects.filter(
+        user=user,
+        created_at__gte=day_start,
+        created_at__lt=day_end,
+    ).count()
+
+    # ── Ideathon team ─────────────────────────────────────────────────
+    team_name = None
+    try:
+        m = IdeathonMember.objects.select_related('team').get(user=user)
+        team_name = m.team.name
+    except IdeathonMember.DoesNotExist:
+        pass
+
+    # ── Highlight string ──────────────────────────────────────────────
+    highlight = None
+    if rank and rank <= 3:
+        highlight = f"🏆 You're in the Top 3 at ETD 2026!"
+    elif rank and rank <= 10:
+        highlight = f"🔥 You're in the Top 10 — amazing!"
+    elif connections_today >= 3:
+        highlight = f"🤝 Super networker — {connections_today} connections today!"
+    elif points_today >= 50:
+        highlight = f"⚡ Power day — {points_today} points earned!"
+    elif bookmarked:
+        highlight = f"📅 You bookmarked {len(bookmarked)} session{'s' if len(bookmarked) != 1 else ''} today."
+    else:
+        highlight = "🌟 Great to have you at ETD 2026!"
+
+    return Response({
+        'day': day,
+        'points_earned_today': points_today,
+        'total_points': total_points,
+        'rank': rank,
+        'sessions_bookmarked': bookmarked,
+        'sessions_bookmarked_count': len(bookmarked),
+        'photos_uploaded': photos_today,
+        'polls_voted': polls_today,
+        'connections_made': connections_today,
+        'team': team_name,
+        'highlight': highlight,
+    })

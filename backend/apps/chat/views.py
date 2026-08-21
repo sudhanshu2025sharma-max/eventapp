@@ -9,7 +9,7 @@ from django.contrib.auth import get_user_model
 
 from .models import (
     ConnectionRequest, Conversation, Message, MessageReaction,
-    MessageReport, BlockedUser, TOPIC_CHOICES, REACTION_CHOICES,
+    MessageReport, BlockedUser, ShakeLog, TOPIC_CHOICES, REACTION_CHOICES,
 )
 
 User = get_user_model()
@@ -674,3 +674,252 @@ def bulk_connection_check(request):
             statuses[uid] = {'status': 'none', 'conversation_id': None}
 
     return Response({'statuses': statuses})
+
+
+# ── Shake to Connect ───────────────────────────────────────────────────────
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+
+def shake_connect(request):
+    """
+    POST /api/v1/chat/shake/
+    Body:
+      { action: 'shake' }
+      { action: 'status' }
+      { action: 'pick', pick_user_id: '<uuid>' }
+
+    shake:
+      - stores a short-lived shake event for current user
+      - logs one real shake timestamp
+
+    status:
+      - checks who else shook near the user's last shake timestamp
+      - does NOT refresh shake time and does NOT create logs
+
+    pick:
+      - instantly creates a mutual accepted connection with the chosen shaker
+    """
+    import time
+    from django.core.cache import cache
+    from django.db.models import Q
+
+    me = request.user
+    action = (request.data.get('action') or 'shake').strip()
+
+    def _photo_url(u):
+        if not u.profile_photo:
+            return None
+        try:
+            return request.build_absolute_uri(u.profile_photo.url)
+        except Exception:
+            return None
+
+    def _find_shakers(my_ts, active_dict):
+        blocked_pairs = BlockedUser.objects.filter(
+            Q(blocker=me) | Q(blocked=me)
+        ).values_list('blocker_id', 'blocked_id')
+
+        blocked_ids = set()
+        for a, b in blocked_pairs:
+            if str(a) != str(me.id):
+                blocked_ids.add(str(a))
+            if str(b) != str(me.id):
+                blocked_ids.add(str(b))
+
+        accepted = ConnectionRequest.objects.filter(
+            Q(sender=me) | Q(receiver=me),
+            status='accepted',
+        )
+        connected_ids = set()
+        for r in accepted:
+            connected_ids.add(str(r.sender_id))
+            connected_ids.add(str(r.receiver_id))
+        connected_ids.discard(str(me.id))
+
+        shakers = []
+        for uid, ts in (active_dict or {}).items():
+            uid = str(uid)
+            if uid == str(me.id):
+                continue
+            if uid in blocked_ids:
+                continue
+            if abs(float(ts) - float(my_ts)) > 4:
+                continue
+
+            u = User.objects.filter(id=uid, is_active=True).first()
+            if not u:
+                continue
+
+            shakers.append({
+                'id': str(u.id),
+                'name': u.get_full_name() or u.email.split('@')[0],
+                'affiliation': u.affiliation or '',
+                'designation': u.designation or '',
+                'profile_photo_url': _photo_url(u),
+                'already_connected': uid in connected_ids,
+            })
+
+        print(f'[SHAKE DEBUG] Matched {len(shakers)} shakers for user {me.email}')
+        return shakers
+
+    if action == 'shake':
+        now = time.time()
+        # Store in shared dict — no Redis scan needed
+        active = cache.get('shake:active', {}) or {}
+        # Prune expired entries (>6s old)
+        active = {uid: ts for uid, ts in active.items() if now - float(ts) < 6}
+        active[str(me.id)] = now
+        cache.set('shake:active', active, timeout=30)
+        cache.set(f'shake:{me.id}', now, timeout=6)
+        print(f'[SHAKE DEBUG] User {me.email} shook at {now}. Active: {list(active.keys())}')
+        ShakeLog.objects.create(user=me, event_type='shake')
+        shakers = _find_shakers(now, active)
+        return Response({
+            'shakers': shakers,
+            'count': len(shakers),
+            'your_shake_at': now,
+        })
+
+    if action == 'status':
+        my_ts = cache.get(f'shake:{me.id}')
+        active = cache.get('shake:active', {}) or {}
+        print(f'[SHAKE DEBUG] User {me.email} status check, my_ts={my_ts}, active={list(active.keys())}')
+        if not my_ts:
+            return Response({
+                'shakers': [],
+                'count': 0,
+                'your_shake_at': None,
+            })
+        shakers = _find_shakers(my_ts, active)
+        return Response({
+            'shakers': shakers,
+            'count': len(shakers),
+            'your_shake_at': my_ts,
+        })
+
+    if action == 'pick':
+        pick_id = (request.data.get('pick_user_id') or '').strip()
+        if not pick_id:
+            return Response({'error': 'pick_user_id required'}, status=400)
+
+        try:
+            other = User.objects.get(id=pick_id, is_active=True)
+        except User.DoesNotExist:
+            return Response({'error': 'User not found'}, status=404)
+
+        if other.id == me.id:
+            return Response({'error': 'Cannot connect with yourself'}, status=400)
+
+        already = ConnectionRequest.objects.filter(
+            Q(sender=me, receiver=other) | Q(sender=other, receiver=me),
+            status='accepted',
+        ).exists()
+
+        if already:
+            conv = Conversation.objects.filter(
+                Q(participant_a=me, participant_b=other) |
+                Q(participant_a=other, participant_b=me)
+            ).first()
+            return Response({
+                'success': True,
+                'already_connected': True,
+                'conversation_id': str(conv.id) if conv else None,
+                'connected_with': {
+                    'id': str(other.id),
+                    'name': other.get_full_name(),
+                },
+            })
+
+        ConnectionRequest.objects.filter(
+            Q(sender=me, receiver=other) | Q(sender=other, receiver=me),
+            status__in=['pending', 'later'],
+        ).delete()
+
+        req = ConnectionRequest.objects.create(
+            sender=me,
+            receiver=other,
+            status='accepted',
+            topic='other',
+            custom_topic='Shake Connect — met at ETD 2026',
+            responded_at=timezone.now(),
+        )
+
+        conv = Conversation.objects.create(
+            request=req,
+            participant_a=me,
+            participant_b=other,
+            topic='other',
+            custom_topic='Shake Connect',
+        )
+
+        ShakeLog.objects.create(user=me, event_type='connect', partner=other)
+        ShakeLog.objects.create(user=other, event_type='connect', partner=me)
+
+        try:
+            _send_push(
+                other,
+                title=f'🤝 {me.get_full_name()} connected with you!',
+                body='You shook phones at ETD 2026. Say hi!',
+                data={'type': 'new_message', 'conversation_id': str(conv.id)},
+            )
+        except Exception:
+            pass
+
+        try:
+            from apps.leaderboard.utils import award_points
+            from apps.leaderboard.models import PointAction
+            award_points(me, PointAction.NETWORKING, f'Shake connect: {other.get_full_name()}')
+            award_points(other, PointAction.NETWORKING, f'Shake connect: {me.get_full_name()}')
+        except Exception:
+            pass
+
+        return Response({
+            'success': True,
+            'already_connected': False,
+            'conversation_id': str(conv.id),
+            'connected_with': {
+                'id': str(other.id),
+                'name': other.get_full_name(),
+            },
+        })
+
+    return Response({'error': 'action must be shake, status or pick'}, status=400)
+
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def disconnect_user(request):
+    """
+    POST /api/v1/chat/disconnect/
+    Body: { user_id: uuid }
+    Removes the connection (deletes conversation + messages + connection request).
+    Does NOT block the user — they can reconnect later.
+    """
+    user_id = (request.data.get('user_id') or '').strip()
+    if not user_id:
+        return Response({'error': 'user_id required'}, status=400)
+
+    try:
+        other = User.objects.get(id=user_id, is_active=True)
+    except (User.DoesNotExist, ValueError):
+        return Response({'error': 'User not found'}, status=404)
+
+    me = request.user
+    if other == me:
+        return Response({'error': 'Cannot disconnect from yourself'}, status=400)
+
+    # Delete the conversation (cascades to messages)
+    Conversation.objects.filter(
+        Q(participant_a=me, participant_b=other) |
+        Q(participant_a=other, participant_b=me)
+    ).delete()
+
+    # Delete the accepted connection request
+    ConnectionRequest.objects.filter(
+        Q(sender=me, receiver=other) | Q(sender=other, receiver=me),
+        status='accepted',
+    ).delete()
+
+    return Response({'success': True, 'disconnected': True})

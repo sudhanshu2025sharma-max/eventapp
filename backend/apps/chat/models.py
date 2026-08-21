@@ -174,3 +174,19 @@ class MessageReport(models.Model):
 
     def __str__(self):
         return f"Report by {self.reporter.email} on msg {self.message_id}"
+
+
+class ShakeLog(models.Model):
+    """Logs every shake event and successful shake-connect."""
+    id         = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user       = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='shake_logs')
+    event_type = models.CharField(max_length=20, choices=[('shake', 'Shake'), ('connect', 'Connected')])
+    partner    = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name='shake_partner_logs')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        indexes  = [models.Index(fields=['-created_at'])]
+
+    def __str__(self):
+        return f"{self.user} — {self.event_type} — {self.created_at:%H:%M:%S}"

@@ -12,4 +12,6 @@ urlpatterns = [
     path('users/',                   views.user_list_view,          name='user_list'),
     path('users/<uuid:pk>/action/',  views.user_action_view,        name='user_action'),
     path('participants/create/',     views.participant_create_view, name='participant_create'),
+    path('discover/',                views.discover_view,           name='api_discover'),
+    path('my-recap/',                views.my_recap_view,           name='api_my_recap'),
 ]

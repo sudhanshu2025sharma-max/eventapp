@@ -332,3 +332,64 @@ def chat_export(request):
             ])
 
     return response
+
+
+@admin_required
+def chat_shakes_panel(request):
+    from django.db.models import Q
+    from django.shortcuts import render
+    from .models import ShakeLog
+
+    search = (request.GET.get('search') or '').strip()
+    event_type = (request.GET.get('event') or '').strip()
+    date_str = (request.GET.get('date') or '').strip()
+
+    qs = ShakeLog.objects.select_related('user', 'partner').order_by('-created_at')
+
+    if event_type in ('shake', 'connect'):
+        qs = qs.filter(event_type=event_type)
+
+    if date_str:
+        qs = qs.filter(created_at__date=date_str)
+
+    if search:
+        qs = qs.filter(
+            Q(user__first_name__icontains=search) |
+            Q(user__last_name__icontains=search) |
+            Q(user__email__icontains=search) |
+            Q(user__registration_id__icontains=search) |
+            Q(partner__first_name__icontains=search) |
+            Q(partner__last_name__icontains=search) |
+            Q(partner__email__icontains=search) |
+            Q(partner__registration_id__icontains=search)
+        )
+
+    logs = qs[:500]
+
+    total_count = qs.count()
+    shake_count = qs.filter(event_type='shake').count()
+    connect_count = qs.filter(event_type='connect').count()
+
+    rows = []
+    for log in logs:
+        rows.append({
+            'id': str(log.id),
+            'event_type': log.event_type,
+            'user_name': log.user.get_full_name() or log.user.email.split('@')[0],
+            'user_email': log.user.email,
+            'user_registration_id': log.user.registration_id or '',
+            'partner_name': (log.partner.get_full_name() or log.partner.email.split('@')[0]) if log.partner else '',
+            'partner_email': log.partner.email if log.partner else '',
+            'partner_registration_id': log.partner.registration_id or '' if log.partner else '',
+            'created_at': log.created_at,
+        })
+
+    return render(request, 'panel/chat/shakes.html', {
+        'rows': rows,
+        'search': search,
+        'event_type': event_type,
+        'date_str': date_str,
+        'total_count': total_count,
+        'shake_count': shake_count,
+        'connect_count': connect_count,
+    })

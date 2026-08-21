@@ -16,6 +16,7 @@ urlpatterns = [
     path('panel/', include('apps.schedule.admin_urls')),
     path('panel/', include('apps.leaderboard.admin_urls')),
     path('panel/', include('apps.photos.admin_urls')),
+    path('panel/', include('apps.polls.admin_urls')),
     path('panel/', include('apps.posts.admin_urls')),
 
     # API routes

@@ -20,6 +20,16 @@ class Sponsor(models.Model):
     contact_phone       = models.CharField(max_length=40, blank=True, default='')
     address             = models.CharField(max_length=400, blank=True, default='')
 
+    # Location & Stall details
+    latitude            = models.DecimalField(max_length=12, max_digits=12, decimal_places=8, null=True, blank=True)
+    longitude           = models.DecimalField(max_length=12, max_digits=12, decimal_places=8, null=True, blank=True)
+    stall_number        = models.CharField(max_length=50, blank=True, default='')
+    stall_photo         = models.ImageField(upload_to='sponsors/stalls/', blank=True, null=True)
+
+    # Contact Person details
+    contact_person_name = models.CharField(max_length=150, blank=True, default='')
+    contact_person_role = models.CharField(max_length=150, blank=True, default='')
+
     linkedin_url        = models.URLField(blank=True, default='')
     twitter_url         = models.URLField(blank=True, default='')
     facebook_url        = models.URLField(blank=True, default='')

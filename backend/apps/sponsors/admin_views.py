@@ -53,10 +53,17 @@ def sponsor_create(request):
                 partnership_details=request.POST.get('partnership_details', '').strip(),
                 display_order=int(request.POST.get('display_order') or 0),
                 is_active=request.POST.get('is_active') == 'on',
+                stall_number=request.POST.get('stall_number', '').strip(),
+                contact_person_name=request.POST.get('contact_person_name', '').strip(),
+                contact_person_role=request.POST.get('contact_person_role', '').strip(),
+                latitude=request.POST.get('latitude') or None,
+                longitude=request.POST.get('longitude') or None,
             )
             if 'logo' in request.FILES:
                 s.logo = request.FILES['logo']
-                s.save()
+            if 'stall_photo' in request.FILES:
+                s.stall_photo = request.FILES['stall_photo']
+            s.save()
             messages.success(request, f'Sponsor "{s.name}" added.')
             return redirect('sponsors_panel')
         except Exception as e:
@@ -91,9 +98,16 @@ def sponsor_edit(request, sponsor_id):
             s.partnership_details = request.POST.get('partnership_details', '').strip()
             s.display_order = int(request.POST.get('display_order') or 0)
             s.is_active = request.POST.get('is_active') == 'on'
+            s.stall_number = request.POST.get('stall_number', '').strip()
+            s.contact_person_name = request.POST.get('contact_person_name', '').strip()
+            s.contact_person_role = request.POST.get('contact_person_role', '').strip()
+            s.latitude = request.POST.get('latitude') or None
+            s.longitude = request.POST.get('longitude') or None
 
             if 'logo' in request.FILES:
                 s.logo = request.FILES['logo']
+            if 'stall_photo' in request.FILES:
+                s.stall_photo = request.FILES['stall_photo']
 
             s.save()
             messages.success(request, f'Sponsor "{s.name}" updated.')

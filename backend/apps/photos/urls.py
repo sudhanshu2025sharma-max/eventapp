@@ -15,4 +15,6 @@ urlpatterns = [
     path('admin/<int:pk>/review/',   views.admin_review,   name='photo_admin_review'),
     path('admin/<int:pk>/delete/',   views.admin_delete,   name='photo_admin_delete'),
     path('admin/stats/',             views.admin_stats,    name='photo_admin_stats'),
+    path('selfie-points/', views.selfie_points_list, name='selfie_points_list'),
+    path('selfie-upload/', views.selfie_upload, name='selfie_upload'),
 ]

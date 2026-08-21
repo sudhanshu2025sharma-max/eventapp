@@ -15,4 +15,5 @@ urlpatterns = [
     path('meal/window/',   views.meal_window_toggle,   name='meal_window'),
     path('meal/stats/',    views.meal_stats,           name='meal_stats'),
     path('meal/list/',     views.meal_list,            name='meal_list'),
+    path('checked-in/', views.checked_in_participants, name='checked_in_participants'),
 ]

@@ -1,0 +1,149 @@
+{% extends "panel/base.html" %}
+
+{% block title %}Shake Connect Logs{% endblock %}
+
+{% block content %}
+<div class="page-head" style="display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap;margin-bottom:20px;">
+  <div>
+    <h1 style="margin:0;font-size:28px;font-weight:800;">🤝 Shake Connect Logs</h1>
+    <p style="margin:6px 0 0;color:#64748b;">See who shook their phones, who connected, and when.</p>
+  </div>
+  <div style="display:flex;gap:10px;flex-wrap:wrap;">
+    <div style="background:#fff;border:1px solid #e2e8f0;border-radius:14px;padding:12px 16px;min-width:130px;">
+      <div style="font-size:12px;color:#64748b;font-weight:700;text-transform:uppercase;letter-spacing:.04em;">Total</div>
+      <div style="font-size:26px;font-weight:800;color:#0f172a;">{{ total_count }}</div>
+    </div>
+    <div style="background:#fff;border:1px solid #e2e8f0;border-radius:14px;padding:12px 16px;min-width:130px;">
+      <div style="font-size:12px;color:#64748b;font-weight:700;text-transform:uppercase;letter-spacing:.04em;">Shakes</div>
+      <div style="font-size:26px;font-weight:800;color:#7c3aed;">{{ shake_count }}</div>
+    </div>
+    <div style="background:#fff;border:1px solid #e2e8f0;border-radius:14px;padding:12px 16px;min-width:130px;">
+      <div style="font-size:12px;color:#64748b;font-weight:700;text-transform:uppercase;letter-spacing:.04em;">Connections</div>
+      <div style="font-size:26px;font-weight:800;color:#059669;">{{ connect_count }}</div>
+    </div>
+  </div>
+</div>
+
+<div style="background:#fff;border:1px solid #e2e8f0;border-radius:18px;padding:16px;margin-bottom:18px;">
+  <form method="get" style="display:grid;grid-template-columns:2fr 1fr 1fr auto auto;gap:12px;align-items:end;">
+    <div>
+      <label style="display:block;font-size:12px;font-weight:700;color:#64748b;margin-bottom:6px;">Search user / partner</label>
+      <input
+        type="text"
+        name="search"
+        value="{{ search }}"
+        placeholder="Name, email, registration id"
+        style="width:100%;height:42px;border:1px solid #cbd5e1;border-radius:12px;padding:0 12px;font-size:14px;"
+      />
+    </div>
+
+    <div>
+      <label style="display:block;font-size:12px;font-weight:700;color:#64748b;margin-bottom:6px;">Event</label>
+      <select
+        name="event"
+        style="width:100%;height:42px;border:1px solid #cbd5e1;border-radius:12px;padding:0 12px;font-size:14px;background:#fff;"
+      >
+        <option value="">All events</option>
+        <option value="shake" {% if event_type == 'shake' %}selected{% endif %}>Shake</option>
+        <option value="connect" {% if event_type == 'connect' %}selected{% endif %}>Connected</option>
+      </select>
+    </div>
+
+    <div>
+      <label style="display:block;font-size:12px;font-weight:700;color:#64748b;margin-bottom:6px;">Date</label>
+      <input
+        type="date"
+        name="date"
+        value="{{ date_str }}"
+        style="width:100%;height:42px;border:1px solid #cbd5e1;border-radius:12px;padding:0 12px;font-size:14px;"
+      />
+    </div>
+
+    <button
+      type="submit"
+      style="height:42px;border:none;border-radius:12px;padding:0 18px;background:linear-gradient(135deg,#4f46e5,#7c3aed);color:#fff;font-weight:800;cursor:pointer;"
+    >
+      Filter
+    </button>
+
+    <a
+      href="/panel/chat/shakes/"
+      style="height:42px;display:inline-flex;align-items:center;justify-content:center;border:1px solid #cbd5e1;border-radius:12px;padding:0 18px;background:#fff;color:#0f172a;font-weight:700;text-decoration:none;"
+    >
+      Reset
+    </a>
+  </form>
+</div>
+
+<div style="background:#fff;border:1px solid #e2e8f0;border-radius:18px;overflow:hidden;">
+  <div style="padding:16px 18px;border-bottom:1px solid #e2e8f0;display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;">
+    <div>
+      <div style="font-size:18px;font-weight:800;color:#0f172a;">Recent Shake Activity</div>
+      <div style="font-size:13px;color:#64748b;margin-top:4px;">Showing latest {{ rows|length }} entries (max 500)</div>
+    </div>
+  </div>
+
+  {% if rows %}
+    <div style="overflow:auto;">
+      <table style="width:100%;border-collapse:collapse;min-width:980px;">
+        <thead>
+          <tr style="background:#f8fafc;">
+            <th style="text-align:left;padding:14px 16px;font-size:12px;font-weight:800;color:#64748b;text-transform:uppercase;letter-spacing:.04em;">Event</th>
+            <th style="text-align:left;padding:14px 16px;font-size:12px;font-weight:800;color:#64748b;text-transform:uppercase;letter-spacing:.04em;">User</th>
+            <th style="text-align:left;padding:14px 16px;font-size:12px;font-weight:800;color:#64748b;text-transform:uppercase;letter-spacing:.04em;">Partner</th>
+            <th style="text-align:left;padding:14px 16px;font-size:12px;font-weight:800;color:#64748b;text-transform:uppercase;letter-spacing:.04em;">Timestamp</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in rows %}
+          <tr style="border-top:1px solid #eef2f7;">
+            <td style="padding:14px 16px;vertical-align:top;">
+              {% if row.event_type == 'connect' %}
+                <span style="display:inline-flex;align-items:center;gap:6px;padding:6px 10px;border-radius:999px;background:#dcfce7;color:#166534;font-size:12px;font-weight:800;">
+                  🤝 Connected
+                </span>
+              {% else %}
+                <span style="display:inline-flex;align-items:center;gap:6px;padding:6px 10px;border-radius:999px;background:#ede9fe;color:#5b21b6;font-size:12px;font-weight:800;">
+                  📳 Shake
+                </span>
+              {% endif %}
+            </td>
+
+            <td style="padding:14px 16px;vertical-align:top;">
+              <div style="font-size:14px;font-weight:800;color:#0f172a;">{{ row.user_name }}</div>
+              <div style="font-size:12px;color:#64748b;margin-top:4px;">{{ row.user_email }}</div>
+              {% if row.user_registration_id %}
+                <div style="font-size:12px;color:#475569;margin-top:4px;">{{ row.user_registration_id }}</div>
+              {% endif %}
+            </td>
+
+            <td style="padding:14px 16px;vertical-align:top;">
+              {% if row.partner_name %}
+                <div style="font-size:14px;font-weight:800;color:#0f172a;">{{ row.partner_name }}</div>
+                <div style="font-size:12px;color:#64748b;margin-top:4px;">{{ row.partner_email }}</div>
+                {% if row.partner_registration_id %}
+                  <div style="font-size:12px;color:#475569;margin-top:4px;">{{ row.partner_registration_id }}</div>
+                {% endif %}
+              {% else %}
+                <span style="font-size:13px;color:#94a3b8;">—</span>
+              {% endif %}
+            </td>
+
+            <td style="padding:14px 16px;vertical-align:top;">
+              <div style="font-size:14px;font-weight:700;color:#0f172a;">{{ row.created_at|date:"d M Y" }}</div>
+              <div style="font-size:12px;color:#64748b;margin-top:4px;">{{ row.created_at|date:"h:i:s A" }}</div>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% else %}
+    <div style="padding:50px 20px;text-align:center;">
+      <div style="font-size:44px;margin-bottom:12px;">🤝</div>
+      <div style="font-size:20px;font-weight:800;color:#0f172a;">No shake logs found</div>
+      <div style="font-size:14px;color:#64748b;margin-top:8px;">Try changing filters or wait for participants to use Shake Connect.</div>
+    </div>
+  {% endif %}
+</div>
+{% endblock %}

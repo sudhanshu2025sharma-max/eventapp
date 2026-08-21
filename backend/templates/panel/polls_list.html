@@ -1,0 +1,104 @@
+{% extends "panel/base.html" %}
+{% block title %}Polls — ETD 2026{% endblock %}
+{% block page_title %}Polls{% endblock %}
+{% block page_subtitle %}Create and manage live conference polls{% endblock %}
+
+{% block content %}
+{% if messages %}
+  {% for m in messages %}
+    <div class="alert alert-{% if m.tags == 'error' %}error{% elif m.tags == 'warning' %}warning{% else %}success{% endif %}">
+      <i class="fas fa-{% if m.tags == 'error' %}exclamation-circle{% elif m.tags == 'warning' %}exclamation-triangle{% else %}check-circle{% endif %}"></i>
+      {{ m }}
+    </div>
+  {% endfor %}
+{% endif %}
+
+<!-- Stats -->
+<div class="stats-grid" style="grid-template-columns:repeat(6,1fr);margin-bottom:24px;">
+  {% for label,val,color in stats_list %}
+  <div class="stat-card">
+    <div class="stat-value" style="font-size:22px;color:{{ color }};">{{ val }}</div>
+    <div class="stat-label">{{ label }}</div>
+  </div>
+  {% endfor %}
+</div>
+
+<div class="page-header">
+  <h1 style="font-size:20px;">All Polls</h1>
+  <a href="{% url 'polls_create' %}" class="btn btn-primary"><i class="fas fa-plus"></i> Create Poll</a>
+</div>
+
+<div class="card">
+  <div class="card-body" style="padding:0;">
+    {% if polls %}
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>Title</th><th>Type</th><th>Status</th><th>Votes</th><th>Ends</th><th>Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for poll in polls %}
+        <tr>
+          <td>
+            <div style="font-weight:700;color:var(--text);">{{ poll.title }}</div>
+            <div style="font-size:12px;color:var(--text-tertiary);margin-top:2px;">{{ poll.question|truncatechars:60 }}</div>
+            {% if poll.is_ideathon %}<span class="badge badge-warning" style="margin-top:4px;display:inline-block;">🏆 Ideathon</span>{% endif %}
+          </td>
+          <td><span class="badge badge-info">{{ poll.get_poll_type_display }}</span></td>
+          <td>
+            {% if poll.status == 'live' %}
+              <span class="badge badge-success">● LIVE</span>
+            {% elif poll.status == 'draft' %}
+              <span class="badge" style="background:#f1f5f9;color:#64748b;">Draft</span>
+            {% elif poll.status == 'scheduled' %}
+              <span class="badge badge-warning">Scheduled</span>
+            {% else %}
+              <span class="badge" style="background:#f1f5f9;color:#64748b;">Closed</span>
+            {% endif %}
+          </td>
+          <td style="font-weight:700;">{{ poll.total_votes }}</td>
+          <td style="font-size:12px;color:var(--text-tertiary);">
+            {% if poll.ends_at %}{{ poll.ends_at|date:"M d, H:i" }}{% else %}—{% endif %}
+          </td>
+          <td>
+            <div style="display:flex;gap:6px;flex-wrap:wrap;">
+              <a href="{% url 'polls_results' poll.pk %}" class="btn btn-secondary btn-sm"><i class="fas fa-chart-bar"></i> Results</a>
+              {% if poll.status == 'draft' or poll.status == 'scheduled' %}
+                <form method="post" action="{% url 'polls_start' poll.pk %}" style="display:inline;">{% csrf_token %}
+                  <button class="btn btn-primary btn-sm" type="submit"><i class="fas fa-play"></i> Start</button>
+                </form>
+              {% elif poll.status == 'live' %}
+                <form method="post" action="{% url 'polls_close' poll.pk %}" style="display:inline;">{% csrf_token %}
+                  <button class="btn btn-secondary btn-sm" type="submit"><i class="fas fa-stop"></i> Close</button>
+                </form>
+              {% elif poll.status == 'closed' %}
+                <form method="post" action="{% url 'polls_reopen' poll.pk %}" style="display:inline;">{% csrf_token %}
+                  <button class="btn btn-secondary btn-sm" type="submit"><i class="fas fa-redo"></i> Reopen</button>
+                </form>
+                <a href="{% url 'polls_export' poll.pk %}" class="btn btn-secondary btn-sm"><i class="fas fa-download"></i> CSV</a>
+              {% endif %}
+              {% if poll.status != 'live' %}
+                <a href="{% url 'polls_edit' poll.pk %}" class="btn btn-secondary btn-sm"><i class="fas fa-edit"></i></a>
+                <form method="post" action="{% url 'polls_delete' poll.pk %}" style="display:inline;"
+                      onsubmit="return confirm('Delete poll &quot;{{ poll.title }}&quot;? This cannot be undone.');">{% csrf_token %}
+                  <button class="btn btn-danger btn-sm" type="submit"><i class="fas fa-trash"></i></button>
+                </form>
+              {% endif %}
+            </div>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <div class="empty-state">
+      <i class="fas fa-chart-bar"></i>
+      <h3>No polls yet</h3>
+      <p>Create your first poll to engage conference attendees.</p>
+      <a href="{% url 'polls_create' %}" class="btn btn-primary"><i class="fas fa-plus"></i> Create Poll</a>
+    </div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

@@ -499,3 +499,32 @@ def meal_list(request):
     } for p in qs]
 
     return Response({'count': len(data), 'passes': data})
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def checked_in_participants(request):
+    """Search checked-in participants by name/email. Used for Ideathon team formation."""
+    from apps.accounts.models import User
+    from django.db.models import Q
+    search = request.query_params.get('search', '').strip()
+    checkin_user_ids = CheckIn.objects.filter(
+        checkin_type='conference'
+    ).values_list('user_id', flat=True)
+    qs = User.objects.filter(id__in=checkin_user_ids, is_active=True)
+    if search:
+        qs = qs.filter(
+            Q(first_name__icontains=search) |
+            Q(last_name__icontains=search) |
+            Q(email__icontains=search) |
+            Q(affiliation__icontains=search)
+        )
+    users = []
+    for u in qs[:30]:
+        users.append({
+            'id': str(u.id),
+            'name': u.get_full_name() or u.email.split('@')[0],
+            'email': u.email,
+            'affiliation': u.affiliation or '',
+        })
+    return Response({'users': users, 'count': len(users)})

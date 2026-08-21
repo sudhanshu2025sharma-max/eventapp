@@ -63,7 +63,7 @@
         .brand-info h2 { color:white; font-size:18px; font-weight:700; letter-spacing:0.5px; }
         .brand-info span { color:rgba(255,255,255,0.4); font-size:11px; font-weight:500; }
 
-        .sidebar-menu { flex:1; padding:16px 12px; overflow-y:auto; }
+        .sidebar-menu { flex:1; padding:16px 12px; overflow: scroll; scroll-behavior: smooth; scrollbar-width: none; }
 
         .menu-label {
             color:rgba(255,255,255,0.35); font-size:10px; font-weight:700;
@@ -326,8 +326,8 @@
             <a href="{% url 'participants_list' %}" class="menu-item {% if 'participant' in request.resolver_match.url_name %}active{% endif %}">
                 <i class="fas fa-users"></i> Participants
             </a>
-            <a href="#" class="menu-item">
-                <i class="fas fa-people-group"></i> Teams
+            <a href="/panel/ideathon/" class="menu-item {% if 'ideathon' in request.resolver_match.url_name %}active{% endif %}">
+                <i class="fas fa-people-group"></i> Ideathon Teams
             </a>
                 <i class="fas fa-utensils"></i> Meal Scanner
             </a>
@@ -342,6 +342,10 @@
             <a href="/panel/photos/" class="menu-item {% if request.resolver_match.url_name == 'photos_panel' %}active{% endif %}">
                 <i class="fas fa-camera"></i> Photos
             </a>
+            <a href="/panel/selfie-points/" class="menu-item {% if request.resolver_match.url_name == 'photos_panel' %}active{% endif %}">
+                <i class="fas fa-location-dot"></i> Selfie Spots
+            </a>
+            <!-- <a href="/panel/selfie-points/" class="nav-item {% if 'selfie' in request.resolver_match.url_name %}active{% endif %}"><i class="fas fa-location-dot"></i> Selfie Spots</a> -->
             <!-- <a href="#" class="menu-item">
                 <i class="fas fa-images"></i> Photo Moderation
                 <span class="menu-badge">34</span>
@@ -351,7 +355,7 @@
             </a>
 
             <div class="menu-label">Engagement</div>
-            <a href="#" class="menu-item">
+            <a href="/panel/polls/" class="menu-item {% if 'poll' in request.resolver_match.url_name %}active{% endif %}">
                 <i class="fas fa-chart-bar"></i> Polls
             </a>
             <a href="#" class="menu-item">
@@ -365,6 +369,10 @@
             </a>
             <a href="/panel/chat/reports/?status=pending" class="menu-item {% if 'report' in request.resolver_match.url_name %}active{% endif %}">
                 <i class="fas fa-flag"></i> Reported Messages
+            </a>
+
+            <a href="/panel/chat/shakes/" class="menu-item {% if 'chat_shakes' in request.resolver_match.url_name %}active{% endif %}">
+                <i class="fa-solid fa-handshake"></i> Shake Connect Logs
             </a>
             <a href="/panel/chat/analytics/" class="menu-item {% if 'analytics' in request.resolver_match.url_name %}active{% endif %}">
                 <i class="fas fa-chart-line"></i> Chat Analytics

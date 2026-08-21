@@ -46,29 +46,6 @@
       ]
     },
     "scheme": "etd2026",
-    "plugins": [
-      ["expo-notifications", {
-        "icon": "./assets/icon.png",
-        "color": "#0333b6",
-        "sounds": []
-      }],
-      "expo-image-picker",
-      "expo-dev-client",
-      "expo-camera",
-      "expo-document-picker",
-      ["expo-media-library", {
-        "photosPermission": "ETD 2026 saves photos to your gallery.",
-        "savePhotosPermission": "ETD 2026 saves photos to your gallery.",
-        "isAccessMediaLocationEnabled": true
-      }],
-      ["expo-location", {
-        "locationAlwaysAndWhenInUsePermission": "ETD 2026 uses your location to tag selfie point photos."
-      }],
-      ["expo-av", {
-        "microphonePermission": "ETD 2026 uses the microphone for live stream audio."
-      }],
-      "expo-local-authentication",
-      "expo-calendar"
-    ]
+    "plugins": []
   }
 }

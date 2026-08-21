@@ -1,8 +1,6 @@
-../_backup
-../backend
-../.devcontainer
-../docker-compose.yml
-../Makefile
-../start.sh
-../start-backend.sh
-../README.md
+node_modules
+.expo
+android/build
+android/app/build
+android/.gradle
+.git

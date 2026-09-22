@@ -2,6 +2,9 @@ from django.urls import path
 from . import views
 
 urlpatterns = [
+    # Root alias
+    path('',                  views.my_notifications,    name='notifications_root'),
+
     # Token management
     path('register-token/',   views.register_token,      name='register_token'),
     path('unregister-token/', views.unregister_token,    name='unregister_token'),

@@ -190,3 +190,59 @@ class ShakeLog(models.Model):
 
     def __str__(self):
         return f"{self.user} — {self.event_type} — {self.created_at:%H:%M:%S}"
+
+
+# ─── Staff Group Coordination Chat ──────────────────────────────────
+
+class StaffGroupMessage(models.Model):
+    id         = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    sender     = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='staff_group_messages')
+    content    = models.TextField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['created_at']
+
+    def __str__(self):
+        return f"[StaffGroup] {self.sender.get_full_name()}: {self.content[:30]}"
+
+
+class CallSession(models.Model):
+    """Tracks 1:1 voice calls between staff."""
+    STATUS_CHOICES = [
+        ('ringing', 'Ringing'),
+        ('active', 'Active'),
+        ('ended', 'Ended'),
+        ('missed', 'Missed'),
+    ]
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    caller = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE,
+        related_name='calls_made'
+    )
+    callee = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE,
+        related_name='calls_received'
+    )
+    status = models.CharField(max_length=10, choices=STATUS_CHOICES, default='ringing')
+    created_at = models.DateTimeField(auto_now_add=True)
+    ended_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    @property
+    def duration_display(self):
+        if not self.ended_at or not self.created_at:
+            return None
+        secs = int((self.ended_at - self.created_at).total_seconds())
+        if secs < 60:
+            return f"{secs}s"
+        m, s = divmod(secs, 60)
+        if m < 60:
+            return f"{m}m {s}s"
+        h, m = divmod(m, 60)
+        return f"{h}h {m}m"
+
+    def __str__(self):
+        return f"{self.caller} → {self.callee} ({self.status})"

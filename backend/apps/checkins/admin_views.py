@@ -1,268 +1,332 @@
-import json as _json
-from django.shortcuts import render
-from django.contrib.auth.decorators import login_required
-from django.contrib.auth import get_user_model
-from django.db.models import Q
+import io, json
+from zoneinfo import ZoneInfo
+from django.shortcuts import render, redirect
 from django.http import JsonResponse
-from django.utils import timezone as _tz
-from django.utils.timezone import localdate
-from rest_framework_simplejwt.tokens import RefreshToken
+from django.contrib.auth.decorators import login_required
+from django.views.decorators.csrf import csrf_exempt
+from django.db import models
+from django.utils import timezone
+from django.contrib import messages
+from django.conf import settings
+from django.core.mail import EmailMessage
 
-from .models import CheckIn, MealPass, MealWindow
+from apps.accounts.models import User
+from apps.accounts.permissions_helper import module_required
+from apps.checkins.models import CheckIn, MealPass, MealWindow
+from apps.checkins.meal_utils import sync_meal_window
+from apps.checkins.push import push_to_checked_in
+from apps.leaderboard.utils import award_points
 
-User = get_user_model()
-SCANNER_ROLES = {'super_admin', 'mgmt_admin', 'team_head', 'staff'}
-
-
-def _require_scanner(view_fn):
-    @login_required(login_url='/panel/login/')
-    def wrapper(request, *args, **kwargs):
-        if request.user.role not in SCANNER_ROLES:
-            from django.http import HttpResponseForbidden
-            return HttpResponseForbidden('Not authorised.')
-        return view_fn(request, *args, **kwargs)
-    return wrapper
+IST = ZoneInfo("Asia/Kolkata")
 
 
-@_require_scanner
+def _today():
+    return timezone.now().astimezone(IST).date()
+
+
+def _meal_payload(window):
+    if not window:
+        return {"is_open": False, "meal_type": "Lunch", "start_time": None, "end_time": None}
+    return {
+        "is_open": bool(window.is_open),
+        "meal_type": window.meal_type or "Lunch",
+        "start_time": window.start_time.strftime("%I:%M %p") if window.start_time else None,
+        "end_time": window.end_time.strftime("%I:%M %p") if window.end_time else None,
+        "date": str(window.date),
+    }
+
+
+@login_required
+@module_required('checkin_scanner')
 def scanner_view(request):
-    return render(request, 'panel/scanner.html', {})
-
-
-@_require_scanner
-def checkin_list_view(request):
-    search = request.GET.get('search', '').strip()
-    tab    = request.GET.get('tab', 'checked_in')
-    today  = localdate()
-
-    checkins = CheckIn.objects.filter(
-        checkin_type='conference'
-    ).select_related('user', 'scanned_by').order_by('-scanned_at')
-
-    checked_in_ids = CheckIn.objects.filter(
-        checkin_type='conference'
-    ).values_list('user_id', flat=True)
-
-    not_checked_in = User.objects.filter(
-        role='participant', is_active=True
-    ).exclude(id__in=checked_in_ids).order_by('first_name', 'last_name')
-
-    meal_passes = MealPass.objects.filter(
-        date=today
-    ).select_related('user', 'scanned_by').order_by('-created_at')
-
-    if search:
-        q = (
-            Q(first_name__icontains=search) | Q(last_name__icontains=search) |
-            Q(email__icontains=search)      | Q(registration_id__icontains=search)
-        )
-        checkins = checkins.filter(
-            Q(user__first_name__icontains=search) | Q(user__last_name__icontains=search) |
-            Q(user__email__icontains=search)      | Q(user__registration_id__icontains=search)
-        )
-        not_checked_in = not_checked_in.filter(q)
-        meal_passes = meal_passes.filter(
-            Q(user__first_name__icontains=search) | Q(user__last_name__icontains=search) |
-            Q(user__email__icontains=search)      | Q(user__registration_id__icontains=search)
-        )
-
-    tabs = [
-        ('checked_in',     f'Checked In ({CheckIn.objects.filter(checkin_type="conference").count()})'),
-        ('not_checked_in', f'Not Checked In ({not_checked_in.count()})'),
-        ('meal',           f'Meal Passes ({MealPass.objects.filter(date=today).count()})'),
-    ]
-
-    return render(request, 'panel/checkin_list.html', {
-        'checkins':            checkins,
-        'not_checked_in':      not_checked_in,
-        'meal_passes':         meal_passes,
-        'checked_in_count':    CheckIn.objects.filter(checkin_type='conference').count(),
-        'not_checked_in_count':not_checked_in.count(),
-        'meal_used_count':     MealPass.objects.filter(date=today, used=True).count(),
-        'search':              search,
-        'tab':                 tab,
-        'tabs':                tabs,
+    try:
+        sync_meal_window()
+    except Exception:
+        pass
+    today = _today()
+    window = MealWindow.objects.filter(date=today).order_by('-id').first()
+    return render(request, 'panel/scanner.html', {
+        "is_open": bool(window and window.is_open),
+        "meal_window": window,
+        "meal_type": window.meal_type if window else "Lunch",
+        "today": today,
     })
 
 
-# ── Panel AJAX endpoints (session-auth) ───────────────────────────────────
+@login_required
+@module_required('checkin_scanner')
+def checkin_list_view(request):
+    today = _today()
+    checkins = CheckIn.objects.select_related('user').filter(
+        scanned_at__date=today
+    ).order_by('-scanned_at')
+    return render(request, 'panel/checkin_list.html', {"checkins": checkins, "today": today})
 
-@_require_scanner
+
+@csrf_exempt
+@login_required
 def panel_scan(request):
+    if request.method != 'POST':
+        return JsonResponse({"success": False, "message": "POST required"}, status=405)
     try:
-        body = _json.loads(request.body)
-    except _json.JSONDecodeError:
-        return JsonResponse({'success': False, 'error': 'Bad JSON'}, status=400)
-
-    reg_id = body.get('registration_id', '').strip().upper()
-    if not reg_id:
-        return JsonResponse({'success': False, 'error': 'No registration ID provided.'}, status=400)
-
-    try:
-        user = User.objects.get(registration_id=reg_id, is_active=True)
-    except User.DoesNotExist:
-        return JsonResponse({'success': False, 'error': f'No active user found with ID "{reg_id}".'}, status=404)
-
-    existing = CheckIn.objects.filter(user=user, checkin_type='conference').first()
-    if existing:
-        return JsonResponse({
-            'success': False, 'already_checked_in': True,
-            'message': f'{user.get_full_name()} is already checked in.',
-            'checkin_id': existing.id,
-            'user': {
-                'name':            user.get_full_name(),
-                'email':           user.email,
-                'registration_id': user.registration_id,
-                'affiliation':     user.affiliation or '',
-                'photo':           request.build_absolute_uri(user.profile_photo.url) if user.profile_photo else '',
-            },
-        })
-
-    checkin = CheckIn.objects.create(
-        user=user, checkin_type='conference',
-        scanned_by=request.user, goodies_status='pending',
+        data = json.loads(request.body.decode('utf-8'))
+    except Exception:
+        data = request.POST
+    code = str(data.get('registration_id') or data.get('qr_data') or data.get('qr_code') or '').strip()
+    target_user = User.objects.filter(
+        models.Q(registration_id=code) | models.Q(email__iexact=code)
+    ).first()
+    if not target_user:
+        return JsonResponse({"success": False, "message": "Participant not found"}, status=404)
+    checkin, created = CheckIn.objects.get_or_create(
+        user=target_user, checkin_type='conference',
+        defaults={'scanned_by': request.user},
     )
-
-    # Points
-    try:
-        from apps.leaderboard.utils import award_points
-        from apps.leaderboard.models import PointAction, PointEntry
-        if not PointEntry.objects.filter(user=user, action=PointAction.CHECKIN).exists():
-            award_points(user, PointAction.CHECKIN, 'Conference check-in')
-    except Exception:
-        pass
-
-    # Push to user device
-    try:
-        from apps.notifications.models import DeviceToken
-        from apps.notifications import fcm
-        toks = list(DeviceToken.objects.filter(user=user, is_active=True).values_list('token', flat=True))
-        if toks:
-            fcm.send_to_tokens(toks, '✅ Check-In Successful!',
-                               f'Welcome to ETD 2026, {user.first_name}! You are checked in.', {})
-    except Exception:
-        pass
-
     return JsonResponse({
-        'success':    True,
-        'message':    f'{user.get_full_name()} checked in successfully!',
-        'checkin_id': checkin.id,
-        'user': {
-            'name':            user.get_full_name(),
-            'email':           user.email,
-            'registration_id': user.registration_id,
-            'affiliation':     user.affiliation or '',
-            'photo':           request.build_absolute_uri(user.profile_photo.url) if user.profile_photo else '',
+        "success": True,
+        "already_checked_in": not created,
+        "message": f"{target_user.get_full_name() or target_user.email} checked in successfully!",
+        "user": {
+            "name": target_user.get_full_name() or target_user.email,
+            "email": target_user.email,
+            "registration_id": getattr(target_user, 'registration_id', '') or '',
+            "goodies_status": checkin.goodies_status,
         },
     })
 
 
-@_require_scanner
+@csrf_exempt
+@login_required
 def panel_goodies(request):
+    if request.method != 'POST':
+        return JsonResponse({"success": False, "message": "POST required"}, status=405)
     try:
-        body = _json.loads(request.body)
-    except _json.JSONDecodeError:
-        return JsonResponse({'success': False, 'error': 'Bad JSON'}, status=400)
-
-    checkin_id = body.get('checkin_id')
-    status_val = body.get('status', 'received')
-    reason     = body.get('reason', '').strip()
-
-    try:
-        checkin = CheckIn.objects.get(id=checkin_id)
-        checkin.goodies_status       = status_val
-        checkin.goodies_note         = reason
-        checkin.goodies_confirmed_by = request.user
-        checkin.goodies_confirmed_at = _tz.now()
-        checkin.save(update_fields=['goodies_status', 'goodies_note', 'goodies_confirmed_by', 'goodies_confirmed_at'])
-        return JsonResponse({'success': True, 'message': f'Conference Kit marked {status_val}.'})
-    except CheckIn.DoesNotExist:
-        return JsonResponse({'success': False, 'error': 'Check-in record not found.'}, status=404)
-
-
-@_require_scanner
-def panel_stats(request):
-    total      = User.objects.filter(role='participant', is_active=True).count()
-    checked_in = CheckIn.objects.filter(checkin_type='conference').count()
-    return JsonResponse({
-        'total':      total,
-        'checked_in': checked_in,
-        'remaining':  max(total - checked_in, 0),
-    })
+        data = json.loads(request.body.decode('utf-8'))
+    except Exception:
+        data = request.POST
+    code = str(data.get('registration_id') or data.get('qr_data') or '').strip()
+    target_user = User.objects.filter(
+        models.Q(registration_id=code) | models.Q(email__iexact=code)
+    ).first()
+    if not target_user:
+        return JsonResponse({"success": False, "message": "Participant not found"}, status=404)
+    checkin, _ = CheckIn.objects.get_or_create(
+        user=target_user, checkin_type='conference',
+        defaults={'scanned_by': request.user},
+    )
+    checkin.goodies_status = 'received'
+    checkin.goodies_confirmed_by = request.user
+    checkin.goodies_confirmed_at = timezone.now()
+    checkin.save()
+    return JsonResponse({"success": True, "message": f"Kit marked received for {target_user.get_full_name() or target_user.email}!"})
 
 
-@_require_scanner
+@login_required
 def panel_meal_window_status(request):
-    today  = localdate()
-    window = MealWindow.objects.filter(meal_type='meal', date=today).first()
+    try:
+        sync_meal_window()
+    except Exception:
+        pass
+    window = MealWindow.objects.filter(date=_today()).order_by('-id').first()
+    meal = _meal_payload(window)
     return JsonResponse({
-        'date': str(today),
-        'meal': {'is_open': window.is_open if window else False},
+        "success": True,
+        "meal": meal,
+        "is_open": meal["is_open"],
+        "meal_open": meal["is_open"],
+        "meal_type": meal["meal_type"],
+        "meal_name": meal["meal_type"],
+        "start_time": meal.get("start_time"),
+        "end_time": meal.get("end_time"),
     })
 
 
-@_require_scanner
+@csrf_exempt
+@login_required
 def panel_meal_window_toggle(request):
+    action = None
+    meal_type = 'Lunch'
     try:
-        body = _json.loads(request.body)
-    except _json.JSONDecodeError:
-        return JsonResponse({'success': False, 'error': 'Bad JSON'}, status=400)
+        body = json.loads(request.body.decode('utf-8'))
+        action = body.get('action')
+        meal_type = (body.get('meal_type') or body.get('meal_name') or 'Lunch').strip()
+    except Exception:
+        action = request.POST.get('action') or request.GET.get('action')
+        meal_type = (request.POST.get('meal_type') or request.GET.get('meal_type') or 'Lunch').strip()
 
-    action = body.get('action', 'open')
-    today  = localdate()
+    target_state = (str(action).lower() == 'open')
+    today = _today()
+    window = MealWindow.objects.filter(date=today).order_by('-id').first()
+    if not window:
+        window = MealWindow.objects.create(date=today, is_open=target_state, meal_type=meal_type)
 
-    if action == 'open':
-        window, created = MealWindow.objects.get_or_create(
-            meal_type='meal', date=today,
-            defaults={'opened_by': request.user, 'is_open': True},
+    window.is_open = target_state
+    if target_state:
+        window.meal_type = meal_type
+    window.opened_by = request.user
+    if not target_state:
+        window.closed_at = timezone.now()
+    window.save()
+
+    active_meal_name = window.meal_type or "Meal"
+
+    if target_state:
+        push_to_checked_in(
+            title=f"🍽️ {active_meal_name} service is now open!",
+            body=f"Dining service for {active_meal_name} is active.",
+            data={"type": "meal_pass", "screen": "qr"},
         )
-        if not created and not window.is_open:
-            window.is_open = True; window.opened_by = request.user; window.closed_at = None
-            window.save(update_fields=['is_open', 'opened_by', 'closed_at'])
     else:
-        MealWindow.objects.filter(meal_type='meal', date=today).update(is_open=False, closed_at=_tz.now())
-
-    return JsonResponse({'success': True, 'message': f'Meal window {action}ed.'})
-
-
-@_require_scanner
-def panel_meal_scan(request):
-    try:
-        body = _json.loads(request.body)
-    except _json.JSONDecodeError:
-        return JsonResponse({'success': False, 'error': 'Bad JSON'}, status=400)
-
-    qr_raw = body.get('qr_code', '').strip()
-    today  = localdate()
-    mp     = None
-
-    if qr_raw:
-        try:
-            payload = _json.loads(qr_raw)
-            pass_id = payload.get('pass_id')
-            mp = MealPass.objects.select_related('user').filter(id=pass_id).first()
-        except Exception:
-            try:
-                user = User.objects.get(registration_id=qr_raw.upper(), is_active=True)
-                mp   = MealPass.objects.select_related('user').filter(user=user, date=today).first()
-            except User.DoesNotExist:
-                pass
-
-    if not mp:
-        return JsonResponse({'success': False, 'error': 'No meal pass found.'}, status=404)
-
-    if mp.used:
-        return JsonResponse({
-            'success': False, 'already_used': True,
-            'message': f'{mp.user.get_full_name()} already used this meal pass.',
-            'user': {'name': mp.user.get_full_name(), 'email': mp.user.email},
-        })
-
-    mp.used = True; mp.used_at = _tz.now(); mp.scanned_by = request.user
-    mp.save(update_fields=['used', 'used_at', 'scanned_by'])
-
+        push_to_checked_in(
+            title=f"🛑 {active_meal_name} service is now closed",
+            body=f"Dining service for {active_meal_name} has concluded.",
+            data={"type": "meal_pass", "screen": "qr"},
+        )
     return JsonResponse({
-        'success': True,
-        'message': f'{mp.user.get_full_name()} — Meal pass verified!',
-        'user': {'name': mp.user.get_full_name(), 'email': mp.user.email},
+        "success": True,
+        "meal": _meal_payload(window),
+        "is_open": window.is_open,
+        "message": f"{active_meal_name} window opened" if target_state else "Window closed",
     })
+
+
+@csrf_exempt
+@login_required
+def panel_meal_push(request):
+    """Re-broadcast push notification for active meal service."""
+    today = _today()
+    window = MealWindow.objects.filter(date=today).order_by('-id').first()
+    if not window or not window.is_open:
+        return JsonResponse({"success": False, "message": "No active meal window is open."}, status=400)
+
+    meal_name = window.meal_type or "Meal"
+    push_to_checked_in(
+        title=f"🍽️ Reminder: {meal_name} is open!",
+        body=f"Dining service for {meal_name} is currently open.",
+        data={"type": "meal_pass", "screen": "qr"}
+    )
+    return JsonResponse({"success": True, "message": f"Push notification sent for {meal_name}!"})
+
+
+@csrf_exempt
+@login_required
+def panel_meal_window_schedule(request):
+    return JsonResponse({"success": True})
+
+
+panel_meal_schedule = panel_meal_window_schedule
+
+
+@csrf_exempt
+@login_required
+def panel_meal_scan(request):
+    if request.method != 'POST':
+        return JsonResponse({"success": False, "message": "POST required"}, status=405)
+    import json, uuid
+    try:
+        data = json.loads(request.body.decode('utf-8'))
+    except Exception:
+        data = request.POST
+    raw_qr = str(data.get('qr_data') or data.get('qr_code') or data.get('registration_id') or '').strip()
+    meal_pass = None
+    try:
+        meal_pass = MealPass.objects.filter(id=uuid.UUID(raw_qr), is_active=True).first()
+    except Exception:
+        pass
+    if not meal_pass:
+        u = User.objects.filter(models.Q(registration_id=raw_qr) | models.Q(email__iexact=raw_qr)).first()
+        if u:
+            meal_pass = MealPass.objects.filter(user=u, date=_today(), is_active=True).order_by('-created_at').first()
+    if not meal_pass:
+        return JsonResponse({"success": False, "message": "Invalid or expired Meal Pass QR."}, status=404)
+    if meal_pass.used:
+        return JsonResponse({"success": False, "message": f"{meal_pass.meal_type} pass already redeemed."}, status=400)
+    meal_pass.used = True
+    meal_pass.used_at = timezone.now()
+    meal_pass.scanned_by = request.user
+    meal_pass.save()
+    if meal_pass.user:
+        try:
+            award_points(meal_pass.user, 'meal_checkin', f"Attended {meal_pass.meal_type} service")
+        except Exception:
+            pass
+    return JsonResponse({
+        "success": True,
+        "message": f"{meal_pass.meal_type} pass verified for {meal_pass.display_name}!",
+        "pass": {
+            "display_name": meal_pass.display_name,
+            "meal_type": meal_pass.meal_type,
+            "used": True,
+        },
+    })
+
+
+@login_required
+def panel_stats(request):
+    today = _today()
+    total = User.objects.filter(
+        models.Q(role='participant') | models.Q(role='attendee') | models.Q(role='speaker')
+    ).count() or User.objects.count()
+    checked_in = CheckIn.objects.filter(checkin_type='conference').count()
+    remaining = max(0, total - checked_in)
+    return JsonResponse({
+        "success": True,
+        "checked_in": checked_in,
+        "remaining": remaining,
+        "total": total,
+        "meals_served": MealPass.objects.filter(date=today, used=True).count(),
+    })
+
+
+@csrf_exempt
+@login_required
+@module_required('meal_scanner')
+def meal_pass_create_view(request):
+    if request.method != 'POST':
+        return render(request, 'panel/meal_pass_manage.html')
+    guest_name = (request.POST.get('guest_name') or '').strip()
+    guest_email = (request.POST.get('guest_email') or '').strip()
+    guest_phone = (request.POST.get('guest_phone') or '').strip()
+    guest_reg_no = (request.POST.get('guest_reg_no') or '').strip()
+    meal_type = (request.POST.get('meal_type') or 'Lunch').strip()
+    if not guest_name:
+        return JsonResponse({"success": False, "message": "Guest name required"}, status=400)
+    mp = MealPass.objects.create(
+        guest_name=guest_name,
+        guest_email=guest_email,
+        guest_phone=guest_phone,
+        guest_reg_no=guest_reg_no,
+        meal_type=meal_type,
+        date=_today(),
+        is_active=True,
+    )
+    email_sent = False
+    if guest_email:
+        try:
+            import qrcode
+            qr = qrcode.QRCode(version=1, box_size=10, border=4)
+            qr.add_data(str(mp.id))
+            qr.make(fit=True)
+            img = qr.make_image(fill_color="black", back_color="white")
+            buf = io.BytesIO()
+            img.save(buf, format="PNG")
+            email = EmailMessage(
+                subject=f"Your ETD 2026 {meal_type} Pass",
+                body=f"Hello {guest_name},\n\nAttached is your {meal_type} pass QR code for ETD 2026.\n\nETD 2026 Organising Team",
+                from_email=getattr(settings, 'DEFAULT_FROM_EMAIL', None),
+                to=[guest_email],
+            )
+            email.attach(f"meal_pass_{mp.id}.png", buf.getvalue(), "image/png")
+            email.send(fail_silently=True)
+            email_sent = True
+        except Exception as e:
+            print("meal pass email failed:", e)
+    ct = request.content_type or ''
+    if 'application/x-www-form-urlencoded' in ct or request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+        return JsonResponse({
+            "success": True,
+            "email_sent": email_sent,
+            "pass": {"id": str(mp.id), "qr_data": str(mp.id), "display_name": mp.display_name},
+        })
+    messages.success(request, f"{meal_type} pass created for {guest_name}!")
+    return redirect('/panel/checkins/scanner/')

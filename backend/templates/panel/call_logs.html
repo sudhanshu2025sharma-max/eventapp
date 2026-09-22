@@ -1,0 +1,188 @@
+{% extends "panel/base.html" %}
+
+{% block title %}Call Logs{% endblock %}
+{% block page_title %}📞 Voice Call Logs{% endblock %}
+{% block page_subtitle %}All staff voice call sessions{% endblock %}
+
+{% block content %}
+<style>
+  .stats-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; margin-bottom: 20px; }
+  .stat-card { background: var(--surface); border-radius: 12px; padding: 16px; text-align: center; border: 1px solid var(--border); }
+  .stat-card .num { font-size: 28px; font-weight: 800; }
+  .stat-card .lbl { font-size: 12px; color: var(--text-sec); margin-top: 4px; text-transform: uppercase; letter-spacing: 0.5px; }
+  .stat-total .num { color: var(--brand); }
+  .stat-active .num { color: #10b981; }
+  .stat-ended .num { color: #6366f1; }
+  .stat-missed .num { color: #ef4444; }
+  .stat-ringing .num { color: #f59e0b; }
+
+  .filter-bar { display: flex; gap: 10px; margin-bottom: 16px; flex-wrap: wrap; align-items: center; }
+  .filter-bar input, .filter-bar select {
+    padding: 8px 12px; border: 1px solid var(--border); border-radius: 8px;
+    font-size: 13px; background: var(--surface); color: var(--text);
+  }
+  .filter-bar input[type="text"] { flex: 1; min-width: 180px; }
+  .filter-bar button {
+    padding: 8px 16px; background: var(--brand); color: #fff; border: none;
+    border-radius: 8px; cursor: pointer; font-weight: 600; font-size: 13px;
+  }
+
+  .log-table { width: 100%; border-collapse: collapse; background: var(--surface); border-radius: 12px; overflow: hidden; border: 1px solid var(--border); }
+  .log-table th { background: #f8fafc; padding: 12px 14px; text-align: left; font-size: 12px; color: var(--text-sec); text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 2px solid var(--border); }
+  .log-table td { padding: 12px 14px; border-bottom: 1px solid var(--border); font-size: 13px; vertical-align: middle; }
+  .log-table tr:last-child td { border-bottom: none; }
+  .log-table tr:hover td { background: #f8fafc; }
+
+  .user-cell { display: flex; align-items: center; gap: 8px; }
+  .user-avatar { width: 32px; height: 32px; border-radius: 50%; background: var(--brand-light); display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 13px; color: var(--brand); flex-shrink: 0; }
+  .user-info .name { font-weight: 600; color: var(--text); }
+  .user-info .email { font-size: 11px; color: var(--text-sec); }
+
+  .badge { display: inline-block; padding: 3px 10px; border-radius: 20px; font-size: 11px; font-weight: 700; text-transform: uppercase; }
+  .badge-active { background: #d1fae5; color: #059669; }
+  .badge-ended { background: #e0e7ff; color: #4338ca; }
+  .badge-missed { background: #fee2e2; color: #dc2626; }
+  .badge-ringing { background: #fef3c7; color: #d97706; }
+
+  .duration { font-family: monospace; font-weight: 600; color: var(--text); }
+  .time-cell { font-size: 12px; color: var(--text-sec); }
+
+  .arrow-cell { color: var(--brand); font-weight: 700; font-size: 16px; text-align: center; }
+
+  .empty-state { text-align: center; padding: 60px 20px; color: var(--text-sec); }
+  .empty-state i { font-size: 48px; margin-bottom: 12px; display: block; opacity: 0.3; }
+
+  .pagination { display: flex; gap: 6px; justify-content: center; margin-top: 20px; }
+  .pagination a, .pagination span {
+    padding: 6px 12px; border: 1px solid var(--border); border-radius: 6px;
+    font-size: 13px; text-decoration: none; color: var(--text);
+  }
+  .pagination .current { background: var(--brand); color: #fff; border-color: var(--brand); }
+</style>
+
+<!-- Stats -->
+<div class="stats-row">
+  <div class="stat-card stat-total">
+    <div class="num">{{ total }}</div>
+    <div class="lbl">Total Calls</div>
+  </div>
+  <div class="stat-card stat-active">
+    <div class="num">{{ active_count }}</div>
+    <div class="lbl">Active</div>
+  </div>
+  <div class="stat-card stat-ended">
+    <div class="num">{{ ended_count }}</div>
+    <div class="lbl">Completed</div>
+  </div>
+  <div class="stat-card stat-missed">
+    <div class="num">{{ missed_count }}</div>
+    <div class="lbl">Missed</div>
+  </div>
+  <div class="stat-card stat-ringing">
+    <div class="num">{{ ringing_count }}</div>
+    <div class="lbl">Ringing</div>
+  </div>
+</div>
+
+<!-- Filters -->
+<form class="filter-bar" method="get">
+  <input type="text" name="q" placeholder="Search by name or email..." value="{{ search }}">
+  <select name="status">
+    <option value="">All Status</option>
+    <option value="ringing" {% if status_filter == 'ringing' %}selected{% endif %}>Ringing</option>
+    <option value="active" {% if status_filter == 'active' %}selected{% endif %}>Active</option>
+    <option value="ended" {% if status_filter == 'ended' %}selected{% endif %}>Ended</option>
+    <option value="missed" {% if status_filter == 'missed' %}selected{% endif %}>Missed</option>
+  </select>
+  <input type="date" name="date_from" value="{{ date_from }}" placeholder="From">
+  <input type="date" name="date_to" value="{{ date_to }}" placeholder="To">
+  <button type="submit"><i class="fa-solid fa-filter"></i> Filter</button>
+  {% if search or status_filter or date_from or date_to %}
+    <a href="{% url 'call_logs' %}" style="padding:8px 12px;color:var(--text-sec);font-size:13px;">Clear</a>
+  {% endif %}
+</form>
+
+<!-- Table -->
+{% if logs %}
+<table class="log-table">
+  <thead>
+    <tr>
+      <th>#</th>
+      <th>Caller</th>
+      <th></th>
+      <th>Callee</th>
+      <th>Status</th>
+      <th>Duration</th>
+      <th>Date & Time</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for log in logs %}
+    <tr>
+      <td style="color:var(--text-sec);font-size:12px;">{{ forloop.counter0|add:logs.start_index }}</td>
+      <td>
+        <div class="user-cell">
+          <div class="user-avatar">{{ log.caller.first_name|first|default:"?" }}</div>
+          <div class="user-info">
+            <div class="name">{{ log.caller.get_full_name|default:log.caller.email }}</div>
+            <div class="email">{{ log.caller.email }}</div>
+          </div>
+        </div>
+      </td>
+      <td class="arrow-cell"><i class="fa-solid fa-arrow-right"></i></td>
+      <td>
+        <div class="user-cell">
+          <div class="user-avatar">{{ log.callee.first_name|first|default:"?" }}</div>
+          <div class="user-info">
+            <div class="name">{{ log.callee.get_full_name|default:log.callee.email }}</div>
+            <div class="email">{{ log.callee.email }}</div>
+          </div>
+        </div>
+      </td>
+      <td>
+        <span class="badge badge-{{ log.status }}">
+          {% if log.status == 'ended' %}Completed{% else %}{{ log.status|title }}{% endif %}
+        </span>
+      </td>
+      <td class="duration">
+        {% if log.ended_at and log.created_at %}
+          {% with secs=log.ended_at|timeuntil:log.created_at %}
+            {{ log.duration_display|default:"—" }}
+          {% endwith %}
+        {% else %}
+          —
+        {% endif %}
+      </td>
+      <td class="time-cell">{{ log.created_at|date:"M d, Y H:i" }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+<!-- Pagination -->
+{% if logs.has_other_pages %}
+<div class="pagination">
+  {% if logs.has_previous %}
+    <a href="?page={{ logs.previous_page_number }}&status={{ status_filter }}&q={{ search }}&date_from={{ date_from }}&date_to={{ date_to }}">← Prev</a>
+  {% endif %}
+  {% for num in logs.paginator.page_range %}
+    {% if logs.number == num %}
+      <span class="current">{{ num }}</span>
+    {% elif num > logs.number|add:"-3" and num < logs.number|add:"3" %}
+      <a href="?page={{ num }}&status={{ status_filter }}&q={{ search }}&date_from={{ date_from }}&date_to={{ date_to }}">{{ num }}</a>
+    {% endif %}
+  {% endfor %}
+  {% if logs.has_next %}
+    <a href="?page={{ logs.next_page_number }}&status={{ status_filter }}&q={{ search }}&date_from={{ date_from }}&date_to={{ date_to }}">Next →</a>
+  {% endif %}
+</div>
+{% endif %}
+
+{% else %}
+<div class="empty-state">
+  <i class="fa-solid fa-phone-slash"></i>
+  <h3>No Call Logs Found</h3>
+  <p>Voice call sessions will appear here once staff start making calls.</p>
+</div>
+{% endif %}
+{% endblock %}

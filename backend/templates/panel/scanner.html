@@ -4,7 +4,6 @@
 {% block page_subtitle %}Conference check-in & meal pass verification{% endblock %}
 
 {% block content %}
-<!-- Mode Tabs -->
 <div style="display:flex;gap:8px;margin-bottom:24px;">
   <button class="btn btn-primary" id="tabConf" onclick="switchMode('conference')" style="flex:1;justify-content:center;">
     <i class="fas fa-qrcode"></i> Conference Check-In
@@ -14,28 +13,29 @@
   </button>
 </div>
 
-<!-- Meal Window Control -->
+<!-- Meal Window Card -->
 <div class="card" style="margin-bottom:24px;display:none;" id="mealWindowCard">
-  <div class="card-header">
-    <h3><i class="fas fa-door-open" style="color:var(--primary);margin-right:8px;"></i>Meal Pass Window — Today</h3>
-    <span id="todayDate" style="font-size:13px;color:var(--text-tertiary);"></span>
+  <div class="card-header" style="display:flex;justify-content:space-between;align-items:center;">
+    <h3><i class="fas fa-door-open" style="color:var(--primary);margin-right:8px;"></i>Meal Pass Window</h3>
+    <button class="btn btn-sm btn-primary" onclick="openCustomPassModal()"><i class="fas fa-plus"></i> Issue Guest Pass</button>
   </div>
   <div class="card-body">
-    <div style="padding:20px;background:var(--bg);border-radius:12px;text-align:center;">
-      <div style="font-size:28px;margin-bottom:8px;">🍽️</div>
-      <div id="mealWindowStatus" style="font-size:14px;font-weight:700;margin-bottom:12px;">—</div>
-      <div style="display:flex;gap:8px;justify-content:center;">
-        <button class="btn btn-primary btn-sm" onclick="toggleWindow('open')"><i class="fas fa-unlock"></i> Open Window</button>
-        <button class="btn btn-secondary btn-sm" onclick="toggleWindow('close')"><i class="fas fa-lock"></i> Close Window</button>
+    <div style="padding:18px;background:var(--bg);border-radius:12px;text-align:center;">
+      <div style="font-size:28px;margin-bottom:4px;">🍽️</div>
+      <div id="mealCategoryDisplay" style="font-size:12px;color:var(--primary);font-weight:700;margin-bottom:4px;">Active Service: —</div>
+      <div id="mealWindowStatus" style="font-size:15px;font-weight:800;margin-bottom:12px;">Checking status...</div>
+      <div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap;">
+        <button class="btn btn-primary btn-sm" onclick="showMealTypeSelect()"><i class="fas fa-unlock"></i> Open Service...</button>
+        <button class="btn btn-secondary btn-sm" onclick="toggleWindow('close')"><i class="fas fa-lock"></i> Close Service</button>
+        <button class="btn btn-warning btn-sm" id="btnSendMealPush" style="display:none;" onclick="sendMealPush()"><i class="fas fa-bullhorn"></i> Send Push</button>
       </div>
     </div>
   </div>
 </div>
 
+<!-- Scan Interface -->
 <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px;max-width:1100px;">
-  <!-- LEFT -->
   <div>
-    <!-- Mode banner -->
     <div class="card" style="margin-bottom:24px;">
       <div class="card-body" style="display:flex;align-items:center;gap:12px;">
         <div id="modeIcon" style="width:44px;height:44px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:22px;background:var(--primary-light);">
@@ -48,374 +48,248 @@
       </div>
     </div>
 
-    <!-- Camera -->
-    <div class="card" style="margin-bottom:24px;">
-      <div class="card-header">
-        <h3><i class="fas fa-camera" style="color:var(--primary);margin-right:8px;"></i>Camera Scanner</h3>
-        <button class="btn btn-sm btn-secondary" id="toggleCam">Start Camera</button>
-      </div>
-      <div class="card-body" style="padding:0;">
-        <div id="camWrap" style="display:none;position:relative;background:#000;border-radius:0 0 14px 14px;overflow:hidden;">
-          <video id="camVideo" style="width:100%;display:block;" autoplay muted playsinline></video>
-          <canvas id="camCanvas" style="display:none;"></canvas>
-          <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none;">
-            <div style="width:220px;height:220px;border:3px solid var(--primary);border-radius:16px;box-shadow:0 0 0 9999px rgba(0,0,0,0.45);"></div>
-          </div>
-          <div style="position:absolute;bottom:16px;left:0;right:0;text-align:center;">
-            <span style="background:rgba(0,0,0,0.6);color:white;padding:6px 16px;border-radius:20px;font-size:13px;">Point camera at QR code</span>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Manual -->
     <div class="card">
       <div class="card-header">
-        <h3><i class="fas fa-keyboard" style="color:var(--primary);margin-right:8px;"></i>Manual Entry</h3>
+        <h3><i class="fas fa-keyboard" style="color:var(--primary);margin-right:8px;"></i>Manual / QR Entry</h3>
       </div>
       <div class="card-body">
-        <label class="form-label">Registration ID</label>
+        <label class="form-label">Registration ID / Scanned QR Text</label>
         <div style="display:flex;gap:10px;">
           <input type="text" id="manualInput" class="form-control" placeholder="e.g. ETD-2026-R-001" style="flex:1;" autocomplete="off"/>
-          <button class="btn btn-primary" id="manualBtn"><i class="fas fa-search"></i> Scan</button>
+          <button class="btn btn-primary" id="manualBtn" onclick="handleManualScan()"><i class="fas fa-search"></i> Verify</button>
         </div>
-        <p style="font-size:12px;color:var(--text-tertiary);margin-top:8px;">Press Enter or click Scan</p>
       </div>
     </div>
   </div>
 
-  <!-- RIGHT -->
   <div>
-    <!-- Scan Result -->
-    <div class="card" style="margin-bottom:24px;">
-      <div class="card-header">
-        <h3><i class="fas fa-id-card" style="color:var(--primary);margin-right:8px;"></i>Scan Result</h3>
-        <span id="resultBadge" style="display:none;"></span>
-      </div>
-      <div class="card-body" id="resultBody">
-        <div class="empty-state" style="padding:32px 0;">
-          <i class="fas fa-qrcode" style="font-size:40px;color:var(--border);"></i>
-          <p style="margin-top:12px;color:var(--text-tertiary);">Waiting for scan...</p>
-        </div>
-      </div>
+    <div class="card" id="resultCard" style="display:none;margin-bottom:24px;">
+      <div class="card-header"><h3 id="resultTitle">Result</h3></div>
+      <div class="card-body" id="resultBody"></div>
     </div>
-
-    <!-- Conference Kit Card -->
-    <div class="card" style="margin-bottom:24px;display:none;" id="kitCard">
-      <div class="card-header" style="background:var(--warning-light);">
-        <h3><i class="fas fa-gift" style="color:var(--warning);margin-right:8px;"></i>Conference Kit Bag</h3>
-      </div>
-      <div class="card-body">
-        <p style="font-size:14px;color:var(--text-secondary);margin-bottom:16px;">
-          Did <strong id="kitName">—</strong> receive the Conference Kit?
-        </p>
-        <div style="display:flex;gap:10px;margin-bottom:12px;">
-          <button class="btn btn-primary" style="flex:1;justify-content:center;" id="kitYes">
-            <i class="fas fa-check"></i> Yes, Received
-          </button>
-          <button class="btn btn-danger" style="flex:1;justify-content:center;" id="kitNo">
-            <i class="fas fa-times"></i> No / Skip
-          </button>
-        </div>
-        <div id="kitReasonWrap" style="display:none;">
-          <label class="form-label">Reason (optional)</label>
-          <textarea id="kitReason" class="form-control" rows="2" placeholder="e.g. Out of stock, will deliver later..."></textarea>
-          <button class="btn btn-secondary" style="margin-top:10px;width:100%;justify-content:center;" id="kitSkipConfirm">
-            <i class="fas fa-check"></i> Confirm — No Kit
-          </button>
-        </div>
-      </div>
+    <div class="card" id="statsCard">
+      <div class="card-header"><h3><i class="fas fa-chart-bar" style="color:var(--primary);margin-right:8px;"></i>Live Stats</h3></div>
+      <div class="card-body" id="statsBody" style="text-align:center;color:var(--text-tertiary);">Loading...</div>
     </div>
+  </div>
+</div>
 
-    <!-- Stats -->
-    <div class="card">
-      <div class="card-header">
-        <h3><i class="fas fa-chart-bar" style="color:var(--primary);margin-right:8px;"></i>Stats</h3>
-        <a href="/panel/checkins/list/" class="card-header-action">View All</a>
-      </div>
-      <div class="card-body" id="statsBody">
-        <div style="text-align:center;color:var(--text-tertiary);padding:16px;">Loading...</div>
+<!-- Modal: Select Meal Type -->
+<div id="mealTypeModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:9999;align-items:center;justify-content:center;">
+  <div style="background:#fff;width:100%;max-width:380px;border-radius:16px;padding:24px;box-shadow:0 10px 25px rgba(0,0,0,0.2);">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+      <h3 style="margin:0;font-size:18px;">Select Meal Category</h3>
+      <button onclick="closeMealTypeSelect()" style="background:none;border:none;font-size:20px;cursor:pointer;">&times;</button>
+    </div>
+    <div style="display:grid;gap:8px;">
+      <button class="btn btn-secondary" onclick="toggleWindow('open', 'Lunch')">🥪 Lunch</button>
+      <button class="btn btn-secondary" onclick="toggleWindow('open', 'Dinner')">🍛 Dinner</button>
+      <button class="btn btn-secondary" onclick="toggleWindow('open', 'High Tea')">☕ High Tea</button>
+      <button class="btn btn-secondary" onclick="toggleWindow('open', 'Breakfast')">🥐 Breakfast</button>
+      <div style="display:flex;gap:8px;margin-top:8px;">
+        <input type="text" id="customMealTypeInput" class="form-control" placeholder="Custom meal name..." style="flex:1;">
+        <button class="btn btn-primary" onclick="toggleWindow('open', document.getElementById('customMealTypeInput').value)">Open</button>
       </div>
     </div>
   </div>
 </div>
 
-<div id="toast" style="position:fixed;bottom:32px;right:32px;padding:14px 22px;border-radius:12px;font-size:14px;font-weight:600;color:white;display:none;z-index:9999;box-shadow:0 8px 24px rgba(0,0,0,0.15);"></div>
+<!-- Modal: Issue Guest Meal Pass -->
+<div id="customPassModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:9999;align-items:center;justify-content:center;">
+  <div style="background:#fff;width:100%;max-width:440px;border-radius:16px;padding:24px;box-shadow:0 10px 25px rgba(0,0,0,0.2);">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+      <h3 style="margin:0;font-size:18px;"><i class="fas fa-ticket-alt" style="color:var(--primary);"></i> Issue Guest Meal Pass</h3>
+      <button onclick="closeCustomPassModal()" style="background:none;border:none;font-size:18px;cursor:pointer;">&times;</button>
+    </div>
+    <div style="display:grid;gap:12px;">
+      <div>
+        <label class="form-label">Meal Category</label>
+        <select id="passMealType" class="form-control">
+          <option value="Lunch">Lunch</option>
+          <option value="Dinner">Dinner</option>
+          <option value="High Tea">High Tea</option>
+          <option value="Breakfast">Breakfast</option>
+        </select>
+      </div>
+      <div>
+        <label class="form-label">Guest Full Name *</label>
+        <input type="text" id="passGuestName" class="form-control" placeholder="e.g. Dr. John Doe">
+      </div>
+      <div>
+        <label class="form-label">Email (QR code sent here)</label>
+        <input type="email" id="passGuestEmail" class="form-control" placeholder="guest@example.com">
+      </div>
+      <div>
+        <label class="form-label">Phone</label>
+        <input type="text" id="passGuestPhone" class="form-control" placeholder="+91...">
+      </div>
+      <button class="btn btn-primary" id="btnIssuePass" onclick="submitCustomPass()" style="margin-top:8px;justify-content:center;">
+        Create &amp; Email QR Pass
+      </button>
+      <div id="customPassMsg" style="font-size:12px;text-align:center;"></div>
+    </div>
+  </div>
+</div>
 
 <script>
-let currentMode   = 'conference';
-let cameraStream  = null;
-let scanLoop      = null;
-let lastScanned   = '';
-let lastCheckinId = null;
-let cameraActive  = false;
+let currentMode = 'conference';
 
-// ── Mode switch ───────────────────────────────────────────────────────────
 function switchMode(mode) {
   currentMode = mode;
   document.getElementById('tabConf').className = mode === 'conference' ? 'btn btn-primary' : 'btn btn-secondary';
-  document.getElementById('tabMeal').className = mode === 'meal'       ? 'btn btn-primary' : 'btn btn-secondary';
-  ['tabConf','tabMeal'].forEach(id => { document.getElementById(id).style.flex = '1'; document.getElementById(id).style.justifyContent = 'center'; });
-
-  const isMeal = mode === 'meal';
-  document.getElementById('mealWindowCard').style.display = isMeal ? '' : 'none';
-  document.getElementById('kitCard').style.display = 'none';
-
-  const meta = {
-    conference: { icon: '<i class="fas fa-qrcode" style="color:var(--primary);"></i>', bg: 'var(--primary-light)', label: 'Conference Check-In',    desc: 'Scan attendee QR or enter Registration ID' },
-    meal:       { icon: '🍽️',                                                          bg: 'var(--warning-light)', label: 'Meal Pass Scan',           desc: 'Scan attendee meal pass QR'                },
-  };
-  const m = meta[mode];
-  document.getElementById('modeIcon').innerHTML   = m.icon;
-  document.getElementById('modeIcon').style.background = m.bg;
-  document.getElementById('modeLabel').textContent = m.label;
-  document.getElementById('modeDesc').textContent  = m.desc;
-
-  lastScanned = ''; lastCheckinId = null;
-  resetResult();
-  if (isMeal) loadMealWindowStatus();
-  loadStats();
+  document.getElementById('tabMeal').className = mode === 'meal' ? 'btn btn-primary' : 'btn btn-secondary';
+  document.getElementById('mealWindowCard').style.display = mode === 'meal' ? 'block' : 'none';
+  document.getElementById('modeLabel').innerText = mode === 'conference' ? 'Conference Check-In' : 'Meal Pass Verification';
+  document.getElementById('modeDesc').innerText = mode === 'conference' ? 'Scan attendee QR or enter Registration ID' : 'Scan Meal Pass QR Code';
+  updateStats();
+  if (mode === 'meal') updateMealStatus();
 }
 
-// ── Toast ─────────────────────────────────────────────────────────────────
-function showToast(msg, type) {
-  const t = document.getElementById('toast');
-  t.textContent = msg;
-  t.style.background = type === 'success' ? '#10b981' : type === 'error' ? '#ef4444' : '#334155';
-  t.style.display = 'block';
-  setTimeout(() => { t.style.display = 'none'; }, 3000);
+function showMealTypeSelect() {
+  document.getElementById('mealTypeModal').style.display = 'flex';
+}
+function closeMealTypeSelect() {
+  document.getElementById('mealTypeModal').style.display = 'none';
 }
 
-// ── Result ────────────────────────────────────────────────────────────────
-function resetResult() {
-  document.getElementById('resultBody').innerHTML = `
-    <div class="empty-state" style="padding:32px 0;">
-      <i class="fas fa-qrcode" style="font-size:40px;color:var(--border);"></i>
-      <p style="margin-top:12px;color:var(--text-tertiary);">Waiting for scan...</p>
-    </div>`;
-  const b = document.getElementById('resultBadge');
-  b.style.display = 'none'; b.textContent = '';
+function openCustomPassModal() {
+  document.getElementById('customPassModal').style.display = 'flex';
+}
+function closeCustomPassModal() {
+  document.getElementById('customPassModal').style.display = 'none';
 }
 
-function showResult(html, type) {
-  const colors = {
-    success: { bg:'#d1fae5', fg:'#10b981' },
-    warning: { bg:'#fef3c7', fg:'#f59e0b' },
-    error:   { bg:'#fee2e2', fg:'#ef4444' },
-  };
-  const c = colors[type] || colors.error;
-  const b = document.getElementById('resultBadge');
-  b.style.cssText = `display:inline-block;background:${c.bg};color:${c.fg};padding:4px 12px;border-radius:20px;font-size:12px;font-weight:700;`;
-  b.textContent = type === 'success' ? '✓ Success' : type === 'warning' ? '⚠ Already Done' : '✗ Error';
-  document.getElementById('resultBody').innerHTML = html;
+async function updateMealStatus() {
+  try {
+    const res = await fetch('/panel/checkins/meal-window-status/');
+    const data = await res.json();
+    const is_open = data.is_open || (data.meal && data.meal.is_open);
+    const meal_type = data.meal_type || (data.meal && data.meal.meal_type) || 'Meal';
+    
+    document.getElementById('mealCategoryDisplay').innerText = 'Active Service: ' + meal_type;
+    const statusEl = document.getElementById('mealWindowStatus');
+    statusEl.innerText = is_open ? 'OPEN NOW' : 'CLOSED';
+    statusEl.style.color = is_open ? 'var(--success)' : 'var(--text-tertiary)';
+    document.getElementById('btnSendMealPush').style.display = is_open ? 'inline-flex' : 'none';
+  } catch (e) {}
 }
 
-// ── Stats ─────────────────────────────────────────────────────────────────
-function loadStats() {
-  fetch('/panel/checkins/stats/', { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
-    .then(r => r.ok ? r.json() : null).then(d => {
-      if (!d) return;
-      document.getElementById('statsBody').innerHTML = `
-        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;text-align:center;">
-          <div style="padding:16px;background:#d1fae5;border-radius:12px;">
-            <div style="font-size:28px;font-weight:800;color:#10b981;">${d.checked_in ?? 0}</div>
-            <div style="font-size:12px;color:var(--text-tertiary);margin-top:4px;">Checked In</div>
-          </div>
-          <div style="padding:16px;background:#fef3c7;border-radius:12px;">
-            <div style="font-size:28px;font-weight:800;color:#f59e0b;">${d.remaining ?? 0}</div>
-            <div style="font-size:12px;color:var(--text-tertiary);margin-top:4px;">Remaining</div>
-          </div>
-          <div style="padding:16px;background:var(--primary-light);border-radius:12px;">
-            <div style="font-size:28px;font-weight:800;color:var(--primary);">${d.total ?? 0}</div>
-            <div style="font-size:12px;color:var(--text-tertiary);margin-top:4px;">Total</div>
-          </div>
-        </div>`;
-    }).catch(() => {});
-}
-
-// ── Meal window ───────────────────────────────────────────────────────────
-function loadMealWindowStatus() {
-  fetch('/panel/checkins/meal-window-status/', { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
-    .then(r => r.ok ? r.json() : null).then(d => {
-      if (!d) return;
-      document.getElementById('todayDate').textContent = d.date || '';
-      const open = d.meal?.is_open;
-      document.getElementById('mealWindowStatus').innerHTML =
-        open ? '<span style="color:#10b981;">🟢 Window Open — Attendees can generate passes</span>'
-             : '<span style="color:#ef4444;">🔴 Window Closed</span>';
-    }).catch(() => {});
-}
-
-function toggleWindow(action) {
-  fetch('/panel/checkins/meal/window/', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken') },
-    body: JSON.stringify({ action }),
-  }).then(r => r.json()).then(d => {
-    showToast(d.message || 'Done', d.success ? 'success' : 'error');
-    loadMealWindowStatus();
-  }).catch(() => showToast('Network error', 'error'));
-}
-
-// ── Core dispatch ─────────────────────────────────────────────────────────
-function processCode(code) {
-  code = code.trim().toUpperCase();
-  if (!code || code === lastScanned) return;
-  lastScanned = code;
-  currentMode === 'conference' ? doConferenceScan(code) : doMealScan(code);
-}
-
-// ── Conference scan ───────────────────────────────────────────────────────
-function doConferenceScan(regId) {
-  fetch('/panel/checkins/scan/', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken') },
-    body: JSON.stringify({ registration_id: regId }),
-  }).then(r => r.json()).then(d => {
-    const u    = d.user || {};
-    const type = d.success ? 'success' : d.already_checked_in ? 'warning' : 'error';
-    const photo = u.photo || '';
-
-    showResult(`
-      <div style="display:flex;align-items:center;gap:16px;margin-bottom:16px;">
-        ${photo
-          ? `<img src="${photo}" style="width:64px;height:64px;border-radius:50%;object-fit:cover;border:2px solid var(--border);" onerror="this.style.display='none'">`
-          : `<div style="width:64px;height:64px;border-radius:50%;background:var(--primary-light);display:flex;align-items:center;justify-content:center;font-size:24px;font-weight:800;color:var(--primary);">${(u.name||'?')[0]}</div>`
-        }
-        <div>
-          <div style="font-size:18px;font-weight:700;">${u.name || '—'}</div>
-          <div style="font-size:13px;color:var(--text-tertiary);">${u.email || ''}</div>
-          <div style="font-size:13px;color:var(--text-tertiary);">${u.registration_id || regId}</div>
-          <div style="font-size:12px;color:var(--text-tertiary);">${u.affiliation || ''}</div>
-        </div>
-      </div>
-      <div style="padding:10px 14px;background:${type==='success'?'#d1fae5':type==='warning'?'#fef3c7':'#fee2e2'};border-radius:8px;font-size:13px;color:${type==='success'?'#10b981':type==='warning'?'#f59e0b':'#ef4444'};">
-        ${d.success ? '✓ ' + d.message : d.already_checked_in ? '⚠ Already checked in' : '✗ ' + (d.error || d.message || 'Not found')}
-      </div>`, type);
-
-    if (d.success && d.checkin_id) {
-      lastCheckinId = d.checkin_id;
-      document.getElementById('kitName').textContent = u.name || regId;
-      document.getElementById('kitCard').style.display = '';
-      document.getElementById('kitReasonWrap').style.display = 'none';
-      document.getElementById('kitReason').value = '';
-    }
-    loadStats();
-  }).catch(() => {
-    showResult('<div style="padding:16px;color:#ef4444;">Network error</div>', 'error');
-  });
-}
-
-// ── Meal scan ─────────────────────────────────────────────────────────────
-function doMealScan(code) {
-  fetch('/panel/checkins/meal/scan/', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken') },
-    body: JSON.stringify({ qr_code: code }),
-  }).then(r => r.json()).then(d => {
-    const u    = d.user || {};
-    const type = d.success ? 'success' : d.already_used ? 'warning' : 'error';
-    showResult(`
-      <div style="display:flex;align-items:center;gap:16px;margin-bottom:16px;">
-        <div style="width:56px;height:56px;border-radius:16px;background:var(--primary-light);display:flex;align-items:center;justify-content:center;font-size:24px;">🍽️</div>
-        <div>
-          <div style="font-size:18px;font-weight:700;">${u.name || '—'}</div>
-          <div style="font-size:13px;color:var(--text-tertiary);">${u.email || ''}</div>
-        </div>
-      </div>
-      <div style="padding:10px 14px;background:${type==='success'?'#d1fae5':type==='warning'?'#fef3c7':'#fee2e2'};border-radius:8px;font-size:13px;color:${type==='success'?'#10b981':type==='warning'?'#f59e0b':'#ef4444'};">
-        ${d.success ? '✓ ' + d.message : d.already_used ? '⚠ Pass already used' : '✗ ' + (d.error || d.message || 'Invalid')}
-      </div>`, type);
-  }).catch(() => {
-    showResult('<div style="padding:16px;color:#ef4444;">Network error</div>', 'error');
-  });
-}
-
-// ── Kit handlers ──────────────────────────────────────────────────────────
-document.getElementById('kitYes').addEventListener('click', () => submitKit('received', ''));
-document.getElementById('kitNo').addEventListener('click',  () => {
-  document.getElementById('kitReasonWrap').style.display = '';
-});
-document.getElementById('kitSkipConfirm').addEventListener('click', () => {
-  submitKit('skipped', document.getElementById('kitReason').value.trim());
-});
-
-function submitKit(status, reason) {
-  if (!lastCheckinId) { showToast('No active check-in', 'error'); return; }
-  fetch('/panel/checkins/goodies/', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken') },
-    body: JSON.stringify({ checkin_id: lastCheckinId, status, reason }),
-  }).then(r => r.json()).then(d => {
-    if (d.success) {
-      showToast('Conference Kit status saved ✓', 'success');
-      document.getElementById('kitCard').style.display = 'none';
-      lastCheckinId = null;
-    } else {
-      showToast(d.error || 'Error', 'error');
-    }
-  }).catch(() => showToast('Network error', 'error'));
-}
-
-// ── Manual entry ──────────────────────────────────────────────────────────
-document.getElementById('manualBtn').addEventListener('click', () => {
-  const val = document.getElementById('manualInput').value.trim();
-  if (!val) { showToast('Enter a Registration ID', 'error'); return; }
-  lastScanned = '';
-  processCode(val);
-  document.getElementById('manualInput').value = '';
-});
-document.getElementById('manualInput').addEventListener('keydown', e => {
-  if (e.key === 'Enter') document.getElementById('manualBtn').click();
-});
-
-// ── Camera ────────────────────────────────────────────────────────────────
-document.getElementById('toggleCam').addEventListener('click', () => {
-  cameraActive ? stopCamera() : startCamera();
-});
-
-function startCamera() {
-  navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })
-    .then(stream => {
-      cameraStream = stream; cameraActive = true;
-      const video = document.getElementById('camVideo');
-      video.srcObject = stream;
-      document.getElementById('camWrap').style.display = '';
-      document.getElementById('toggleCam').textContent = 'Stop Camera';
-      video.addEventListener('loadedmetadata', () => { scanLoop = setInterval(scanFrame, 400); });
-    }).catch(() => showToast('Camera permission denied', 'error'));
-}
-
-function stopCamera() {
-  clearInterval(scanLoop);
-  if (cameraStream) cameraStream.getTracks().forEach(t => t.stop());
-  cameraStream = null; cameraActive = false;
-  document.getElementById('camWrap').style.display = 'none';
-  document.getElementById('toggleCam').textContent = 'Start Camera';
-}
-
-function scanFrame() {
-  const video = document.getElementById('camVideo');
-  const canvas = document.getElementById('camCanvas');
-  if (video.readyState < 2) return;
-  canvas.width = video.videoWidth; canvas.height = video.videoHeight;
-  canvas.getContext('2d').drawImage(video, 0, 0);
-  if ('BarcodeDetector' in window) {
-    new BarcodeDetector({ formats: ['qr_code'] }).detect(canvas)
-      .then(codes => { if (codes.length) processCode(codes[0].rawValue); })
-      .catch(() => {});
+async function toggleWindow(action, mealType) {
+  closeMealTypeSelect();
+  try {
+    const res = await fetch('/panel/checkins/meal/window/', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({action: action, meal_type: mealType || 'Lunch'})
+    });
+    const data = await res.json();
+    alert(data.message || 'Updated');
+    updateMealStatus();
+  } catch (e) {
+    alert('Error toggling window');
   }
 }
 
-function getCookie(name) {
-  const m = document.cookie.match('(^|;)\\s*' + name + '\\s*=\\s*([^;]+)');
-  return m ? m.pop() : '';
+async function sendMealPush() {
+  try {
+    const res = await fetch('/panel/checkins/meal/push/', {method: 'POST'});
+    const data = await res.json();
+    alert(data.message || 'Notification Sent!');
+  } catch (e) {
+    alert('Failed to send push notification');
+  }
 }
 
-document.addEventListener('DOMContentLoaded', () => {
-  document.getElementById('todayDate').textContent =
-    new Date().toLocaleDateString('en-IN', { weekday:'long', year:'numeric', month:'long', day:'numeric' });
-  loadStats();
-});
+async function updateStats() {
+  try {
+    const res = await fetch('/panel/checkins/stats/');
+    const data = await res.json();
+    document.getElementById('statsBody').innerHTML = `
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+        <div style="padding:12px;background:var(--bg);border-radius:8px;">
+          <div style="font-size:22px;font-weight:800;color:var(--primary);">${data.checked_in || 0}</div>
+          <div style="font-size:11px;color:var(--text-tertiary);">Checked In</div>
+        </div>
+        <div style="padding:12px;background:var(--bg);border-radius:8px;">
+          <div style="font-size:22px;font-weight:800;color:var(--success);">${data.meals_served || 0}</div>
+          <div style="font-size:11px;color:var(--text-tertiary);">Meals Served Today</div>
+        </div>
+      </div>
+    `;
+  } catch (e) {}
+}
+
+async function handleManualScan() {
+  const input = document.getElementById('manualInput');
+  const code = input.value.trim();
+  if (!code) return alert('Please enter code');
+  
+  const endpoint = currentMode === 'conference' ? '/panel/checkins/scan/' : '/panel/checkins/meal/scan/';
+  try {
+    const res = await fetch(endpoint, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({registration_id: code, qr_data: code})
+    });
+    const data = await res.json();
+    
+    const card = document.getElementById('resultCard');
+    const body = document.getElementById('resultBody');
+    card.style.display = 'block';
+    
+    if (data.success) {
+      body.innerHTML = `<div style="color:var(--success);font-weight:700;">✅ ${data.message}</div>`;
+      input.value = '';
+    } else {
+      body.innerHTML = `<div style="color:var(--error);font-weight:700;">❌ ${data.message || 'Failed'}</div>`;
+    }
+    updateStats();
+  } catch (e) {
+    alert('Error scanning');
+  }
+}
+
+async function submitCustomPass() {
+  const name = document.getElementById('passGuestName').value.trim();
+  const email = document.getElementById('passGuestEmail').value.trim();
+  const phone = document.getElementById('passGuestPhone').value.trim();
+  const mealType = document.getElementById('passMealType').value;
+  
+  if (!name) return alert('Guest name is required');
+  
+  try {
+    const formData = new FormData();
+    formData.append('guest_name', name);
+    formData.append('guest_email', email);
+    formData.append('guest_phone', phone);
+    formData.append('meal_type', mealType);
+    
+    const res = await fetch('/panel/checkins/meal-pass/', {
+      method: 'POST',
+      body: formData,
+      headers: {'X-Requested-With': 'XMLHttpRequest'}
+    });
+    const data = await res.json();
+    if (data.success) {
+      alert(data.email_sent ? 'Guest pass issued & QR emailed!' : 'Guest pass issued!');
+      closeCustomPassModal();
+      document.getElementById('passGuestName').value = '';
+      document.getElementById('passGuestEmail').value = '';
+      document.getElementById('passGuestPhone').value = '';
+    } else {
+      alert(data.message || 'Error');
+    }
+  } catch (e) {
+    alert('Error issuing pass');
+  }
+}
+
+// Auto-poll meal status every 5 seconds to keep Web Scanner synced with schedule/app
+setInterval(() => {
+  if (currentMode === 'meal') updateMealStatus();
+}, 5000);
+
+// Init
+switchMode('conference');
 </script>
 {% endblock %}

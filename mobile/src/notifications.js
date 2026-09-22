@@ -1,117 +1,102 @@
 import * as Notifications from 'expo-notifications';
-import * as Device from 'expo-device';
 import { Platform } from 'react-native';
-import { API_URL, API_HEADERS } from './theme';
+import { apiFetch } from './api';
 
-// Show notification when app is in foreground
+// Configures Expo SDK 54 notification handler with modern flags
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
     shouldShowAlert: true,
+    shouldShowBanner: true,
+    shouldShowList: true,
     shouldPlaySound: true,
-    shouldSetBadge:  true,
-    priority: Notifications.AndroidNotificationPriority.HIGH,
+    shouldSetBadge: true,
   }),
 });
 
-const EXPO_PROJECT_ID = 'afa28d7e-10d5-4e85-bed4-783b7371a56b';
-
-export async function registerForPushNotifications(accessToken) {
-  if (!Device.isDevice) {
-    console.log('[Push] Skipping — simulator/emulator');
-    return null;
-  }
-
-  // Request permission
-  const { status: existing } = await Notifications.getPermissionsAsync();
-  let finalStatus = existing;
-
-  if (existing !== 'granted') {
-    const { status } = await Notifications.requestPermissionsAsync();
-    finalStatus = status;
-  }
-
-  if (finalStatus !== 'granted') {
-    console.log('[Push] Permission denied');
-    return null;
-  }
-
-  // Android notification channel
-  if (Platform.OS === 'android') {
-    await Notifications.setNotificationChannelAsync('default', {
-      name:             'ETD 2026',
-      importance:       Notifications.AndroidImportance.MAX,
-      vibrationPattern: [0, 250, 250, 250],
-      lightColor:       '#0333b6',
-      sound:            'default',
-    });
-
-    // Chat channel
-    await Notifications.setNotificationChannelAsync('chat', {
-      name:             'Chat Messages',
-      importance:       Notifications.AndroidImportance.HIGH,
-      vibrationPattern: [0, 150],
-      lightColor:       '#0333b6',
-      sound:            'default',
-    });
-  }
-
-  // SDK 54: getExpoPushTokenAsync still works in dev builds
+export async function registerForPushNotificationsAsync() {
   let token;
   try {
-    const tokenData = await Notifications.getExpoPushTokenAsync({
-      projectId: EXPO_PROJECT_ID,
-    });
-    token = tokenData.data;
-    console.log('[Push] Expo token:', token);
-  } catch (err) {
-    console.log('[Push] Failed to get token:', err.message);
+    const { status: existingStatus } = await Notifications.getPermissionsAsync();
+    let finalStatus = existingStatus;
+    if (existingStatus !== 'granted') {
+      const { status } = await Notifications.requestPermissionsAsync();
+      finalStatus = status;
+    }
+    if (finalStatus !== 'granted') {
+      console.log('Failed to get push token for push notification!');
+      return null;
+    }
+
+    if (Platform.OS === 'android') {
+      await Notifications.setNotificationChannelAsync('default', {
+        name: 'General Notifications',
+        importance: Notifications.AndroidImportance.MAX,
+        vibrationPattern: [0, 250, 250, 250],
+        lightColor: '#1856FF',
+      });
+      await Notifications.setNotificationChannelAsync('chat', {
+        name: 'Chat & Messages',
+        importance: Notifications.AndroidImportance.HIGH,
+        vibrationPattern: [0, 100, 100, 100],
+        lightColor: '#7C3AED',
+      });
+    }
+
+    const expoTokenObj = await Notifications.getExpoPushTokenAsync();
+    const expoToken = expoTokenObj.data;
+
+    if (expoToken) {
+      await apiFetch('/notifications/tokens/', {
+        method: 'POST',
+        body: JSON.stringify({
+          token: expoToken,
+          platform: Platform.OS,
+        }),
+      });
+    }
+    return expoToken;
+  } catch (error) {
+    console.log('Error registering for push notifications:', error);
     return null;
   }
-
-  // Register with Django backend
-  try {
-    const res = await fetch(`${API_URL}/notifications/register-token/`, {
-      method:  'POST',
-      headers: { ...API_HEADERS, 'Authorization': `Bearer ${accessToken}` },
-      body:    JSON.stringify({ token, platform: Platform.OS }),
-    });
-    const data = await res.json();
-    console.log('[Push] Backend registration:', data);
-  } catch (err) {
-    console.log('[Push] Backend registration failed:', err.message);
-  }
-
-  return token;
 }
 
-export async function unregisterToken(token, accessToken) {
-  if (!token || !accessToken) return;
-  try {
-    await fetch(`${API_URL}/notifications/unregister-token/`, {
-      method:  'POST',
-      headers: { ...API_HEADERS, 'Authorization': `Bearer ${accessToken}` },
-      body:    JSON.stringify({ token }),
-    });
-    console.log('[Push] Token unregistered');
-  } catch (err) {
-    console.log('[Push] Unregister failed:', err.message);
-  }
-}
+// Alias to prevent "registerForPushNotifications is not a function" error
+export const registerForPushNotifications = registerForPushNotificationsAsync;
 
-export function setupNotificationListeners(onReceive, onTap) {
-  // SDK 54: same API, addNotificationReceivedListener unchanged
-  const sub1 = Notifications.addNotificationReceivedListener(notification => {
-    console.log('[Push] Received:', notification.request.content.title);
-    onReceive && onReceive(notification);
+export function setupNotificationListeners(onNotificationReceived, onNotificationResponse) {
+  const receivedSub = Notifications.addNotificationReceivedListener(notification => {
+    if (typeof onNotificationReceived === 'function') {
+      onNotificationReceived(notification);
+    }
   });
 
-  const sub2 = Notifications.addNotificationResponseReceivedListener(response => {
-    console.log('[Push] Tapped:', response.notification.request.content.title);
-    onTap && onTap(response);
+  const responseSub = Notifications.addNotificationResponseReceivedListener(response => {
+    if (typeof onNotificationResponse === 'function') {
+      onNotificationResponse(response);
+    }
   });
 
   return () => {
-    sub1.remove();
-    sub2.remove();
+    try {
+      receivedSub.remove();
+      responseSub.remove();
+    } catch (e) {}
   };
+}
+
+export async function sendLocalNotification(title, body, data = {}) {
+  try {
+    await Notifications.scheduleNotificationAsync({
+      content: {
+        title,
+        body,
+        data,
+        sound: 'default',
+      },
+      trigger: null,
+    });
+  } catch (e) {
+    console.log('Error sending local notification:', e);
+  }
 }

@@ -1,0 +1,471 @@
+from apps.checkins.meal_utils import sync_meal_window
+import json
+import io
+import base64
+import uuid
+import qrcode
+from datetime import datetime as dt, time as dtime
+from django.utils import timezone
+from django.utils.timezone import localdate
+from django.core.mail import EmailMessage
+from rest_framework.decorators import api_view, permission_classes
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.response import Response
+
+from .models import CheckIn, MealPass, MealWindow
+from apps.accounts.models import User
+from apps.accounts.permissions_helper import user_has_module_access
+
+SCANNER_ROLES = {'super_admin', 'mgmt_admin', 'team_head', 'staff'}
+
+def _user_detail(user, request=None):
+    if not user:
+        return {
+            'id': '',
+            'name': '',
+            'email': '',
+            'registration_id': '',
+            'affiliation': '',
+            'designation': '',
+            'role': '',
+            'research_interests': '',
+            'photo': '',
+            'profile_photo_url': ''
+        }
+
+    photo = ''
+    if getattr(user, 'profile_photo', None):
+        try:
+            photo = request.build_absolute_uri(user.profile_photo.url) if request else user.profile_photo.url
+        except Exception:
+            photo = ''
+
+    return {
+        'id': str(user.id),
+        'name': user.get_full_name() or user.email,
+        'first_name': getattr(user, 'first_name', ''),
+        'last_name': getattr(user, 'last_name', ''),
+        'email': user.email,
+        'registration_id': getattr(user, 'registration_id', '') or '',
+        'affiliation': getattr(user, 'affiliation', '') or '',
+        'designation': getattr(user, 'designation', '') or '',
+        'role': getattr(user, 'role', 'participant'),
+        'research_interests': getattr(user, 'research_interests', '') or '',
+        'photo': photo,
+        'profile_photo_url': photo,
+    }
+
+    photo = ''
+    if getattr(user, 'profile_photo', None):
+        try:
+            # Fall back gracefully to relative URL if request object is missing
+            photo = request.build_absolute_uri(user.profile_photo.url) if request else user.profile_photo.url
+        except Exception:
+            photo = ''
+    return {
+        'id': str(user.id),
+        'name': user.get_full_name() or user.email,
+        'email': user.email,
+        'registration_id': getattr(user, 'registration_id', '') or '',
+        'affiliation': getattr(user, 'affiliation', '') or '',
+        'photo': photo,
+        'profile_photo_url': photo,
+    }
+    photo = ''
+    if getattr(user, 'profile_photo', None):
+        try:
+            photo = request.build_absolute_uri(user.profile_photo.url) if request else ''
+        except Exception:
+            photo = ''
+    return {
+        'name': user.get_full_name() or user.email,
+        'email': user.email,
+        'registration_id': getattr(user, 'registration_id', '') or '',
+        'affiliation': getattr(user, 'affiliation', '') or '',
+        'photo': photo,
+    }
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def scan_checkin(request):
+    if request.user.role not in SCANNER_ROLES:
+        return Response({'success': False, 'message': 'Not authorised.'}, status=403)
+
+    reg_id = request.data.get('registration_id', '').strip().upper()
+    if not reg_id:
+        return Response({'success': False, 'message': 'No registration ID provided.'}, status=400)
+
+    try:
+        user = User.objects.get(registration_id=reg_id, is_active=True)
+    except User.DoesNotExist:
+        return Response({'success': False, 'message': f'No active attendee found with ID "{reg_id}".'}, status=404)
+
+    existing = CheckIn.objects.filter(user=user, checkin_type='conference').first()
+    if existing:
+        return Response({
+            'success': False, 'already_in': True,
+            'message': f'{user.get_full_name()} is already checked in.',
+            'checkin_id': existing.id,
+            'user': _user_detail(user, request),
+        })
+
+    checkin = CheckIn.objects.create(user=user, checkin_type='conference', scanned_by=request.user, goodies_status='pending')
+    return Response({
+        'success': True, 'message': f'{user.get_full_name()} checked in successfully!',
+        'checkin_id': checkin.id,
+        'user': _user_detail(user, request),
+    })
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def confirm_goodies(request):
+    checkin_id = request.data.get('checkin_id')
+    received = request.data.get('received', True)
+    try:
+        c = CheckIn.objects.get(id=checkin_id)
+        c.goodies_status = 'received' if received else 'skipped'
+        c.goodies_confirmed_by = request.user
+        c.goodies_confirmed_at = timezone.now()
+        c.save(update_fields=['goodies_status', 'goodies_confirmed_by', 'goodies_confirmed_at'])
+        return Response({'success': True, 'goodies_status': c.goodies_status})
+    except CheckIn.DoesNotExist:
+        return Response({'success': False, 'message': 'Not found'}, status=404)
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def checkin_status(request):
+    c = CheckIn.objects.filter(user=request.user, checkin_type='conference').first()
+    return Response({'checked_in': bool(c), 'checkin_id': c.id if c else None})
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def checkin_list(request):
+    items = CheckIn.objects.filter(checkin_type='conference').select_related('user', 'scanned_by').order_by('-scanned_at')[:100]
+    data = [{'id': x.id, 'scanned_at': x.scanned_at, 'goodies_status': x.goodies_status, 'user': _user_detail(x.user, request), 'scanned_by': x.scanned_by.get_full_name() if x.scanned_by else ''} for x in items]
+    return Response({'success': True, 'count': len(data), 'checkins': data})
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def my_qr(request):
+    reg = request.user.registration_id or str(request.user.id)
+    return Response({
+        'registration_id': reg,
+        'email': request.user.email,
+        'qr_data': reg,
+    })
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def network_list(request):
+    from apps.checkins.models import CheckIn
+    from django.db.models import Q
+
+    search_q = request.GET.get('search', '').strip()
+    interest_q = request.GET.get('interest', '').strip()
+    role_q = request.GET.get('role', '').strip()
+
+    # Get users who are checked into the conference
+    checked_in_ids = CheckIn.objects.filter(checkin_type='conference').values_list('user_id', flat=True)
+    
+    queryset = User.objects.filter(is_active=True, id__in=checked_in_ids).exclude(id=request.user.id)
+
+    if role_q:
+        queryset = queryset.filter(role=role_q)
+
+    if search_q:
+        queryset = queryset.filter(
+            Q(first_name__icontains=search_q) |
+            Q(last_name__icontains=search_q) |
+            Q(email__icontains=search_q) |
+            Q(affiliation__icontains=search_q) |
+            Q(designation__icontains=search_q)
+        )
+
+    if interest_q:
+        queryset = queryset.filter(research_interests__icontains=interest_q)
+
+    users_list = [_user_detail(u, request) for u in queryset[:100]]
+
+    # Extract unique research interests from checked-in attendees for the filter chips
+    all_interests = set()
+    for u in User.objects.filter(is_active=True, id__in=checked_in_ids).exclude(role='speaker'):
+        if u.research_interests:
+            for item in u.research_interests.split(','):
+                cleaned = item.strip()
+                if cleaned:
+                    all_interests.add(cleaned)
+
+    return Response({
+        'success': True,
+        'users': users_list,
+        'attendees': users_list,  # Double-safe compatibility
+        'interests': sorted(list(all_interests))[:25]
+    })
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def meal_status(request):
+    try:
+        sync_meal_window()
+    except Exception as e:
+        pass
+    today = localdate()
+    w, _ = MealWindow.objects.get_or_create(meal_type='meal', date=today)
+    return Response({
+        'success': True,
+        'meal': {'is_open': bool(w.is_open)},
+        'meal_window': {
+            'date': str(today),
+            'is_open': bool(w.is_open),
+            'start_time': str(w.start_time) if w.start_time else '',
+            'end_time': str(w.end_time) if w.end_time else '',
+            'notify_open_minutes_before': int(w.notify_open_minutes_before or 15),
+            'notify_close_minutes_before': int(w.notify_close_minutes_before or 10),
+        }
+    })
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def generate_meal_pass(request):
+    try:
+        sync_meal_window()
+    except Exception as e:
+        pass
+    today = localdate()
+    p, _ = MealPass.objects.get_or_create(user=request.user, meal_type='meal', date=today, defaults={'is_active': True})
+    return Response({'success': True, 'pass_id': str(p.id)})
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def scan_meal(request):
+    if request.user.role not in SCANNER_ROLES:
+        return Response({'success': False, 'message': 'Not authorised.'}, status=403)
+
+    qr_raw = (request.data.get('qr_data') or request.data.get('qr_code') or '').strip()
+    reg_id = (request.data.get('registration_id') or '').strip()
+    pass_id = None
+    today = localdate()
+
+    if qr_raw:
+        try:
+            payload = json.loads(qr_raw)
+            pass_id = payload.get('pass_id') or payload.get('id')
+        except Exception:
+            pass
+
+    if not pass_id and qr_raw:
+        try:
+            pass_id = str(uuid.UUID(qr_raw.strip()))
+        except Exception:
+            pass
+
+    mp = None
+    if pass_id:
+        mp = MealPass.objects.select_related('user').filter(id=pass_id).first()
+    elif reg_id:
+        u = User.objects.filter(registration_id=reg_id.strip().upper(), is_active=True).first()
+        if u:
+            mp = MealPass.objects.select_related('user').filter(user=u, date=today).first()
+        else:
+            return Response({'success': False, 'message': f'No user with ID "{reg_id}".'}, status=404)
+
+    if not mp:
+        return Response({'success': False, 'message': 'No meal pass found.'}, status=404)
+
+    if mp.used:
+        return Response({
+            'success': False, 'already_used': True,
+            'message': f'{mp.display_name} already used this meal pass at {mp.used_at.strftime("%I:%M %p") if mp.used_at else "earlier"}.',
+        })
+
+    mp.used = True
+    mp.used_at = timezone.now()
+    mp.scanned_by = request.user
+    mp.save(update_fields=['used', 'used_at', 'scanned_by'])
+
+    return Response({
+        'success': True,
+        'message': f'{mp.display_name} — Meal pass verified!',
+        'user': {'name': mp.display_name, 'email': mp.display_email, 'registration_id': mp.display_reg},
+    })
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def meal_window_toggle(request):
+    if request.user.role not in SCANNER_ROLES:
+        return Response({'success': False, 'message': 'Not authorised.'}, status=403)
+
+    action = request.data.get('action', 'open')
+    today = localdate()
+
+    if action == 'open':
+        window, created = MealWindow.objects.get_or_create(meal_type='meal', date=today, defaults={'opened_by': request.user, 'is_open': True})
+        if not created and not window.is_open:
+            window.is_open = True
+            window.opened_by = request.user
+            window.closed_at = None
+            window.save(update_fields=['is_open', 'opened_by', 'closed_at'])
+        try:
+            from apps.checkins.push import push_to_checked_in
+            push_to_checked_in("🍽️ Meal service is now open!", "Head to the dining area and show your QR code at the counter.", data={'type': 'meal_pass', 'screen': 'qr'})
+        except Exception:
+            pass
+    else:
+        MealWindow.objects.filter(meal_type='meal', date=today).update(is_open=False, closed_at=timezone.now())
+        try:
+            from apps.checkins.push import push_to_checked_in
+            push_to_checked_in("🚫 Meal service is now closed", "Meal service has ended for now.", data={'type': 'meal_pass', 'screen': 'qr'})
+        except Exception:
+            pass
+
+    return Response({'success': True, 'message': f'Meal window {action}ed.'})
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def meal_window_schedule(request):
+    if request.user.role not in SCANNER_ROLES:
+        return Response({'success': False, 'message': 'Not authorised.'}, status=403)
+
+    date_str = request.data.get('date') or str(localdate())
+    start_time = (request.data.get('start_time') or '').strip()
+    end_time = (request.data.get('end_time') or '').strip()
+    open_before = int(request.data.get('notify_open_minutes_before') or 15)
+    close_before = int(request.data.get('notify_close_minutes_before') or 10)
+
+    try:
+        day = dt.strptime(date_str, '%Y-%m-%d').date()
+    except Exception:
+        day = localdate()
+
+    st, et = None, None
+    try:
+        if start_time:
+            h, m = map(int, start_time.split(':'))
+            st = dtime(h, m)
+        if end_time:
+            h, m = map(int, end_time.split(':'))
+            et = dtime(h, m)
+    except Exception:
+        return Response({'success': False, 'message': 'Invalid time format.'}, status=400)
+
+    w, _ = MealWindow.objects.update_or_create(
+        meal_type='meal', date=day,
+        defaults={
+            'start_time': st, 'end_time': et,
+            'notify_open_minutes_before': max(0, open_before),
+            'notify_close_minutes_before': max(0, close_before),
+            'notified_opening': False, 'notified_closing': False,
+        }
+    )
+    return Response({'success': True, 'date': str(w.date)})
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def meal_stats(request):
+    today = localdate()
+    total = MealPass.objects.filter(date=today).count()
+    used = MealPass.objects.filter(date=today, used=True).count()
+    return Response({'total': total, 'used': used, 'remaining': max(total - used, 0)})
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def meal_list(request):
+    today = localdate()
+    passes = MealPass.objects.filter(date=today).select_related('user', 'scanned_by').order_by('-created_at')[:200]
+    out = []
+    for p in passes:
+        out.append({
+            'id': str(p.id),
+            'meal_type': p.meal_type,
+            'date': str(p.date),
+            'used': bool(p.used),
+            'used_at': p.used_at,
+            'user': _user_detail(p.user, request) if p.user else {'name': p.guest_name or 'Guest', 'email': p.guest_email or '', 'registration_id': p.guest_reg_no or '', 'affiliation': '', 'photo': ''},
+        })
+    return Response({'success': True, 'total': len(out), 'used': sum(1 for x in out if x['used']), 'passes': out})
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def checked_in_participants(request):
+    ids = CheckIn.objects.filter(checkin_type='conference').values_list('user_id', flat=True)
+    users = User.objects.filter(id__in=ids)
+    return Response({'count': users.count(), 'users': [_user_detail(u, request) for u in users]})
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def create_meal_pass_api(request):
+    if not (user_has_module_access(request.user, 'checkin_scanner') or 
+            user_has_module_access(request.user, 'meal_scanner') or 
+            request.user.role in SCANNER_ROLES):
+        return Response({'error': 'Not authorised.'}, status=403)
+
+    today = localdate()
+    date_str = request.data.get('date', str(today))
+    user_id = request.data.get('user_id')
+
+    try:
+        meal_date = dt.strptime(date_str, '%Y-%m-%d').date()
+    except Exception:
+        meal_date = today
+
+    recipient_name = None
+    recipient_email = None
+
+    if user_id:
+        try:
+            target_user = User.objects.get(id=user_id)
+            recipient_name = target_user.get_full_name() or target_user.email
+            recipient_email = target_user.email
+            mp, _ = MealPass.objects.get_or_create(user=target_user, meal_type='meal', date=meal_date, defaults={'is_active': True, 'used': False})
+        except User.DoesNotExist:
+            return Response({'error': 'User not found'}, status=404)
+    else:
+        guest_name = request.data.get('guest_name', '').strip()
+        guest_email = request.data.get('guest_email', '').strip()
+        guest_phone = request.data.get('guest_phone', '').strip()
+        guest_reg_no = request.data.get('guest_reg_no', '').strip()
+
+        if not guest_name:
+            return Response({'error': 'guest_name is required'}, status=400)
+
+        recipient_name = guest_name
+        recipient_email = guest_email
+        mp = MealPass.objects.create(
+            user=None, meal_type='meal', date=meal_date,
+            guest_name=guest_name, guest_email=guest_email,
+            guest_phone=guest_phone, guest_reg_no=guest_reg_no,
+            is_active=True, used=False,
+        )
+
+    # Generate QR & email
+    email_sent = False
+    if recipient_email:
+        try:
+            qr_img = qrcode.make(str(mp.id))
+            buf = io.BytesIO()
+            qr_img.save(buf, format='PNG')
+            msg = EmailMessage(
+                subject=f'Your ETD 2026 Meal Pass — {mp.date.strftime("%d %b %Y")}',
+                body=f"Dear {recipient_name},\n\nYour Meal Pass for {mp.date.strftime('%A, %d %B %Y')} is attached.\n\nShow this QR at the meal counter.\n\nRegards,\nETD 2026 Team",
+                to=[recipient_email],
+            )
+            msg.attach('meal_pass_qr.png', buf.getvalue(), 'image/png')
+            msg.send(fail_silently=True)
+            email_sent = True
+        except Exception:
+            pass
+
+    return Response({
+        'success': True,
+        'meal_pass_id': str(mp.id),
+        'assigned_to': recipient_name,
+        'email': recipient_email,
+        'email_sent': email_sent,
+        'qr_data': str(mp.id),
+    })
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def my_meal_passes(request):
+    passes = MealPass.objects.filter(user=request.user, is_active=True, date__gte=localdate()).order_by('date')
+    return Response({'passes': [{'id': str(p.id), 'date': str(p.date), 'used': p.used, 'qr_data': str(p.id)} for p in passes]})

@@ -1,0 +1,40 @@
+{
+  "layer": 2,
+  "name": "Infrastructure Stress",
+  "score": 75.0,
+  "postgresql": {
+    "test": "pgbench",
+    "clients": 50,
+    "threads": 4,
+    "duration": 60,
+    "tps": 0,
+    "latency_ms": 0,
+    "success": false,
+    "raw_output": "\npgbench: error: connection to server on socket \"/var/run/postgresql/.s.PGSQL.5432\" failed: FATAL:  role \"baadalvm\" does not exist\npgbench: error: could not create connection for setup\n",
+    "score": 50.0
+  },
+  "redis": {
+    "test": "redis-benchmark",
+    "duration": 30,
+    "operations": {
+      "SET": 44964.03,
+      "GET": 65703.02,
+      "INCR": 77760.5,
+      "LPUSH": 79365.08,
+      "LPOP": 73529.41
+    },
+    "success": true,
+    "score": 100,
+    "avg_ops_per_sec": 68264.40800000001,
+    "redis_stats": {
+      "uptime_seconds": 1438609,
+      "clients": 1,
+      "memory_bytes": 1414768,
+      "memory_human": "1.35M",
+      "total_commands": 773248,
+      "ops_per_sec": 75468,
+      "evicted_keys": 0
+    }
+  },
+  "passed": true
+}

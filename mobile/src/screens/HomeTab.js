@@ -9,19 +9,29 @@ import { COLORS, FONT, SPACE, RADIUS, SHADOW, API_URL, API_HEADERS, fixMediaUrl 
 import { apiFetch, setTokens as setApiTokens } from '../api';
 import { PulsingDot, GradientAvatar } from '../components';
 
+// Modern high-performance Reanimated + Gesture Handler imports
+import ReAnimated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withSpring,
+  withTiming,
+  interpolate,
+  runOnJS,
+} from 'react-native-reanimated';
+import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler';
+
 const PAD = SPACE.xl;
 const TIMELINE_WINDOW = 3;
 
-// Quick actions — 8 items in an organized grid
-const QUICK = [
+const QUICK_ITEMS = [
+  { icon: 'mic-outline',         label: 'Speakers',     grad: ['#7c3aed',      '#6d28d9'],         action: 'speakers' },
+  { icon: 'trophy-outline',      label: 'Leaderboard',  grad: [COLORS.rose,    '#e11d48'],         action: 'leaderboard' },
+  { icon: 'document-text-outline',label:'Papers/Posters',grad: ['#0d9488', '#0f766e'],         action: 'papers' },
   { icon: 'ribbon-outline',      label: 'Sponsors',     grad: [COLORS.brand,   COLORS.brandDark],  action: 'sponsors' },
-  { icon: 'mic-outline',         label: 'Speakers',     grad: ['#7c3aed',      '#6d28d9'],          action: 'speakers' },
-  { icon: 'camera-outline',      label: 'Photos',       grad: [COLORS.success, '#059669'],          action: 'photos' },
-  { icon: 'location-outline',    label: 'Selfie Spots', grad: ['#ec4899',      '#be185d'],          action: 'selfie_spots' },
+  { icon: 'flag-outline',        label: 'Checkpoint',   grad: ['#ec4899',      '#be185d'],         action: 'checkpoint' },
   { icon: 'stats-chart-outline', label: 'Live Polls',   grad: [COLORS.accent,  COLORS.accentDark], action: 'polls' },
-  { icon: 'bulb-outline',        label: 'Ideathon',     grad: ['#0ea5e9',      '#0284c7'],          action: 'ideathon' },
-  { icon: 'trophy-outline',      label: 'Leaderboard',  grad: [COLORS.rose,    '#e11d48'],          action: 'leaderboard' },
-  { icon: 'time-outline',        label: 'Schedule',     grad: ['#3b82f6',      '#1d4ed8'],          action: 'schedule' },
+  { icon: 'bulb-outline',        label: 'Ideathon',     grad: ['#0ea5e9',      '#0284c7'],         action: 'ideathon' },
+  { icon: 'people-outline',      label: 'Events Team',  grad: ['#6366f1',      '#4338ca'],         action: 'staff_team' },
 ];
 
 const TYPE_STYLE = {
@@ -44,18 +54,6 @@ const DEFAULT_CONF = {
   name: 'ETD 2026', tagline: 'IIT Delhi', logo_url: null,
   start_date: '2026-10-23', end_date: '2026-10-25',
 };
-
-function confDay(start) {
-  if (!start) return 1;
-  return Math.max(1, Math.floor((Date.now() - new Date(start).getTime()) / 86400000) + 1);
-}
-function totalDays(start, end) {
-  if (!start || !end) return 3;
-  return Math.max(1, Math.round((new Date(end) - new Date(start)) / 86400000) + 1);
-}
-function currentConferenceDay(start, end) {
-  return Math.min(totalDays(start, end), confDay(start));
-}
 
 function getEventDate(ev, which = 'start') {
   const iso = which === 'end' ? ev.end_datetime : ev.start_datetime;
@@ -95,9 +93,9 @@ function classifyAndSort(events) {
   return events.map(e => {
     const start = getEventDate(e, 'start');
     const end = getEventDate(e, 'end');
-    let status = e.status;
-    if (status === 'live') status = 'current';
-    else if (status === 'upcoming') status = 'next';
+    let status = null;
+    if (e.status === 'live' || e.status === 'current') status = 'current';
+    else if (e.status === 'upcoming') status = 'next';
     if (!status && start && end) {
       if (now >= start && now < end) status = 'current';
       else if (now >= end) status = 'past';
@@ -122,6 +120,44 @@ function timeAgo(dateStr) {
   if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
   if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
   return `${Math.floor(diff / 86400)}d ago`;
+}
+
+function formatCountdown(targetMs, nowMs) {
+  const diff = Math.max(0, targetMs - nowMs);
+  if (diff <= 0) return '00:00:00';
+  const secs = Math.floor(diff / 1000);
+  const mins = Math.floor(secs / 60);
+  const hrs = Math.floor(mins / 60);
+  const days = Math.floor(hrs / 24);
+
+  const d = days;
+  const h = hrs % 24;
+  const m = mins % 60;
+  const s = secs % 60;
+
+  const parts = [];
+  if (d > 0) parts.push(`${d}d`);
+  if (h > 0 || d > 0) parts.push(`${h}h`);
+  parts.push(`${m}m`);
+  parts.push(`${s}s`);
+  return parts.join(' ');
+}
+
+// Reusable shimmer skeleton block
+function Skeleton({ width, height, radius = 6, style, light = false }) {
+  const shimmer = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    const loop = Animated.loop(
+      Animated.timing(shimmer, { toValue: 1, duration: 1200, easing: Easing.linear, useNativeDriver: true })
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [shimmer]);
+  const opacity = shimmer.interpolate({ inputRange: [0, 0.5, 1], outputRange: [0.35, 0.7, 0.35] });
+  const bg = light ? 'rgba(255,255,255,0.22)' : 'rgba(148,163,184,0.22)';
+  return (
+    <Animated.View style={[{ width, height, borderRadius: radius, backgroundColor: bg, opacity }, style]} />
+  );
 }
 
 function TimelineCard({ ev, index, total, expanded, onToggle, anim }) {
@@ -274,7 +310,6 @@ function TimelineCard({ ev, index, total, expanded, onToggle, anim }) {
   );
 }
 
-// ── Quick Action Card ────────────────────────────────────────────────────────
 function QuickCard({ item, onPress }) {
   return (
     <TouchableOpacity style={qc.cell} onPress={onPress} activeOpacity={0.8}>
@@ -295,83 +330,221 @@ const qc = StyleSheet.create({
   label: { fontSize: 9.5, fontWeight: FONT.w7, color: '#fff', textAlign: 'center' },
 });
 
-// ── Announcement Deck ───────────────────────
 const ANN_GRADS = [
   [COLORS.brand, COLORS.brandDark], ['#7c3aed','#6d28d9'], ['#0ea5e9','#0284c7'],
   [COLORS.success,'#059669'], [COLORS.rose,'#e11d48'],
 ];
 
+// Reanimated Swipe Deck with synchronized Thread Entry and parent scrollview lockouts
 function AnnouncementDeck({ notifications, onOpenNotifications }) {
-  const total = notifications.length;
-  const idxRef = useRef(0);
-  const [displayIdx, setDisplayIdx] = useState(0);
-  const tx = useRef(new Animated.Value(0)).current;
+  const [index, setIndex] = useState(0);
+  const [width, setWidth] = useState(0);
+  const tx = useSharedValue(0);
+  const ty = useSharedValue(0);
 
-  const swipe = useCallback((dir) => {
-    const cur = idxRef.current;
-    const next = cur + dir;
-    if (next < 0) return;
-    if (next >= total) {
-      onOpenNotifications();
-      return;
-    }
-    Animated.timing(tx, { toValue: -dir * 360, duration: 200, useNativeDriver: true }).start(() => {
-      idxRef.current = next;
-      setDisplayIdx(next);
-      tx.setValue(dir * 360);
-      Animated.spring(tx, { toValue: 0, useNativeDriver: true, tension: 180, friction: 14 }).start();
-    });
-  }, [total, onOpenNotifications, tx]);
+  const entryProgress = useSharedValue(1);
 
-  const pan = useRef(
-    PanResponder.create({
-      onMoveShouldSetPanResponder: (_, g) => Math.abs(g.dx) > 10 && Math.abs(g.dy) < 50,
-      onPanResponderMove: (_, g) => tx.setValue(g.dx * 0.4),
-      onPanResponderRelease: (_, g) => {
-        if      (g.dx < -40) swipe(1);
-        else if (g.dx >  40) swipe(-1);
-        else Animated.spring(tx, { toValue: 0, useNativeDriver: true, tension: 200 }).start();
-      },
+  useEffect(() => {
+    setIndex(0);
+    entryProgress.value = 1;
+  }, [notifications]);
+
+  useEffect(() => {
+    entryProgress.value = 0;
+    entryProgress.value = withSpring(1, { damping: 16, stiffness: 110 });
+  }, [index]);
+
+  const advance = (dir) => {
+    tx.value = 0;
+    ty.value = 0;
+    entryProgress.value = 0;
+    setIndex(prev => prev + 1);
+  };
+
+  const gesture = Gesture.Pan()
+    .enabled(index < notifications.length && width > 0)
+    .activeOffsetX([-10, 10])
+    .failOffsetY([-15, 15])
+    .onUpdate((e) => {
+      tx.value = e.translationX;
+      ty.value = e.translationY;
     })
-  ).current;
+    .onEnd((e) => {
+      const threshold = width * 0.35;
+      if (Math.abs(e.translationX) > threshold || Math.abs(e.velocityX) > 900) {
+        const dir = e.translationX > 0 || (Math.abs(e.translationX) <= threshold && e.velocityX > 0) ? 1 : -1;
+        tx.value = withTiming(dir * width * 1.4, { duration: 220 }, () => runOnJS(advance)(dir));
+        ty.value = withTiming(e.translationY + e.velocityY * 0.05, { duration: 220 });
+      } else {
+        tx.value = withSpring(0);
+        ty.value = withSpring(0);
+      }
+    });
 
-  const n = notifications[displayIdx];
-  if (!n) return null;
-  const grad = ANN_GRADS[displayIdx % ANN_GRADS.length];
+  const topCardStyle = useAnimatedStyle(() => {
+    const scale = interpolate(entryProgress.value, [0, 1], [0.93, 1]);
+    const translateY = interpolate(entryProgress.value, [0, 1], [12, 0]) + ty.value;
+    const opacity = interpolate(entryProgress.value, [0, 1], [0.2, 1]);
+    const rotate = `${interpolate(tx.value, [-width || -1, width || 1], [-12, 12])}deg`;
+
+    return {
+      transform: [
+        { translateX: tx.value },
+        { translateY: translateY },
+        { scale: scale },
+        { rotate: rotate },
+      ],
+      opacity: opacity,
+    };
+  });
+
+  const nextCardStyle = useAnimatedStyle(() => {
+    const progress = Math.min(1, Math.abs(tx.value) / ((width || 1) * 0.5));
+    return {
+      transform: [
+        { scale: 0.95 + 0.05 * progress },
+        { translateY: 8 - 8 * progress }
+      ],
+      opacity: 0.5 + 0.5 * progress,
+    };
+  });
+
+  const usefulBadgeStyle = useAnimatedStyle(() => {
+    const opacity = interpolate(tx.value, [0, width * 0.2], [0, 1]);
+    return { opacity };
+  });
+
+  const okayBadgeStyle = useAnimatedStyle(() => {
+    const opacity = interpolate(tx.value, [-width * 0.2, 0], [1, 0]);
+    return { opacity };
+  });
+
+  const total = notifications.length;
+
+  const renderNotificationCard = (n, idx, isTop = false) => {
+    const grad = ANN_GRADS[idx % ANN_GRADS.length];
+    return (
+      <LinearGradient colors={grad} style={dk.grad} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}>
+        <View style={dk.row}>
+          <View style={dk.iconBox}><Ionicons name="megaphone" size={16} color="rgba(255,255,255,0.9)" /></View>
+          <Text style={dk.time}>{timeAgo(n.delivered_at || n.created_at)}</Text>
+        </View>
+        <Text style={dk.title} numberOfLines={2}>{n.title}</Text>
+        <Text style={dk.body}  numberOfLines={2}>{n.body}</Text>
+        <View style={dk.foot}>
+          <View style={dk.dots}>
+            {notifications.map((_, i) => <View key={i} style={[dk.dot, i === idx && dk.dotOn]} />)}
+          </View>
+          <Text style={dk.hint}>{`${idx + 1}/${total}`}</Text>
+        </View>
+
+        {isTop && (
+          <>
+            <ReAnimated.View style={[dk.badgeContainer, dk.usefulBadge, usefulBadgeStyle]}>
+              <Text style={dk.badgeText}>USEFUL</Text>
+            </ReAnimated.View>
+            <ReAnimated.View style={[dk.badgeContainer, dk.okayBadge, okayBadgeStyle]}>
+              <Text style={dk.badgeText}>OKAY</Text>
+            </ReAnimated.View>
+          </>
+        )}
+      </LinearGradient>
+    );
+  };
+
+  if (index >= total) {
+    return (
+      <TouchableOpacity style={dk.wrap} activeOpacity={0.9} onPress={onOpenNotifications}>
+        <View style={[dk.card, dk.emptyCard]}>
+          <Ionicons name="checkmark-circle-outline" size={42} color={COLORS.success} />
+          <Text style={dk.emptyTitle}>You're all caught up!</Text>
+          <Text style={dk.emptySub}>No unread announcements. Tap to view all announcements.</Text>
+        </View>
+      </TouchableOpacity>
+    );
+  }
+
+  const top = notifications[index];
+  const next = notifications[index + 1];
 
   return (
-    <View style={dk.wrap}>
-      {displayIdx + 2 < total && <View style={[dk.bg, dk.bg3]} />}
-      {displayIdx + 1 < total && <View style={[dk.bg, dk.bg2]} />}
-      <Animated.View style={[dk.card, { transform: [{ translateX: tx }] }]} {...pan.panHandlers}>
-        <LinearGradient colors={grad} style={dk.grad} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}>
-          <View style={dk.row}>
-            <View style={dk.iconBox}><Ionicons name="megaphone" size={16} color="rgba(255,255,255,0.9)" /></View>
-            <Text style={dk.time}>{timeAgo(n.delivered_at || n.created_at)}</Text>
-          </View>
-          <Text style={dk.title} numberOfLines={2}>{n.title}</Text>
-          <Text style={dk.body}  numberOfLines={2}>{n.body}</Text>
-          <View style={dk.foot}>
-            <View style={dk.dots}>
-              {notifications.map((_, i) => <View key={i} style={[dk.dot, i === displayIdx && dk.dotOn]} />)}
-            </View>
-            <Text style={dk.hint}>{displayIdx === total - 1 ? 'swipe → all' : `${displayIdx + 1}/${total}`}</Text>
-          </View>
-        </LinearGradient>
-      </Animated.View>
-    </View>
+    <GestureHandlerRootView style={dk.wrap}>
+      <View
+        style={{ flex: 1, position: 'relative' }}
+        onLayout={(e) => setWidth(e.nativeEvent.layout.width)}
+      >
+        {next !== undefined && (
+          <ReAnimated.View style={[dk.card, nextCardStyle]} pointerEvents="none">
+            {renderNotificationCard(next, index + 1)}
+          </ReAnimated.View>
+        )}
+        {top !== undefined && (
+          <GestureDetector gesture={gesture}>
+            <ReAnimated.View style={[dk.card, topCardStyle]} accessible={true} accessibilityLabel={`Card ${index + 1} of ${total}`}>
+              {renderNotificationCard(top, index, true)}
+            </ReAnimated.View>
+          </GestureDetector>
+        )}
+      </View>
+    </GestureHandlerRootView>
   );
 }
 
 const dk = StyleSheet.create({
   wrap: { position: 'relative', height: 168, marginTop: SPACE.sm },
-  bg:   { position: 'absolute', left: 4, right: 4, borderRadius: 22 },
-  bg2:  { top: 6, bottom: -6, backgroundColor: 'rgba(3,51,182,0.18)' },
-  bg3:  { top: 12, bottom: -12, backgroundColor: 'rgba(3,51,182,0.09)' },
   card: {
     position: 'absolute', left: 0, right: 0, top: 0, bottom: 0,
     borderRadius: 22, overflow: 'hidden',
     ...Platform.select({ ios: { shadowColor: '#002182', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.18, shadowRadius: 14 }, android: { elevation: 4 }, default: {} }),
+  },
+  emptyCard: {
+    flex: 1,
+    backgroundColor: 'rgba(255,255,255,0.85)',
+    borderStyle: 'dashed',
+    borderWidth: 1.5,
+    borderColor: 'rgba(148,163,184,0.3)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: SPACE.xl,
+    gap: SPACE.xs,
+  },
+  emptyTitle: {
+    fontSize: FONT.md,
+    fontWeight: FONT.w9,
+    color: COLORS.brand,
+    marginTop: SPACE.sm,
+  },
+  emptySub: {
+    fontSize: FONT.xs,
+    color: COLORS.textTer,
+    textAlign: 'center',
+    lineHeight: 16,
+  },
+  badgeContainer: {
+    position: 'absolute',
+    top: 20,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    borderWidth: 2.5,
+  },
+  usefulBadge: {
+    right: 20,
+    borderColor: '#4ade80',
+    backgroundColor: 'rgba(74,222,128,0.22)',
+    transform: [{ rotate: '15deg' }],
+  },
+  okayBadge: {
+    left: 20,
+    borderColor: '#60a5fa',
+    backgroundColor: 'rgba(96,165,250,0.22)',
+    transform: [{ rotate: '-15deg' }],
+  },
+  badgeText: {
+    fontSize: 14,
+    fontWeight: '900',
+    color: '#fff',
+    letterSpacing: 1.2,
   },
   grad:    { flex: 1, padding: SPACE.lg, gap: SPACE.sm },
   row:     { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
@@ -386,11 +559,75 @@ const dk = StyleSheet.create({
   hint:    { fontSize: 9, color: 'rgba(255,255,255,0.45)', fontWeight: FONT.w6 },
 });
 
+// Hero card with 3D tilt-on-press feedback
+function HeroCard({ children, cardWidth }) {
+  const tiltX = useRef(new Animated.Value(0)).current;
+  const tiltY = useRef(new Animated.Value(0)).current;
+  const press = useRef(new Animated.Value(0)).current;
+
+  const pan = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: () => true,
+      onPanResponderGrant: (e) => {
+        const { locationX, locationY } = e.nativeEvent;
+        const w = cardWidth.current || 300;
+        const h = 260;
+        const nx = Math.max(-1, Math.min(1, (locationX - w / 2) / (w / 2)));
+        const ny = Math.max(-1, Math.min(1, (locationY - h / 2) / (h / 2)));
+        Animated.parallel([
+          Animated.spring(tiltX, { toValue: ny, useNativeDriver: true, tension: 220, friction: 12 }),
+          Animated.spring(tiltY, { toValue: -nx, useNativeDriver: true, tension: 220, friction: 12 }),
+          Animated.spring(press, { toValue: 1, useNativeDriver: true, tension: 220, friction: 12 }),
+        ]).start();
+      },
+      onPanResponderMove: (e) => {
+        const { locationX, locationY } = e.nativeEvent;
+        const w = cardWidth.current || 300;
+        const h = 260;
+        const nx = Math.max(-1, Math.min(1, (locationX - w / 2) / (w / 2)));
+        const ny = Math.max(-1, Math.min(1, (locationY - h / 2) / (h / 2)));
+        tiltX.setValue(ny);
+        tiltY.setValue(-nx);
+      },
+      onPanResponderRelease: () => {
+        Animated.parallel([
+          Animated.spring(tiltX, { toValue: 0, useNativeDriver: true, tension: 140, friction: 8 }),
+          Animated.spring(tiltY, { toValue: 0, useNativeDriver: true, tension: 140, friction: 8 }),
+          Animated.spring(press, { toValue: 0, useNativeDriver: true, tension: 140, friction: 8 }),
+        ]).start();
+      },
+      onPanResponderTerminate: () => {
+        Animated.parallel([
+          Animated.spring(tiltX, { toValue: 0, useNativeDriver: true, tension: 140, friction: 8 }),
+          Animated.spring(tiltY, { toValue: 0, useNativeDriver: true, tension: 140, friction: 8 }),
+          Animated.spring(press, { toValue: 0, useNativeDriver: true, tension: 140, friction: 8 }),
+        ]).start();
+      },
+    })
+  ).current;
+
+  const rotateX = tiltX.interpolate({ inputRange: [-1, 1], outputRange: ['5deg', '-5deg'] });
+  const rotateY = tiltY.interpolate({ inputRange: [-1, 1], outputRange: ['-5deg', '5deg'] });
+  const scale = press.interpolate({ inputRange: [0, 1], outputRange: [1, 0.985] });
+
+  return (
+    <Animated.View
+      {...pan.panHandlers}
+      onLayout={(e) => { cardWidth.current = e.nativeEvent.layout.width; }}
+      style={{ transform: [{ perspective: 1000 }, { rotateX }, { rotateY }, { scale }] }}
+    >
+      {children}
+    </Animated.View>
+  );
+}
+
 export default function HomeTab({
   user, tokens,
   onOpenNotifications, onOpenSponsors, onOpenSpeakers,
-  onOpenChats, onOpenQR, onOpenSchedule, onOpenLeaderboard, onOpenPhotos,
-  onOpenFeed, onOpenProfile, onOpenPolls, onOpenIdeathon, onOpenSelfieSpots,
+  onOpenChats, onOpenQR, onOpenSchedule,
+  onOpenStaffTeam, onOpenLeaderboard, onOpenPapers, onOpenPhotos,
+  onOpenFeed, onOpenProfile, onOpenPolls, onOpenIdeathon, onOpenCheckpoint,
   chatBadge,
 }) {
   const [unread, setUnread] = useState(0);
@@ -401,7 +638,11 @@ export default function HomeTab({
   const [recentNotifs, setRecentNotifs] = useState([]);
   const [selectedDay, setSelectedDay] = useState(1);
   const [expandedId, setExpandedId] = useState(null);
+  const [now, setNow] = useState(new Date());
+  const [loaded, setLoaded] = useState(false);
+  const [showAllQuick, setShowAllQuick] = useState(false);
   const tokensRef = useRef(null);
+  const heroWidthRef = useRef(0);
   const cardAnims = useRef([new Animated.Value(0), new Animated.Value(0), new Animated.Value(0)]).current;
 
   useEffect(() => { tokensRef.current = tokens; }, [tokens]);
@@ -417,17 +658,19 @@ export default function HomeTab({
     const [u, p, c, ev, notif] = await Promise.all([
       safeJson(apiFetch('/notifications/unread-count/')),
       safeJson(apiFetch('/leaderboard/my/')),
-      safeJson(fetch(`${API_URL}/conferences/settings/`, { headers: API_HEADERS })),
-      safeJson(fetch(`${API_URL}/schedule/sessions/`, { headers: API_HEADERS })),
+      safeJson(apiFetch('/conferences/settings/')),
+      safeJson(apiFetch('/schedule/sessions/')),
       safeJson(apiFetch('/notifications/my/')),
     ]);
     if (u) setUnread(u.unread_count || 0);
     if (p) { setPoints(p.total_points || 0); setRank(p.rank || 0); }
     if (c) setConf(prev => ({ ...prev, ...c }));
-    if (ev?.sessions) setAllEvents(ev.sessions);
+    const sessionList = ev?.sessions || (Array.isArray(ev) ? ev : ev?.results);
+    if (sessionList) setAllEvents(sessionList);
     if (notif?.notifications?.length) {
       setRecentNotifs(notif.notifications.slice(0, 5));
     }
+    if (c !== null || ev !== null) setLoaded(true);
   }, [tokens]);
 
   useEffect(() => {
@@ -436,19 +679,108 @@ export default function HomeTab({
     return () => { clearTimeout(d); clearInterval(t); };
   }, [fetchAll]);
 
-  const day = currentConferenceDay(conf.start_date, conf.end_date);
-  const total = totalDays(conf.start_date, conf.end_date);
-  const progress = Math.round((day / Math.max(total, 1)) * 100);
+  useEffect(() => {
+    const t = setInterval(() => setNow(new Date()), 1000);
+    return () => clearInterval(t);
+  }, []);
+
+  const allSorted = useMemo(() => classifyAndSort(allEvents), [allEvents]);
+  
+  const nowMs = now.getTime();
+  const firstSession = allSorted[0];
+  const lastSession = allSorted[allSorted.length - 1];
+
+  // Derive reliable configuration times strictly from the seeded schedule sessions
+  const confStartMs = useMemo(() => {
+    if (firstSession) return getEventDate(firstSession, 'start')?.getTime() || new Date(conf.start_date).getTime();
+    return new Date(conf.start_date).getTime();
+  }, [firstSession, conf.start_date]);
+
+  const confEndMs = useMemo(() => {
+    if (lastSession) return getEventDate(lastSession, 'end')?.getTime() || new Date(conf.end_date).getTime();
+    return new Date(conf.end_date).getTime() + 86400000;
+  }, [lastSession, conf.end_date]);
+
+  const liveSession = allSorted.find(e => e.status === 'current');
+  const nextSession = allSorted.find(e => getEventDate(e, 'start') && getEventDate(e, 'start').getTime() > nowMs);
+
+  const total = useMemo(() => {
+    if (allSorted.length > 0) return Math.max(...allSorted.map(e => Number(e.day) || 1));
+    if (conf.start_date && conf.end_date) {
+      return Math.max(1, Math.round((new Date(conf.end_date) - new Date(conf.start_date)) / 86400000) + 1);
+    }
+    return 3;
+  }, [allSorted, conf.start_date, conf.end_date]);
+
+  const activeDayIndex = useMemo(() => {
+    if (liveSession) return Number(liveSession.day) || 1;
+    if (nextSession) return Number(nextSession.day) || 1;
+    if (nowMs >= confEndMs) return total;
+    return 1;
+  }, [liveSession, nextSession, nowMs, confEndMs, total]);
+
+  const day = activeDayIndex;
+
+  let mode = 'progress';
+  let targetMs = 0;
+  let targetLabel = '';
+  let pillText = `Day ${day} of ${total}`;
+  let progress = 0;
+
+  if (nowMs < confStartMs) {
+    mode = 'countdown';
+    targetMs = confStartMs;
+    targetLabel = firstSession ? firstSession.title : conf.name;
+    pillText = 'Starting Soon';
+  } else if (nowMs >= confEndMs) {
+    mode = 'progress';
+    progress = 100;
+    pillText = 'Completed';
+  } else {
+    // During conference window
+    if (liveSession) {
+      mode = 'progress';
+      progress = Math.min(100, Math.max(0, Math.round(((nowMs - confStartMs) / (confEndMs - confStartMs)) * 100)));
+      pillText = `Day ${day} of ${total}`;
+    } else if (nextSession) {
+      mode = 'countdown';
+      targetMs = getEventDate(nextSession, 'start').getTime();
+      targetLabel = nextSession.title;
+      if (Number(nextSession.day) > day) {
+        pillText = `Day ${day} End`;
+      } else {
+        pillText = `Day ${day} of ${total}`;
+      }
+    } else {
+      mode = 'progress';
+      progress = Math.min(100, Math.max(0, Math.round(((nowMs - confStartMs) / (confEndMs - confStartMs)) * 100)));
+      pillText = `Day ${day} of ${total}`;
+    }
+  }
+
+  const countdownText = useMemo(() => {
+    if (mode !== 'countdown' || !targetMs) return '';
+    return formatCountdown(targetMs, nowMs);
+  }, [mode, targetMs, nowMs]);
 
   useEffect(() => { setSelectedDay(day); }, [day]);
   useEffect(() => { setExpandedId(null); }, [selectedDay]);
 
-  const allSorted = useMemo(() => classifyAndSort(allEvents), [allEvents]);
   const dayEvents = useMemo(() => allSorted.filter(e => Number(e.day) === selectedDay), [allSorted, selectedDay]);
   const windowEvents = useMemo(() => smartWindow(dayEvents, TIMELINE_WINDOW), [dayEvents]);
   const windowKey = windowEvents.map(e => e.id || e.title).join('|');
-  const liveSession = allSorted.find(e => e.status === 'current');
   const remainingCount = Math.max(0, dayEvents.length - windowEvents.length);
+
+  const venueLabel = liveSession?.room || nextSession?.room || conf.tagline || 'IIT Delhi';
+  const venueIsLive = !!liveSession?.room;
+
+  const liveEndsInMin = useMemo(() => {
+    if (!liveSession) return null;
+    const end = getEventDate(liveSession, 'end');
+    if (!end) return null;
+    const remaining = Math.ceil((end.getTime() - nowMs) / 60000);
+    return (remaining > 0 && remaining <= 15) ? remaining : null;
+  }, [liveSession, nowMs]);
 
   useEffect(() => {
     cardAnims.forEach(a => a.setValue(0));
@@ -462,25 +794,42 @@ export default function HomeTab({
     ? (allPast ? "That's a wrap for today!" : 'Happening now')
     : selectedDay < day ? 'Completed' : 'Coming up';
 
+  const quickActionsToRender = useMemo(() => {
+    if (!showAllQuick) {
+      return [
+        ...QUICK_ITEMS.slice(0, 3),
+        { icon: 'grid-outline', label: 'More', grad: ['#64748b', '#475569'], action: 'more' }
+      ];
+    }
+    return [
+      ...QUICK_ITEMS,
+      { icon: 'camera-outline', label: 'Photo Gallery', grad: [COLORS.success, '#059669'], action: 'photos' },
+      { icon: 'chevron-up-outline', label: 'Less', grad: ['#64748b', '#475569'], action: 'less' }
+    ];
+  }, [showAllQuick]);
+
   const handleQuickAction = (action) => {
-    if (action === 'schedule'        && onOpenSchedule)    onOpenSchedule();
-    else if (action === 'sponsors'   && onOpenSponsors)    onOpenSponsors();
-    else if (action === 'speakers'   && onOpenSpeakers)    onOpenSpeakers();
-    else if (action === 'leaderboard'&& onOpenLeaderboard) onOpenLeaderboard();
-    else if (action === 'photos'     && onOpenPhotos)      onOpenPhotos();
-    else if (action === 'selfie_spots' && onOpenSelfieSpots) onOpenSelfieSpots();
-    else if (action === 'feed'       && onOpenFeed)        onOpenFeed();
-    else if (action === 'polls'      && onOpenPolls)       onOpenPolls();
-    else if (action === 'ideathon'   && onOpenIdeathon)    onOpenIdeathon();
-    else if (action === 'qr'         && onOpenQR)          onOpenQR();
-    else if (action === 'chats'      && onOpenChats)       onOpenChats();
+    if (action === 'more') setShowAllQuick(true);
+    else if (action === 'less') setShowAllQuick(false);
+    else if (action === 'schedule'        && onOpenSchedule)    onOpenSchedule();
+    else if (action === 'staff_team'      && onOpenStaffTeam)   onOpenStaffTeam();
+    else if (action === 'sponsors'        && onOpenSponsors)    onOpenSponsors();
+    else if (action === 'speakers'        && onOpenSpeakers)    onOpenSpeakers();
+    else if (action === 'leaderboard'     && onOpenLeaderboard) onOpenLeaderboard();
+    else if (action === 'papers'          && onOpenPapers)      onOpenPapers();
+    else if (action === 'photos'          && onOpenPhotos)      onOpenPhotos();
+    else if (action === 'checkpoint'      && onOpenCheckpoint)  onOpenCheckpoint();
+    else if (action === 'feed'            && onOpenFeed)        onOpenFeed();
+    else if (action === 'polls'           && onOpenPolls)       onOpenPolls();
+    else if (action === 'ideathon'        && onOpenIdeathon)    onOpenIdeathon();
+    else if (action === 'qr'              && onOpenQR)          onOpenQR();
+    else if (action === 'chats'           && onOpenChats)       onOpenChats();
   };
 
   return (
     <View style={{ flex: 1, backgroundColor: '#f0f4f9' }}>
       <StatusBar barStyle="dark-content" />
 
-      {/* Top bar */}
       <View style={g.topbar}>
         <Text style={g.topbarBrand}>{conf.name}</Text>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: SPACE.md }}>
@@ -498,52 +847,103 @@ export default function HomeTab({
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingTop: 105, paddingBottom: 120 }}>
 
-        {/* Hero */}
         <View style={{ paddingHorizontal: PAD, marginBottom: SPACE.lg }}>
-          <View style={g.heroCard}>
-            <View style={g.blob1} /><View style={g.blob2} />
-            <View style={g.heroTop}>
-              <View>
-                <Text style={g.heroLabel}>CURRENT STATUS</Text>
-                <View style={g.heroDayPill}><View style={g.heroDayDot} /><Text style={g.heroDayText}>Day {day} of {total}</Text></View>
+          <HeroCard cardWidth={heroWidthRef}>
+            <View style={g.heroCard}>
+              <View style={g.blob1} /><View style={g.blob2} />
+              <View style={g.heroTop}>
+                <View style={{ flex: 1 }}>
+                  <Text style={g.heroLabel}>CURRENT STATUS</Text>
+                  {loaded ? (
+                    <View style={g.heroDayPill}>
+                      <View style={[g.heroDayDot, mode === 'countdown' && { backgroundColor: COLORS.error }]} />
+                      <Text style={g.heroDayText}>{pillText}</Text>
+                    </View>
+                  ) : (
+                    <Skeleton width={110} height={26} radius={13} light />
+                  )}
+                </View>
+                <View style={{ alignItems: 'flex-end', maxWidth: '55%' }}>
+                  <Text style={g.heroLabel}>{loaded && venueIsLive ? 'LIVE VENUE' : 'VENUE'}</Text>
+                  {loaded ? (
+                    <View style={g.venueRow}>
+                      {venueIsLive && <PulsingDot color="#fde68a" size={6} />}
+                      <Ionicons name="location" size={12} color="#fff" />
+                      <Text style={g.heroVenue} numberOfLines={2}>{venueLabel}</Text>
+                    </View>
+                  ) : (
+                    <Skeleton width={130} height={26} radius={13} light />
+                  )}
+                </View>
               </View>
-              <View style={{ alignItems: 'flex-end' }}>
-                <Text style={g.heroLabel}>VENUE</Text>
-                <Text style={g.heroVenue} numberOfLines={1}>{conf.tagline}</Text>
+              <Text style={g.heroGreeting}>Good {greeting},{'\n'}{user.first_name || 'Attendee'} 👋</Text>
+              <View style={{ marginTop: SPACE.lg }}>
+                {!loaded ? (
+                  <View>
+                    <Skeleton width={140} height={12} radius={4} light />
+                    <View style={{ height: SPACE.xs }} />
+                    <Skeleton width={'70%'} height={28} radius={6} light />
+                  </View>
+                ) : mode === 'countdown' ? (
+                  <View>
+                    <Text style={g.progressLbl} numberOfLines={1}>Countdown for {targetLabel}</Text>
+                    <Text style={g.countdownTime}>{countdownText}</Text>
+                  </View>
+                ) : (
+                  <View>
+                    <View style={g.progressRow}>
+                      <Text style={g.progressLbl}>Conference Progress</Text>
+                      <Text style={g.progressPct}>{progress}%</Text>
+                    </View>
+                    <View style={g.progressTrack}>
+                      <View style={[g.progressFill, { width: `${progress}%` }]} />
+                    </View>
+                  </View>
+                )}
               </View>
             </View>
-            <Text style={g.heroGreeting}>Good {greeting},{'\n'}{user.first_name || 'Attendee'} 👋</Text>
-            <View style={{ marginTop: SPACE.lg }}>
-              <View style={g.progressRow}><Text style={g.progressLbl}>Conference Progress</Text><Text style={g.progressPct}>{progress}%</Text></View>
-              <View style={g.progressTrack}><View style={[g.progressFill, { width: `${progress}%` }]} /></View>
-            </View>
-          </View>
+          </HeroCard>
         </View>
 
-        {/* Live session */}
         {liveSession && (
-          <View style={[g.glassCard, { marginHorizontal: PAD, marginBottom: SPACE.lg }]}>
-            <View style={g.liveTopRow}>
-              <View style={g.livePill}><PulsingDot color={COLORS.error} size={7} /><Text style={g.livePillText}>LIVE NOW</Text></View>
-              <Text style={g.liveRoom}>{(liveSession.room || '').toUpperCase()}</Text>
+          <TouchableOpacity
+            activeOpacity={0.88}
+            onPress={onOpenSchedule}
+            style={{ marginHorizontal: PAD, marginBottom: SPACE.lg }}
+          >
+            <View style={g.glassCard}>
+              <View style={g.liveTopRow}>
+                <View style={g.livePill}><PulsingDot color={COLORS.error} size={7} /><Text style={g.livePillText}>LIVE NOW</Text></View>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: SPACE.xs }}>
+                  {liveEndsInMin !== null && (
+                    <View style={g.endsPill}>
+                      <Ionicons name="hourglass-outline" size={10} color={COLORS.accent} />
+                      <Text style={g.endsPillText}>Ends in {liveEndsInMin}m</Text>
+                    </View>
+                  )}
+                  <Text style={g.liveRoom}>{(liveSession.room || '').toUpperCase()}</Text>
+                </View>
+              </View>
+              <Text style={g.liveTitle}>{liveSession.title}</Text>
+              <Text style={g.liveMeta}>Day {liveSession.day} • {formatRange(liveSession)}</Text>
+              {!!liveSession.speaker && <Text style={g.liveSpeaker}>{liveSession.speaker}</Text>}
+              <View style={g.liveTapHint}>
+                <Text style={g.liveTapHintText}>Tap to view schedule</Text>
+                <Ionicons name="chevron-forward" size={12} color={COLORS.textTer} />
+              </View>
             </View>
-            <Text style={g.liveTitle}>{liveSession.title}</Text>
-            <Text style={g.liveMeta}>Day {liveSession.day} • {formatRange(liveSession)}</Text>
-            {!!liveSession.speaker && <Text style={g.liveSpeaker}>{liveSession.speaker}</Text>}
-          </View>
+          </TouchableOpacity>
         )}
 
-        {/* Quick Actions 4x2 Grid */}
         <View style={{ paddingHorizontal: PAD, marginBottom: SPACE.xl }}>
           <Text style={g.sectionTitle}>Quick Access</Text>
           <View style={g.quickGrid}>
-            {QUICK.map((q) => (
+            {quickActionsToRender.map((q) => (
               <QuickCard key={q.label} item={q} onPress={() => handleQuickAction(q.action)} />
             ))}
           </View>
         </View>
 
-        {/* QR + Chats */}
         <View style={{ paddingHorizontal: PAD, marginBottom: SPACE.xl, flexDirection: 'row', gap: SPACE.md }}>
           <TouchableOpacity activeOpacity={0.85} style={{ flex: 1 }} onPress={onOpenQR}>
             <LinearGradient colors={[COLORS.text, '#2d3748']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={g.dualBtn}>
@@ -558,7 +958,6 @@ export default function HomeTab({
           </TouchableOpacity>
         </View>
 
-        {/* My Status — compact strip */}
         <View style={{ paddingHorizontal: PAD, marginBottom: SPACE.lg }}>
           <View style={g.statusStrip}>
             <View style={g.statusItem}>
@@ -585,7 +984,6 @@ export default function HomeTab({
           </View>
         </View>
 
-        {/* TIMELINE */}
         <View style={[g.sectionRow, { paddingHorizontal: PAD }]}>
           <Text style={g.sectionTitle}>Timeline</Text>
           <TouchableOpacity onPress={onOpenSchedule} activeOpacity={0.8}>
@@ -596,7 +994,6 @@ export default function HomeTab({
           </TouchableOpacity>
         </View>
 
-        {/* Day chips */}
         <ScrollView horizontal showsHorizontalScrollIndicator={false}
           contentContainerStyle={{ paddingHorizontal: PAD, gap: SPACE.sm, paddingBottom: SPACE.md }}
           style={{ marginBottom: SPACE.sm }}>
@@ -625,16 +1022,14 @@ export default function HomeTab({
           })}
         </ScrollView>
 
-        {/* Day context label */}
         <View style={{ paddingHorizontal: PAD, marginBottom: SPACE.lg }}>
           <View style={g.dayContextRow}>
             <View style={[g.dayContextDot, { backgroundColor: allPast ? COLORS.textTer : COLORS.brand }]} />
             <Text style={g.dayContextText}>{dayLabel}</Text>
-            <Text style={g.dayContextSub}> · {dayEvents.length} sessions</Text>
+            <Text style={g.dayContextSub}> · Day {selectedDay}</Text>
           </View>
         </View>
 
-        {/* Timeline cards */}
         <View style={{ paddingHorizontal: PAD, gap: SPACE.lg, marginBottom: SPACE.lg }}>
           {windowEvents.length === 0 && (
             <View style={[g.glassCard, { alignItems: 'center', paddingVertical: SPACE.xxl }]}>
@@ -655,7 +1050,6 @@ export default function HomeTab({
           ))}
         </View>
 
-        {/* More sessions */}
         {remainingCount > 0 && (
           <TouchableOpacity style={[g.moreBtn, { marginHorizontal: PAD, marginBottom: SPACE.xl }]} activeOpacity={0.85} onPress={onOpenSchedule}>
             <LinearGradient colors={['rgba(24,86,255,0.06)', 'rgba(24,86,255,0.02)']} style={g.moreBtnInner}>
@@ -671,7 +1065,6 @@ export default function HomeTab({
           </TouchableOpacity>
         )}
 
-        {/* Announcements */}
         {recentNotifs.length > 0 && (
           <View style={{ paddingHorizontal: PAD, marginBottom: SPACE.xl }}>
             <View style={g.sectionRow}>
@@ -703,7 +1096,7 @@ const s = StyleSheet.create({
   railDotLive: { width: 20, height: 20, borderRadius: 10, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(239,68,68,0.12)' },
   railLine: { width: 3, flex: 1, marginTop: SPACE.sm, borderRadius: 4, backgroundColor: 'rgba(24,86,255,0.14)' },
   railLinePast: { backgroundColor: 'rgba(148,163,184,0.2)' },
-  card: { backgroundColor: 'rgba(255,255,255,0.88)', borderRadius: 24, borderWidth: 1, borderColor: 'rgba(255,255,255,0.96)', padding: SPACE.lg, overflow: 'hidden', ...Platform.select({ ios: {shadowColor: '#002182', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.07, shadowRadius: 20 }, android: { elevation: 2 } }) },
+  card: { backgroundColor: 'rgba(255,255,255,0.88)', borderRadius: 24, borderWidth: 1, borderColor: 'rgba(255,255,255,0.96)', padding: SPACE.lg, overflow: 'hidden' },
   featuredCard: { borderWidth: 0, padding: SPACE.xl },
   currentCard: { borderColor: 'rgba(24,86,255,0.2)', borderWidth: 1.5 },
   pastCard: { opacity: 0.55 },
@@ -746,29 +1139,35 @@ const g = StyleSheet.create({
   notifBadge: { position: 'absolute', top: -3, right: -3, minWidth: 16, height: 16, borderRadius: 8, backgroundColor: COLORS.error, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 3, borderWidth: 2, borderColor: '#f0f4f9' },
   notifBadgeText: { fontSize: 9, fontWeight: FONT.w8, color: '#fff' },
   avatar: { width: 40, height: 40, borderRadius: 20, borderWidth: 2, borderColor: COLORS.border },
-  heroCard: { backgroundColor: COLORS.brand, borderRadius: 32, padding: SPACE.xxl, overflow: 'hidden', ...Platform.select({ ios: { shadowColor: COLORS.brand, shadowOffset: { width: 0, height: 12 }, shadowOpacity: 0.4, shadowRadius: 24 }, android: { elevation: 8 } }) },
+  heroCard: { backgroundColor: COLORS.brand, borderRadius: 32, padding: SPACE.xxl, overflow: 'hidden', ...Platform.select({ ios: { shadowColor: COLORS.brand, shadowOffset: { width: 0, height: 12 }, shadowOpacity:0.4, shadowRadius: 24 }, android: { elevation: 8 } }) },
   blob1: { position: 'absolute', width: 220, height: 220, borderRadius: 110, backgroundColor: 'rgba(255,255,255,0.06)', top: -80, right: -60 },
   blob2: { position: 'absolute', width: 160, height: 160, borderRadius: 80, backgroundColor: 'rgba(245,158,11,0.08)', bottom: -40, left: -40 },
   heroTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: SPACE.xl },
   heroLabel: { fontSize: 9, fontWeight: FONT.w8, color: '#fff', letterSpacing: 1.5, marginBottom: SPACE.xs },
-  heroDayPill: { flexDirection: 'row', alignItems: 'center', gap: SPACE.sm, backgroundColor: 'rgba(255,255,255,0.12)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.2)', paddingHorizontal: SPACE.md, paddingVertical: SPACE.xs, borderRadius: RADIUS.full },
+  heroDayPill: { flexDirection: 'row', alignItems: 'center', gap: SPACE.sm, backgroundColor: 'rgba(255,255,255,0.12)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.2)', paddingHorizontal: SPACE.md, paddingVertical: SPACE.xs, borderRadius: RADIUS.full, alignSelf: 'flex-start' },
   heroDayDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: '#fde68a' },
   heroDayText: { fontSize: FONT.sm, fontWeight: FONT.w7, color: '#fff' },
-  heroVenue: { fontSize: FONT.sm, fontWeight: FONT.w6, color: '#fff' },
+  venueRow: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: 'rgba(255,255,255,0.12)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.2)', paddingHorizontal: SPACE.sm, paddingVertical: SPACE.xs, borderRadius: RADIUS.full },
+  heroVenue: { fontSize: FONT.xs, fontWeight: FONT.w7, color: '#fff', flexShrink: 1, textAlign: 'right' },
   heroGreeting: { fontSize: 34, fontWeight: FONT.w9, color: '#fff', lineHeight: 40, letterSpacing: -0.5 },
   progressRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: SPACE.sm },
   progressLbl: { fontSize: 10, fontWeight: FONT.w6, color: '#fff', letterSpacing: 0.5 },
   progressPct: { fontSize: 10, fontWeight: FONT.w8, color: '#fff' },
   progressTrack: { height: 4, backgroundColor: 'rgba(255,255,255,0.12)', borderRadius: 2, overflow: 'hidden' },
   progressFill: { height: '100%', borderRadius: 2, backgroundColor: '#fff' },
+  countdownTime: { fontSize: 24, fontWeight: FONT.w9, color: '#fff', marginTop: SPACE.xs, letterSpacing: 0.5 },
   glassCard: { backgroundColor: 'rgba(255,255,255,0.72)', borderRadius: 28, borderWidth: 1, borderColor: 'rgba(255,255,255,0.9)', padding: SPACE.xl, ...Platform.select({ ios: { shadowColor: '#002182', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.06, shadowRadius: 16 }, android: { elevation: 0 } }) },
   liveTopRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: SPACE.md },
   livePill: { flexDirection: 'row', alignItems: 'center', gap: SPACE.sm, backgroundColor: COLORS.error, paddingHorizontal: SPACE.md, paddingVertical: 6, borderRadius: RADIUS.full },
   livePillText: { fontSize: 10, fontWeight: FONT.w8, color: '#fff', letterSpacing: 1 },
   liveRoom: { fontSize: FONT.xs, fontWeight: FONT.w7, color: COLORS.textTer, letterSpacing: 1 },
+  endsPill: { flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: COLORS.accentLight, paddingHorizontal: SPACE.sm, paddingVertical: 4, borderRadius: RADIUS.full },
+  endsPillText: { fontSize: 10, fontWeight: FONT.w8, color: COLORS.accent, letterSpacing: 0.3 },
   liveTitle: { fontSize: FONT.xl + 2, fontWeight: FONT.w9, color: COLORS.brand, letterSpacing: -0.3, marginBottom: SPACE.xs },
   liveMeta: { fontSize: FONT.sm, color: COLORS.textTer, marginBottom: 2 },
   liveSpeaker: { fontSize: FONT.base, color: COLORS.textSec },
+  liveTapHint: { flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 2, marginTop: SPACE.sm },
+  liveTapHintText: { fontSize: 10, color: COLORS.textTer, fontWeight: FONT.w6 },
   sectionTitle: { fontSize: 28, fontWeight: FONT.w9, color: COLORS.brand, letterSpacing: -0.5, marginBottom: SPACE.md },
   sectionRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end' },
   seeFullBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: COLORS.brandLight, paddingHorizontal: SPACE.md, paddingVertical: SPACE.sm, borderRadius: RADIUS.full, marginBottom: SPACE.md },

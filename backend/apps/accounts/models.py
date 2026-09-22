@@ -55,6 +55,9 @@ class User(AbstractBaseUser, PermissionsMixin):
     must_change_password = models.BooleanField(default=True)
     profile_complete    = models.BooleanField(default=False)
     warning_note        = models.TextField(blank=True, help_text='Admin warning message sent to user')
+    warning_acknowledged = models.BooleanField(default=False, help_text='Has the user acknowledged the warning')
+    warning_acknowledged_at = models.DateTimeField(null=True, blank=True, help_text='When the warning was acknowledged')
+    warning_response     = models.TextField(blank=True, help_text='User message/response when acknowledging')
     suspended_reason    = models.TextField(blank=True, help_text='Reason for account suspension')
     is_active           = models.BooleanField(default=True)
     is_staff            = models.BooleanField(default=False)
@@ -121,3 +124,77 @@ class ParticipantImport(models.Model):
 
     def __str__(self):
         return f"{self.email} [{self.status}]"
+
+
+# ─── Staff RBAC Models ───────────────────────────────────────────────
+
+class StaffProfile(models.Model):
+    """Extended profile for event staff (librarian team)."""
+    TIER_CHOICES = [
+        ('librarian', 'Librarian & Head'),
+        ('deputy',    'Deputy Librarian'),
+        ('assistant', 'Assistant Librarian'),
+        ('staff',     'Staff'),
+    ]
+    user        = models.OneToOneField('self' if False else 'accounts.User',
+                        on_delete=models.CASCADE, related_name='staff_profile')
+    tier        = models.CharField(max_length=20, choices=TIER_CHOICES)
+    designation = models.CharField(max_length=200)
+    department  = models.CharField(max_length=200, blank=True)
+    phone       = models.CharField(max_length=50, blank=True)
+    photo       = models.ImageField(upload_to='staff/', blank=True, null=True)
+    linkedin_url  = models.URLField(blank=True)
+    profile_url   = models.URLField(blank=True)
+    scholar_url   = models.URLField(blank=True)
+    order       = models.IntegerField(default=0, help_text='Display sort order')
+    is_public   = models.BooleanField(default=True)
+
+    class Meta:
+        ordering = ['order', 'id']
+
+    def __str__(self):
+        return f"{self.user.get_full_name()} — {self.get_tier_display()}"
+
+
+class StaffPermission(models.Model):
+    """Granular module-level access for staff/team_head users."""
+    MODULE_CHOICES = [
+        # Management
+        ('participants',      'Participants'),
+        ('papers', 'Papers & Posters'),
+        ('ideathon',          'Ideathon Teams'),
+        ('meal_scanner',      'Meal Scanner'),
+        ('checkin_scanner',   'Check-In Scanner'),
+        # Content
+        ('schedule',          'Events & Schedule'),
+        ('photos',            'Photos'),
+        ('checkpoint',        'Checkpoint'),
+        ('feed',              'Posts & Feed'),
+        # Engagement
+        ('polls',             'Polls'),
+        ('qa_manager',        'Q&A Manager'),
+        ('leaderboard',       'Leaderboard'),
+        ('chat',              'Chat & Connections'),
+        ('reported_messages', 'Reported Messages'),
+        ('shake_logs',        'Shake Connect Logs'),
+        ('chat_analytics',    'Chat Analytics'),
+        # System
+        ('notifications',     'Notifications'),
+        ('sponsors',          'Sponsors'),
+        ('speakers',          'Speakers'),
+        ('users_manage',      'User Management'),
+        ('reports',           'Reports'),
+        ('settings',          'Settings'),
+    ]
+    user       = models.ForeignKey('accounts.User', on_delete=models.CASCADE,
+                        related_name='staff_permissions')
+    module     = models.CharField(max_length=50, choices=MODULE_CHOICES)
+    granted_by = models.ForeignKey('accounts.User', on_delete=models.SET_NULL,
+                        null=True, related_name='+')
+    granted_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ('user', 'module')
+
+    def __str__(self):
+        return f"{self.user.email} → {self.module}"

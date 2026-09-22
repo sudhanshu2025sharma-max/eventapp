@@ -39,3 +39,8 @@ urlpatterns = [
     path('events/<int:pk>/edit/',       conf_views.event_edit,    name='event_edit'),
     path('events/<int:pk>/delete/',     conf_views.event_delete,  name='event_delete'),
 ]
+
+# Staff Permissions panel
+urlpatterns += [
+    path('staff/permissions/', admin_views.staff_permissions_panel, name='staff_permissions_panel'),
+]

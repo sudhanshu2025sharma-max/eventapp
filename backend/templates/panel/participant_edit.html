@@ -14,7 +14,10 @@
 {% endif %}
 
 <div class="card" style="max-width:640px;">
-  <div class="card-header"><h3>Edit Details</h3></div>
+  <div class="card-header">
+    <h3>Edit Details</h3>
+    <span style="font-size:13px;color:var(--text-tertiary);">Reg ID: <code>{{ participant.registration_id|default:"—" }}</code></span>
+  </div>
   <div class="card-body">
     <form method="post">
       {% csrf_token %}
@@ -53,8 +56,18 @@
           <input type="text" name="designation" value="{{ participant.designation }}" class="form-control">
         </div>
         <div style="grid-column:1/-1;">
-          <label class="form-label">Affiliation</label>
+          <label class="form-label">Affiliation / Institute</label>
           <input type="text" name="affiliation" value="{{ participant.affiliation }}" class="form-control">
+        </div>
+
+        <!-- Manual Password Reset Section -->
+        <div style="grid-column:1/-1;background:var(--bg);padding:16px;border-radius:10px;border:1px solid var(--border);margin-top:8px;">
+          <label class="form-label" style="font-weight:700;color:var(--text);"><i class="fas fa-key" style="color:var(--brand);margin-right:6px;"></i> Reset Password (Optional)</label>
+          <input type="text" name="new_password" class="form-control" placeholder="Enter new password to reset (or leave blank to keep existing)" style="font-family:monospace;">
+          <label style="display:flex;align-items:center;gap:8px;cursor:pointer;margin-top:10px;">
+            <input type="checkbox" name="must_change_password" {% if participant.must_change_password %}checked{% endif %} style="width:16px;height:16px;">
+            <span style="font-size:13px;color:var(--text-sec);">Require user to change password on next login</span>
+          </label>
         </div>
       </div>
 

@@ -7,7 +7,7 @@ class IdeathonConfig(models.Model):
     registration_open = models.BooleanField(default=False)
     reg_starts_at     = models.DateTimeField(null=True, blank=True)
     reg_ends_at       = models.DateTimeField(null=True, blank=True)
-    min_team_size     = models.PositiveSmallIntegerField(default=2)
+    min_team_size     = models.PositiveSmallIntegerField(default=3)
     max_team_size     = models.PositiveSmallIntegerField(default=5)
     description       = models.TextField(blank=True, default='Build. Collaborate. Innovate. Transform Libraries.')
     updated_by        = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, on_delete=models.SET_NULL)
@@ -22,7 +22,7 @@ class IdeathonConfig(models.Model):
 
     @classmethod
     def get(cls):
-        obj, _ = cls.objects.get_or_create(pk=1)
+        obj, _ = cls.objects.get_or_create(pk=1, defaults={'min_team_size': 3, 'max_team_size': 5})
         return obj
 
     @property
@@ -53,6 +53,20 @@ AVATAR_CHOICES = [
     ('compass',   '🧭 Compass'),
     ('atom',      '⚛️ Atom'),
 ]
+
+
+class IdeathonInterest(models.Model):
+    user       = models.OneToOneField(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE,
+        related_name='ideathon_interest',
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"{self.user.email} (Interested)"
 
 
 class IdeathonTeam(models.Model):
@@ -122,9 +136,32 @@ class IdeathonInvite(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        # One pending invite per person per team
         unique_together = [('team', 'invitee')]
         ordering = ['-created_at']
 
     def __str__(self):
         return f"{self.invitee.get_full_name()} → {self.team.name} [{self.status}]"
+
+
+class IdeathonJoinRequest(models.Model):
+    class Status(models.TextChoices):
+        PENDING  = 'pending',  'Pending'
+        ACCEPTED = 'accepted', 'Accepted'
+        DECLINED = 'declined', 'Declined'
+
+    id         = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    team       = models.ForeignKey(IdeathonTeam, on_delete=models.CASCADE, related_name='join_requests')
+    user       = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE,
+        related_name='ideathon_join_requests',
+    )
+    status     = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDING)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = [('team', 'user')]
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"{self.user.get_full_name()} → {self.team.name} [{self.status}]"

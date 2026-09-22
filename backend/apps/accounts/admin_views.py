@@ -223,23 +223,27 @@ IIT Delhi
 # ── auth views ─────────────────────────────────────────────────────────────
 
 def admin_login(request):
+    next_url = request.GET.get('next') or request.POST.get('next') or 'admin_dashboard'
     if request.user.is_authenticated:
-        return redirect('admin_dashboard')
+        return redirect(next_url)
+
+    from apps.conferences.models import ConferenceSetting
+    conf = ConferenceSetting.get()
 
     if request.method == 'POST':
         email    = request.POST.get('email', '').strip()
         password = request.POST.get('password', '')
         user     = authenticate(request, username=email, password=password)
 
-        if user is not None and user.role in ('super_admin', 'mgmt_admin'):
+        if user is not None and user.role in ('super_admin', 'mgmt_admin', 'team_head', 'staff'):
             login(request, user)
-            return redirect('admin_dashboard')
+            return redirect(next_url)
         elif user is not None:
             messages.error(request, 'You do not have admin access.')
         else:
             messages.error(request, 'Invalid email or password.')
 
-    return render(request, 'panel/login.html')
+    return render(request, 'panel/login.html', {'conf': conf})
 
 
 @login_required(login_url='/panel/login/')
@@ -252,27 +256,110 @@ def admin_logout(request):
 
 @login_required(login_url='/panel/login/')
 def admin_dashboard(request):
-    from apps.checkins.models import CheckIn
+    from apps.checkins.models import CheckIn, MealPass, MealWindow
+    from apps.photos.models import Photo
+    from apps.polls.models import Poll
+    from apps.schedule.models import ScheduleSession
+    from django.utils import timezone
+
+    today = timezone.now().date()
+
+    # 1. Participants & Check-Ins
     total_participants = User.objects.filter(role='participant').count()
-    checked_in = CheckIn.objects.filter(checkin_type='conference').count()
+    checked_in = CheckIn.objects.filter(checkin_type='conference').values('user_id').distinct().count()
     checkin_pct = round(checked_in * 100 / total_participants) if total_participants else 0
+    profile_complete_pct = round(
+        User.objects.filter(role='participant', profile_complete=True).count() * 100 / total_participants
+    ) if total_participants else 0
+
+    # 2. Photos & Pending Moderation
+    try:
+        photos_uploaded = Photo.objects.count()
+        photos_pending = Photo.objects.filter(status='pending').count()
+    except Exception:
+        photos_uploaded = 0
+        photos_pending = 0
+
+    # 3. Active Polls
+    try:
+        active_polls = Poll.objects.filter(is_active=True).count()
+    except Exception:
+        active_polls = 0
+
+    # 4. Ideathon Teams
+    try:
+        from apps.polls.models import IdeathonTeam
+        ideathon_teams_count = IdeathonTeam.objects.count()
+    except Exception:
+        ideathon_teams_count = 0
+
+    # 5. Today Meals Scanned & Window Status
+    try:
+        today_meals_count = MealPass.objects.filter(scanned_at__date=today).count()
+        current_meal_window = MealWindow.objects.filter(date=today, is_open=True).first()
+    except Exception:
+        today_meals_count = 0
+        current_meal_window = None
+
+    # 6. Today Schedule
+    today_events = []
+    try:
+        today_sessions = ScheduleSession.objects.filter(date=today).order_by('start_time')[:6]
+        now_time = timezone.now().time()
+        for s in today_sessions:
+            status = 'upcoming'
+            if s.start_time and s.end_time:
+                if s.start_time <= now_time <= s.end_time:
+                    status = 'live'
+                elif now_time > s.end_time:
+                    status = 'completed'
+            today_events.append({
+                'title': s.title,
+                'time': f"{s.start_time.strftime('%H:%M')} - {s.end_time.strftime('%H:%M')}" if s.start_time and s.end_time else "TBD",
+                'room': s.location or "Main Hall",
+                'status': status,
+                'speaker': s.speaker_name or ""
+            })
+    except Exception:
+        today_events = []
+
+    # 7. Recent Check-Ins Stream
+    recent_checkins = []
+    try:
+        raw_checkins = (
+            CheckIn.objects.filter(checkin_type='conference')
+            .select_related('user')
+            .order_by('-scanned_at')[:7]
+        )
+        for c in raw_checkins:
+            user_obj = c.user
+            name = user_obj.get_full_name() if user_obj else "Participant"
+            if not name.strip() and user_obj:
+                name = user_obj.email.split('@')[0]
+            
+            recent_checkins.append({
+                'name': name,
+                'email': user_obj.email if user_obj else '',
+                'id': f"#{str(user_obj.id)[:8]}" if user_obj else '',
+                'time': c.scanned_at.astimezone(timezone.get_current_timezone()).strftime('%H:%M:%S') if c.scanned_at else '',
+                'goodies': getattr(c, 'goodies_status', False)
+            })
+    except Exception:
+        recent_checkins = []
 
     context = {
         'total_participants': total_participants,
         'checked_in': checked_in,
         'checkin_percent': checkin_pct,
-        'photos_uploaded': 0,
-        'photos_pending': 0,
-        'active_polls': 0,
-        'profile_complete_percent': round(
-            User.objects.filter(role='participant', profile_complete=True).count() * 100 / total_participants
-        ) if total_participants else 0,
-        'today_events': [],
-        'recent_checkins': list(
-            CheckIn.objects.filter(checkin_type='conference')
-            .select_related('user')
-            .order_by('-scanned_at')[:5]
-        ),
+        'profile_complete_percent': profile_complete_pct,
+        'photos_uploaded': photos_uploaded,
+        'photos_pending': photos_pending,
+        'active_polls': active_polls,
+        'ideathon_teams_count': ideathon_teams_count,
+        'today_meals_count': today_meals_count,
+        'current_meal_window': current_meal_window,
+        'today_events': today_events,
+        'recent_checkins': recent_checkins,
     }
     return render(request, 'panel/dashboard.html', context)
 
@@ -395,7 +482,8 @@ def participants_confirm(request):
             continue
 
         first_name, last_name = _split_name(staged.full_name)
-        temp_password = _generate_temp_password()
+        manual_pwd = request.POST.get('temp_password', '').strip()
+        temp_password = manual_pwd if manual_pwd else _generate_temp_password()
 
         try:
             with transaction.atomic():
@@ -447,22 +535,47 @@ def participants_confirm(request):
 
 @login_required(login_url='/panel/login/')
 def participants_list(request):
+    from apps.checkins.models import CheckIn
     search = request.GET.get('search', '').strip()
-    participants = User.objects.filter(role='participant').order_by('first_name', 'last_name')
+    status_filter = request.GET.get('status', '').strip()
+
+    qs = User.objects.filter(role='participant').order_by('first_name', 'last_name')
     if search:
-        participants = participants.filter(
+        qs = qs.filter(
             Q(first_name__icontains=search) | Q(last_name__icontains=search) |
             Q(email__icontains=search) | Q(registration_id__icontains=search)
         )
+
+    # Fetch all checked-in participant IDs
+    checked_in_ids = set(
+        CheckIn.objects.filter(checkin_type='conference').values_list('user_id', flat=True)
+    )
+
     total_all = User.objects.filter(role='participant').count()
+    all_participant_ids = set(User.objects.filter(role='participant').values_list('id', flat=True))
+    total_checked_in = len(checked_in_ids.intersection(all_participant_ids))
+    total_not_checked_in = total_all - total_checked_in
     password_set = User.objects.filter(role='participant', must_change_password=False).count()
+
+    participants = list(qs)
+    for p in participants:
+        p.is_checked_in = p.id in checked_in_ids
+
+    if status_filter == 'checked_in':
+        participants = [p for p in participants if p.is_checked_in]
+    elif status_filter == 'not_checked_in':
+        participants = [p for p in participants if not p.is_checked_in]
+
     return render(request, 'panel/participants_list.html', {
         'participants': participants,
         'total': total_all,
+        'total_checked_in': total_checked_in,
+        'total_not_checked_in': total_not_checked_in,
         'password_set': password_set,
         'password_pending': total_all - password_set,
         'search': search,
-        'showing': participants.count(),
+        'status_filter': status_filter,
+        'showing': len(participants),
     })
 
 
@@ -542,6 +655,16 @@ def participant_edit(request, pk):
         new_reg = request.POST.get('registration_id', '').strip()
         if new_reg:
             user.registration_id = new_reg
+
+        # Optional manual password reset
+        new_pwd = request.POST.get('new_password', '').strip()
+        if new_pwd:
+            user.set_password(new_pwd)
+            if request.POST.get('must_change_password') == 'on':
+                user.must_change_password = True
+            else:
+                user.must_change_password = False
+            messages.info(request, f'Password updated for {user.get_full_name()}.')
 
         try:
             user.save()
@@ -694,7 +817,10 @@ def user_warn(request, pk):
             return redirect('users_manage')
 
         user_target.warning_note = note
-        user_target.save(update_fields=['warning_note'])
+        user_target.warning_acknowledged = False
+        user_target.warning_acknowledged_at = None
+        user_target.warning_response = ''
+        user_target.save(update_fields=['warning_note', 'warning_acknowledged', 'warning_acknowledged_at', 'warning_response'])
 
         try:
             from apps.notifications.models import Notification as Notif
@@ -773,7 +899,10 @@ def user_clear_warning(request, pk):
     user_target = get_object_or_404(User, pk=pk)
     if request.method == 'POST':
         user_target.warning_note = ''
-        user_target.save(update_fields=['warning_note'])
+        user_target.warning_acknowledged = False
+        user_target.warning_acknowledged_at = None
+        user_target.warning_response = ''
+        user_target.save(update_fields=['warning_note', 'warning_acknowledged', 'warning_acknowledged_at', 'warning_response'])
         messages.success(request, f'Warning cleared for {user_target.get_full_name()}.')
     return redirect('users_manage')
 
@@ -792,3 +921,121 @@ def admin_required(view_func):
             return redirect('admin_dashboard')
         return view_func(request, *args, **kwargs)
     return wrapper
+
+from .models import StaffProfile, StaffPermission
+from .permissions_helper import ALL_MODULE_KEYS, get_user_permissions, user_has_module_access
+
+@admin_required
+def staff_permissions_panel(request):
+    """Full CRUD + permissions management for staff."""
+
+    if request.method == 'POST':
+        action = request.POST.get('action', '')
+
+        if action == 'delete':
+            user_id = request.POST.get('user_id')
+            try:
+                u = User.objects.get(id=user_id)
+                name = u.get_full_name()
+                u.delete()
+                messages.success(request, f"{name} deleted.")
+            except User.DoesNotExist:
+                messages.error(request, "User not found.")
+            return redirect('staff_permissions_panel')
+
+        elif action == 'create':
+            email = request.POST.get('email', '').strip().lower()
+            first_name = request.POST.get('first_name', '').strip()
+            last_name = request.POST.get('last_name', '').strip()
+            if not email or not first_name:
+                messages.error(request, "Email and first name required.")
+                return redirect('staff_permissions_panel')
+            if User.objects.filter(email=email).exists():
+                messages.error(request, "Email already exists.")
+                return redirect('staff_permissions_panel')
+            role = request.POST.get('role', 'staff')
+            password = request.POST.get('password', 'Staff@123') or 'Staff@123'
+            u = User.objects.create_user(email=email, password=password, first_name=first_name, last_name=last_name, role=role)
+            StaffProfile.objects.create(
+                user=u,
+                tier=request.POST.get('tier', 'staff'),
+                designation=request.POST.get('designation', ''),
+                department=request.POST.get('department', ''),
+                phone=request.POST.get('phone', ''),
+                linkedin_url=request.POST.get('linkedin_url', ''),
+                profile_url=request.POST.get('profile_url', ''),
+                scholar_url=request.POST.get('scholar_url', ''),
+                order=StaffProfile.objects.count() + 1,
+            )
+            if 'photo' in request.FILES:
+                p = u.staff_profile
+                p.photo = request.FILES['photo']
+                p.save()
+            messages.success(request, f"{first_name} {last_name} created.")
+            return redirect('staff_permissions_panel')
+
+        elif action == 'edit':
+            user_id = request.POST.get('user_id')
+            try:
+                u = User.objects.get(id=user_id)
+                u.first_name = request.POST.get('first_name', u.first_name)
+                u.last_name = request.POST.get('last_name', u.last_name)
+                u.role = request.POST.get('role', u.role)
+                if request.POST.get('password'):
+                    u.set_password(request.POST['password'])
+                u.save()
+                p = u.staff_profile
+                p.tier = request.POST.get('tier', p.tier)
+                p.designation = request.POST.get('designation', p.designation)
+                p.department = request.POST.get('department', p.department)
+                p.phone = request.POST.get('phone', p.phone)
+                p.linkedin_url = request.POST.get('linkedin_url', p.linkedin_url)
+                p.profile_url = request.POST.get('profile_url', p.profile_url)
+                p.scholar_url = request.POST.get('scholar_url', p.scholar_url)
+                if 'photo' in request.FILES:
+                    p.photo = request.FILES['photo']
+                p.save()
+                messages.success(request, f"{u.get_full_name()} updated.")
+            except (User.DoesNotExist, StaffProfile.DoesNotExist):
+                messages.error(request, "Staff not found.")
+            return redirect('staff_permissions_panel')
+
+        elif action == 'permissions':
+            user_id = request.POST.get('user_id')
+            selected_modules = request.POST.getlist('modules')
+            try:
+                target_user = User.objects.get(id=user_id)
+                StaffPermission.objects.filter(user=target_user).delete()
+                for m in selected_modules:
+                    if m in ALL_MODULE_KEYS:
+                        StaffPermission.objects.create(user=target_user, module=m, granted_by=request.user)
+                messages.success(request, f"Permissions updated for {target_user.get_full_name()}.")
+            except User.DoesNotExist:
+                messages.error(request, "User not found.")
+            return redirect('staff_permissions_panel')
+
+    staff_users = User.objects.filter(
+        role__in=['team_head', 'staff']
+    ).select_related('staff_profile').order_by('staff_profile__order', 'first_name')
+
+    user_perms_map = {}
+    for u in staff_users:
+        user_perms_map[str(u.id)] = set(
+            StaffPermission.objects.filter(user=u).values_list('module', flat=True)
+        )
+
+    module_categories = [
+        {'name': 'Management', 'items': [('participants', 'Participants'), ('ideathon', 'Ideathon Teams'), ('meal_scanner', 'Meal Scanner'), ('checkin_scanner', 'Check-In Scanner')]},
+        {'name': 'Content', 'items': [('schedule', 'Events & Schedule'), ('papers', 'Papers & Posters'), ('papers', 'Papers & Posters'), ('photos', 'Photos'), ('checkpoint', 'Checkpoint'), ('feed', 'Posts & Feed')]},
+        {'name': 'Engagement', 'items': [('polls', 'Polls'), ('qa_manager', 'Q&A Manager'), ('leaderboard', 'Leaderboard'), ('chat', 'Chat'), ('reported_messages', 'Reported Messages'), ('shake_logs', 'Shake Logs'), ('chat_analytics', 'Chat Analytics')]},
+        {'name': 'System', 'items': [('notifications', 'Notifications'), ('sponsors', 'Sponsors'), ('speakers', 'Speakers'), ('users_manage', 'User Management'), ('reports', 'Reports'), ('settings', 'Settings')]},
+    ]
+
+    context = {
+        'staff_users': staff_users,
+        'user_perms_map': user_perms_map,
+        'module_categories': module_categories,
+        'all_modules': StaffPermission.MODULE_CHOICES,
+    }
+    return render(request, 'panel/staff_permissions.html', context)
+

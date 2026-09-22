@@ -1,3 +1,7 @@
+import StaffGroupChatScreen from './screens/StaffGroupChatScreen';
+import StaffScreen from './screens/StaffScreen';
+import StaffDetailScreen from './screens/StaffDetailScreen';
+import VoiceCallScreen from './screens/VoiceCallScreen';
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { View, Text, TouchableOpacity, Pressable, StyleSheet, Platform, Animated, Modal, BackHandler, Keyboard } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -22,12 +26,13 @@ import ChatRoomScreen from './screens/ChatRoomScreen';
 import ConnectionRequestsScreen from './screens/ConnectionRequestsScreen';
 import LeaderboardScreen from './screens/LeaderboardScreen';
 import PhotosScreen from './screens/PhotosScreen';
+import AcceptedPapersScreen from './screens/AcceptedPapersScreen';
 import FeedScreen from './screens/FeedScreen';
 import PollsScreen from './screens/PollsScreen';
 import RecapScreen from './screens/RecapScreen';
 import IdeathonScreen from './screens/IdeathonScreen';
 import ShakeConnectScreen from './screens/ShakeConnectScreen';
-import SelfieSpotsScreen from './screens/SelfieSpotsScreen';
+import CheckpointScreen from './screens/CheckpointScreen';
 
 const BASE_TABS = [
   { key: 'home',     iconOn: 'home',        iconOff: 'home-outline',        label: 'Home' },
@@ -40,108 +45,105 @@ const BASE_TABS = [
 const ADMIN_TAB = { key: 'admin', iconOn: 'shield-checkmark', iconOff: 'shield-checkmark-outline', label: 'Admin' };
 
 function getTabs(role) {
-  const isAdmin = role === 'super_admin' || role === 'mgmt_admin';
+  const isAdmin = role === 'super_admin' || role === 'mgmt_admin' || role === 'team_head' || role === 'staff';
   if (!isAdmin) return BASE_TABS;
   return BASE_TABS.slice(0, 4).concat(ADMIN_TAB);
 }
 
-// --- FIXED 3D ANIMATED TAB BUTTON ---
 function AnimatedTabButton({ tab, isActive, badge, onTab }) {
-  const selectAnim = useRef(new Animated.Value(isActive ? 1 : 0)).current;
-  const pressAnim = useRef(new Animated.Value(0)).current; 
-
-  useEffect(() => {
-    Animated.spring(selectAnim, {
-      toValue: isActive ? 1 : 0,
-      tension: 250,
-      friction: 18,
-      useNativeDriver: true,
-    }).start();
-  }, [isActive]);
+  const scale = useRef(new Animated.Value(1)).current;
+  const translateY = useRef(new Animated.Value(0)).current;
 
   const handlePressIn = () => {
-    Animated.spring(pressAnim, { toValue: 1, tension: 300, friction: 12, useNativeDriver: true }).start();
+    Animated.parallel([
+      Animated.spring(scale, { toValue: 0.85, friction: 5, tension: 300, useNativeDriver: true }),
+      Animated.timing(translateY, { toValue: 3, duration: 100, useNativeDriver: true })
+    ]).start();
   };
 
   const handlePressOut = () => {
-    Animated.spring(pressAnim, { toValue: 0, tension: 300, friction: 12, useNativeDriver: true }).start();
+    Animated.parallel([
+      Animated.spring(scale, { toValue: 1, friction: 3, tension: 200, useNativeDriver: true }),
+      Animated.spring(translateY, { toValue: 0, friction: 4, tension: 200, useNativeDriver: true })
+    ]).start();
   };
 
-  const scale = pressAnim.interpolate({ inputRange: [0, 1], outputRange: [1, 0.85] });
-  const rotateX = pressAnim.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '30deg'] }); 
-  const iconTranslateY = selectAnim.interpolate({ inputRange: [0, 1], outputRange: [0, -10] });
-  const textOpacity = selectAnim.interpolate({ inputRange: [0, 1], outputRange: [0, 1] });
-  const textTranslateY = selectAnim.interpolate({ inputRange: [0, 1], outputRange: [10, 0] });
-  const textScale = selectAnim.interpolate({ inputRange: [0, 1], outputRange: [0.6, 1] });
-  const dotScale = selectAnim.interpolate({ inputRange: [0, 1], outputRange: [0, 1.2] });
-
   return (
-    <Pressable 
-      style={st.tabItem} 
-      onPress={() => { Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {}); onTab(tab.key); }}
+    <Pressable
+      style={st.tabItem}
+      onPress={() => {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+        onTab(tab.key);
+      }}
       onPressIn={handlePressIn}
       onPressOut={handlePressOut}
     >
-      <Animated.View style={[
-        st.iconWrap, 
-        { transform: [{ perspective: 500 }, { scale }, { rotateX }, { translateY: iconTranslateY }] }
-      ]}>
-        <Ionicons 
-          name={isActive ? tab.iconOn : tab.iconOff} 
-          size={24} 
-          color={isActive ? COLORS.brand : COLORS.textTer} 
-        />
-        {badge > 0 && (
-          <View style={st.tabBadge}>
-            <Text style={st.tabBadgeText}>{badge > 9 ? '9+' : badge}</Text>
-          </View>
-        )}
+      <Animated.View style={[st.tabInner, { transform: [{ scale }, { translateY }] }]}>
+        <View style={[st.iconBox, isActive && st.iconBoxActive]}>
+          <Ionicons
+            name={isActive ? tab.iconOn : tab.iconOff}
+            size={22}
+            color={isActive ? COLORS.primary : COLORS.textSec}
+          />
+          {badge > 0 && (
+            <View style={st.badgeDot}>
+              <Text style={st.badgeText}>{badge > 99 ? '99+' : badge}</Text>
+            </View>
+          )}
+        </View>
+        <Text style={[st.tabLabel, isActive && st.tabLabelActive]} numberOfLines={1}>
+          {tab.label}
+        </Text>
       </Animated.View>
-
-      <Animated.View style={[
-        st.textWrap,
-        { opacity: textOpacity, transform: [{ translateY: textTranslateY }, { scale: textScale }] }
-      ]}>
-        <Text style={st.tabLabelActive}>{tab.label}</Text>
-      </Animated.View>
-      
-      {isActive && (
-        <Animated.View style={[
-          st.activeDot,
-          { opacity: selectAnim, transform: [{ scale: dotScale }] }
-        ]} />
-      )}
     </Pressable>
   );
 }
 
-// --- DYNAMIC BREATHING FAB ---
 function AnimatedFAB({ tab, isActive, onTab }) {
-  const floatAnim = useRef(new Animated.Value(0)).current;
-  const pressAnim = useRef(new Animated.Value(0)).current;
+  const scale = useRef(new Animated.Value(1)).current;
+  const pressTranslate = useRef(new Animated.Value(0)).current;
+  const rotateX = useRef(new Animated.Value(0)).current;
 
+  const hoverAnim = useRef(new Animated.Value(0)).current;
   useEffect(() => {
     Animated.loop(
       Animated.sequence([
-        Animated.timing(floatAnim, { toValue: 1, duration: 1800, useNativeDriver: true }),
-        Animated.timing(floatAnim, { toValue: 0, duration: 1800, useNativeDriver: true }),
+        Animated.timing(hoverAnim, { toValue: 1, duration: 1800, useNativeDriver: true }),
+        Animated.timing(hoverAnim, { toValue: 0, duration: 1800, useNativeDriver: true }),
       ])
     ).start();
   }, []);
 
+  const hoverTranslate = hoverAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0, -4],
+  });
+
+  const glowScale = hoverAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [1, 1.06],
+  });
+
+  const rotateXDeg = rotateX.interpolate({
+    inputRange: [0, 1],
+    outputRange: ['0deg', '12deg'],
+  });
+
   const handlePressIn = () => {
-    Animated.spring(pressAnim, { toValue: 1, tension: 400, friction: 10, useNativeDriver: true }).start();
+    Animated.parallel([
+      Animated.spring(scale, { toValue: 0.88, friction: 6, tension: 350, useNativeDriver: true }),
+      Animated.timing(pressTranslate, { toValue: 6, duration: 80, useNativeDriver: true }),
+      Animated.timing(rotateX, { toValue: 1, duration: 80, useNativeDriver: true })
+    ]).start();
   };
 
   const handlePressOut = () => {
-    Animated.spring(pressAnim, { toValue: 0, tension: 300, friction: 15, useNativeDriver: true }).start();
+    Animated.parallel([
+      Animated.spring(scale, { toValue: 1, friction: 3, tension: 180, useNativeDriver: true }),
+      Animated.spring(pressTranslate, { toValue: 0, friction: 3, tension: 180, useNativeDriver: true }),
+      Animated.timing(rotateX, { toValue: 0, duration: 150, useNativeDriver: true })
+    ]).start();
   };
-
-  const hoverTranslate = floatAnim.interpolate({ inputRange: [0, 1], outputRange: [0, -6] });
-  const pressTranslate = pressAnim.interpolate({ inputRange: [0, 1], outputRange: [0, 10] });
-  const scale = pressAnim.interpolate({ inputRange: [0, 1], outputRange: [1, 0.9] });
-  const rotateX = pressAnim.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '25deg'] });
-  const glowScale = floatAnim.interpolate({ inputRange: [0, 1], outputRange: [1, 1.05] });
 
   return (
     <Pressable 
@@ -156,7 +158,7 @@ function AnimatedFAB({ tab, isActive, onTab }) {
       ]}>
         <Animated.View style={[
           st.fabButton,
-          { transform: [{ perspective: 800 }, { translateY: pressTranslate }, { scale }, { rotateX }] }
+          { transform: [{ perspective: 800 }, { translateY: pressTranslate }, { scale }, { rotateX: rotateXDeg }] }
         ]}>
           <Ionicons name={isActive ? tab.iconOn : tab.iconOff} size={26} color={COLORS.surface} />
         </Animated.View>
@@ -188,49 +190,36 @@ function BottomTabBar({ active, onTab, tabs, networkBadge }) {
   );
 }
 
-// --- ANIMATED WARNING MODAL ---
-function WarningModal({ visible, text, onClose }) {
-  const [show, setShow] = useState(visible);
-  const scale = useRef(new Animated.Value(1.1)).current; 
-  const opacity = useRef(new Animated.Value(0)).current;
-
-  useEffect(() => {
-    if (visible) {
-      setShow(true);
-      Animated.parallel([
-        Animated.spring(scale, { toValue: 1, friction: 12, tension: 250, useNativeDriver: true }),
-        Animated.timing(opacity, { toValue: 1, duration: 250, useNativeDriver: true }),
-      ]).start();
-    } else {
-      Animated.parallel([
-        Animated.timing(scale, { toValue: 0.9, duration: 200, useNativeDriver: true }),
-        Animated.timing(opacity, { toValue: 0, duration: 200, useNativeDriver: true }),
-      ]).start(() => setShow(false));
-    }
-  }, [visible]);
-
-  if (!show) return null;
+function WarningModal({ visible, text, onAcknowledge, loading }) {
+  if (!visible) return null;
 
   return (
-    <Modal transparent animationType="none" visible={show} onRequestClose={onClose}>
+    <Modal transparent animationType="fade" visible={visible} onRequestClose={() => {}}>
       <View style={wm.overlay}>
-        <Animated.View style={[wm.card, { opacity, transform: [{ scale }, { perspective: 800 }] }]}>
+        <View style={wm.card}>
           <View style={wm.iconWrap}>
-            <Ionicons name="warning" size={36} color={COLORS.warning} />
+            <Ionicons name="warning" size={38} color="#f59e0b" />
           </View>
-          <Text style={wm.title}>Warning from Admin</Text>
-          <Text style={wm.body}>{text}</Text>
-          <Text style={wm.hint}>Please review your conduct at the conference.</Text>
-          <TouchableOpacity style={wm.btn} onPress={onClose} activeOpacity={0.7}>
-            <Text style={wm.btnTxt}>I Understand</Text>
+          <Text style={wm.title}>Notice from Organizers</Text>
+          <Text style={wm.body}>{text || 'Please adhere to event guidelines.'}</Text>
+          <Text style={wm.hint}>Please acknowledge this notice to continue using the app.</Text>
+          <TouchableOpacity 
+            style={[wm.btn, loading && { opacity: 0.7 }]} 
+            disabled={loading}
+            onPress={() => {
+              try { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); } catch (_) {}
+              onAcknowledge?.();
+            }}
+            activeOpacity={0.8}
+          >
+            <Text style={wm.btnTxt}>{loading ? 'Acknowledging...' : 'I Understand'}</Text>
           </TouchableOpacity>
-        </Animated.View>
+        </View>
       </View>
     </Modal>
   );
 }
 
-// --- MAIN APP COMPONENT ---
 export default function MainApp({
   user: initialUser,
   tokens,
@@ -242,9 +231,18 @@ export default function MainApp({
 }) {
   const [tab, setTab] = useState('home');
   const [subScreen, setSubScreen] = useState(null);
+  const [selectedStaff, setSelectedStaff] = useState(null);
   const [subParams, setSubParams] = useState({});
   const [user, setUser] = useState(initialUser);
+  const [activeCall, setActiveCall] = useState(null);
+
+  useEffect(() => {
+    if (initialUser) {
+      setUser(initialUser);
+    }
+  }, [initialUser]);
   const tokensRef = useRef(tokens);
+  const callWsRef = useRef(null);
   
   useEffect(() => { tokensRef.current = tokens; }, [tokens]);
   
@@ -253,18 +251,86 @@ export default function MainApp({
   const [pendingRequests, setPendingRequests] = useState(0);
   const [chatUnread, setChatUnread] = useState(0);
   const [keyboardVisible, setKeyboardVisible] = useState(false);
+  const [ackLoading, setAckLoading] = useState(false);
 
+  const isOrganizer = ['super_admin', 'mgmt_admin', 'team_head', 'staff'].includes(user?.role);
   const tabs = getTabs(user.role);
 
   useEffect(() => { if (tokens) setApiTokens(tokens); }, [tokens]);
   useEffect(() => { if (refreshUser) refreshUser(tokens); }, []);
 
   useEffect(() => {
-    if (user.warning_note) {
+    if (user?.warning_note && !user?.warning_acknowledged) {
       setWarningText(user.warning_note);
       setWarningVisible(true);
+    } else {
+      setWarningVisible(false);
     }
-  }, [user.warning_note]);
+  }, [user?.warning_note, user?.warning_acknowledged]);
+
+  const handleAcknowledgeWarning = async () => {
+    try {
+      setAckLoading(true);
+      const res = await apiFetch('/auth/warning/acknowledge/', {
+        method: 'POST',
+        body: JSON.stringify({ response: 'I Understand' }),
+      });
+      const data = await res.json();
+      if (data.success && data.user) {
+        setUser(data.user);
+        if (setUserProp) setUserProp(data.user);
+      }
+      setWarningVisible(false);
+    } catch (err) {
+      console.warn('[Warning Ack Error]', err);
+      setWarningVisible(false);
+    } finally {
+      setAckLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!tokens?.access || !isOrganizer) return;
+
+    let ws = null;
+    let reconnectTimeout = null;
+
+    function connectCallSocket() {
+      try {
+        ws = new WebSocket(`ws://10.17.9.48:8000/ws/call/?token=${tokens.access}`);
+        callWsRef.current = ws;
+
+        ws.onmessage = (e) => {
+          try {
+            const data = JSON.parse(e.data);
+            if (data.type === 'incoming_call') {
+              try { Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning); } catch (_) {}
+              setActiveCall({
+                mode: 'incoming',
+                targetUser: data.caller,
+                incomingSessionId: data.session_id,
+              });
+            }
+          } catch (err) {
+            console.warn('[Call Listen Error]', err);
+          }
+        };
+
+        ws.onclose = () => {
+          reconnectTimeout = setTimeout(connectCallSocket, 5000);
+        };
+      } catch (err) {
+        console.warn('[Call WS Conn Error]', err);
+      }
+    }
+
+    connectCallSocket();
+
+    return () => {
+      if (reconnectTimeout) clearTimeout(reconnectTimeout);
+      if (ws) ws.close();
+    };
+  }, [tokens?.access, isOrganizer]);
 
   const fetchBadges = useCallback(async () => {
     const t = tokensRef.current;
@@ -298,12 +364,16 @@ export default function MainApp({
     return () => { s.remove(); h.remove(); };
   }, []);
 
-  // Android hardware back button
   useEffect(() => {
     if (Platform.OS !== 'android') return;
     const handler = BackHandler.addEventListener('hardwareBackPress', () => {
+      if (activeCall) return true;
       if (keyboardVisible) {
         Keyboard.dismiss();
+        return true;
+      }
+      if (subScreen === 'staff_detail' || subScreen === 'staff_group_chat') {
+        setSubScreen('staff_team');
         return true;
       }
       if (subScreen) {
@@ -317,51 +387,109 @@ export default function MainApp({
       return false;
     });
     return () => handler.remove();
-  }, [keyboardVisible, subScreen, tab]);
+  }, [keyboardVisible, subScreen, tab, activeCall]);
+
+  const openSubScreen = (name, params = {}) => {
+    setSubParams(params);
+    setSubScreen(name);
+  };
+
+  const closeSubScreen = () => {
+    setSubScreen(null);
+    setSubParams({});
+  };
+
+  const openChat = (convId) => {
+    openSubScreen('chat_room', { conversationId: convId });
+  };
 
   const handleProfileUpdated = (updatedUser) => {
     setUser(updatedUser);
     if (setUserProp) setUserProp(updatedUser);
   };
 
-  const openSubScreen = (name, params = {}) => { setSubParams(params); setSubScreen(name); };
-  const closeSubScreen = () => { setSubScreen(null); setSubParams({}); fetchBadges(); };
-  const openChat = (conversationId) => openSubScreen('chat_room', { conversationId });
-
-  // Route Handling
   useEffect(() => {
     if (!notificationRoute) return;
-    const { type, conversationId } = notificationRoute;
+    const { type, screen, subscreen, conversationId } = notificationRoute;
 
-    if (type === 'chat_room' && conversationId) openSubScreen('chat_room', { conversationId });
-    else if (type === 'connection_requests') openSubScreen('connection_requests');
-    else if (type === 'notifications') openSubScreen('notifications');
-    else if (type === 'poll') openSubScreen('polls');
-    else if (type === 'ideathon') openSubScreen('ideathon');
-    else if (type === 'selfie_spots') openSubScreen('selfie_spots');
-    else if (type === 'schedule') { setTab('schedule'); setSubScreen(null); }
+    if (type === 'chat' && conversationId) {
+      openChat(conversationId);
+    } else if (type === 'chat_request') {
+      openSubScreen('connection_requests');
+    } else if (type === 'announcement' || type === 'notification') {
+      openSubScreen('notifications');
+    } else if (type === 'schedule') { setTab('schedule'); setSubScreen(null); }
     else if (type === 'qr') { setTab('qr'); setSubScreen(null); }
     else if (type === 'feed') { setTab('feed'); setSubScreen(null); }
 
     if (clearNotificationRoute) clearNotificationRoute();
   }, [notificationRoute]);
 
-  // Sub-screens Routing
-  if (subScreen === 'notifications') return <NotificationsScreen tokens={tokens} onBack={closeSubScreen} />;
-  if (subScreen === 'edit_profile') return <EditProfileScreen user={user} tokens={tokens} onBack={closeSubScreen} onProfileUpdated={handleProfileUpdated} />;
-  if (subScreen === 'change_password') return <ChangePasswordScreen user={user} tokens={tokens} onDone={closeSubScreen} onLogout={onLogout} />;
-  if (subScreen === 'sponsors') return <SponsorsScreen tokens={tokens} onBack={closeSubScreen} />;
-  if (subScreen === 'speakers') return <SpokersScreen tokens={tokens} onBack={closeSubScreen} />;
-  if (subScreen === 'chat_list') return <ChatListScreen tokens={tokens} onBack={closeSubScreen} onOpenChat={(convId) => openSubScreen('chat_room', { conversationId: convId })} onOpenRequests={() => openSubScreen('connection_requests')} pendingCount={pendingRequests} />;
-  if (subScreen === 'chat_room') return <ChatRoomScreen tokens={tokens} user={user} conversationId={subParams.conversationId} onBack={() => setSubScreen('chat_list')} onDisconnected={() => setSubScreen('chat_list')} />;
-  if (subScreen === 'connection_requests') return <ConnectionRequestsScreen tokens={tokens} onBack={closeSubScreen} onOpenChat={(convId) => openSubScreen('chat_room', { conversationId: convId })} />;
-  if (subScreen === 'leaderboard') return <LeaderboardScreen onBack={() => setSubScreen(null)} />;
-  if (subScreen === 'photos') return <PhotosScreen onBack={() => setSubScreen(null)} onOpenSelfieSpots={() => openSubScreen('selfie_spots')} />;
-  if (subScreen === 'polls') return <PollsScreen onBack={() => setSubScreen(null)} />;
-  if (subScreen === 'shake_connect') return <ShakeConnectScreen tokens={tokens} user={user} onConnected={(convId) => { if (convId) openSubScreen('chat_room', { conversationId: convId }); else closeSubScreen(); }} onBack={() => setSubScreen(null)} />;
-  if (subScreen === 'ideathon') return <IdeathonScreen onBack={() => setSubScreen(null)} onOpenPolls={() => setSubScreen('polls')} />;
-  if (subScreen === 'recap') return <RecapScreen tokens={tokens} onBack={closeSubScreen} />;
-  if (subScreen === 'selfie_spots') return <SelfieSpotsScreen tokens={tokens} onBack={closeSubScreen} />;
+  const renderSubScreenContent = () => {
+    if (subScreen === 'notifications') return <NotificationsScreen tokens={tokens} onBack={closeSubScreen} />;
+    if (subScreen === 'edit_profile') return <EditProfileScreen user={user} tokens={tokens} onBack={closeSubScreen} onProfileUpdated={handleProfileUpdated} />;
+    if (subScreen === 'change_password') return <ChangePasswordScreen user={user} tokens={tokens} onDone={closeSubScreen} onLogout={onLogout} />;
+    if (subScreen === 'sponsors') return <SponsorsScreen tokens={tokens} onBack={closeSubScreen} />;
+    if (subScreen === 'speakers') return <SpokersScreen tokens={tokens} onBack={closeSubScreen} />;
+    if (subScreen === 'chat_list') return <ChatListScreen tokens={tokens} onBack={closeSubScreen} onOpenChat={(convId) => openSubScreen('chat_room', { conversationId: convId })} onOpenRequests={() => openSubScreen('connection_requests')} pendingCount={pendingRequests} />;
+    if (subScreen === 'chat_room') return <ChatRoomScreen tokens={tokens} user={user} conversationId={subParams.conversationId} onBack={() => setSubScreen('chat_list')} onDisconnected={() => setSubScreen('chat_list')} />;
+    if (subScreen === 'connection_requests') return <ConnectionRequestsScreen tokens={tokens} onBack={closeSubScreen} onOpenChat={(convId) => openSubScreen('chat_room', { conversationId: convId })} />;
+    
+    if (subScreen === 'staff_team') {
+      return (
+        <StaffScreen
+          onBack={closeSubScreen}
+          user={user}
+          onOpenStaffDetail={(staff) => {
+            setSelectedStaff(staff);
+            setSubScreen('staff_detail');
+          }}
+          onOpenGroupChat={() => {
+            setSubScreen('staff_group_chat');
+          }}
+        />
+      );
+    }
+
+    if (subScreen === 'staff_group_chat') {
+      return (
+        <StaffGroupChatScreen
+          user={user}
+          onBack={() => setSubScreen('staff_team')}
+        />
+      );
+    }
+
+    if (subScreen === 'staff_detail') {
+      return (
+        <StaffDetailScreen
+          staff={selectedStaff}
+          currentUser={user}
+          onBack={() => setSubScreen('staff_team')}
+          onOpenChat={(staffMember) => {
+            openSubScreen('chat_list');
+          }}
+          onInitiateVoiceCall={(target) => {
+            setActiveCall({
+              mode: 'outgoing',
+              targetUser: target,
+            });
+          }}
+        />
+      );
+    }
+
+    if (subScreen === 'leaderboard') return <LeaderboardScreen onBack={() => setSubScreen(null)} />;
+    if (subScreen === 'papers') return <AcceptedPapersScreen onBack={() => setSubScreen(null)} onOpenSchedule={() => { setSubScreen(null); setTab('schedule'); }} initialSearch={subParams.search} />;
+    if (subScreen === 'photos') return <PhotosScreen onBack={() => setSubScreen(null)} onOpenCheckpoint={() => openSubScreen('checkpoint')} onOpenStaffTeam={() => openSubScreen('staff_team')} />;
+    if (subScreen === 'polls') return <PollsScreen onBack={() => setSubScreen(null)} />;
+    if (subScreen === 'shake_connect') return <ShakeConnectScreen tokens={tokens} user={user} onConnected={(convId) => { if (convId) openSubScreen('chat_room', { conversationId: convId }); else closeSubScreen(); }} onBack={() => setSubScreen(null)} />;
+    if (subScreen === 'ideathon') return <IdeathonScreen onBack={() => setSubScreen(null)} onOpenPolls={() => setSubScreen('polls')} />;
+    if (subScreen === 'recap') return <RecapScreen tokens={tokens} onBack={closeSubScreen} />;
+    if (subScreen === 'checkpoint' || subScreen === 'selfie_spots') return <CheckpointScreen tokens={tokens} onBack={closeSubScreen} />;
+
+    return null;
+  };
 
   const SCREENS = {
     home: (
@@ -375,16 +503,18 @@ export default function MainApp({
         onOpenQR={() => setTab('qr')}
         onOpenSchedule={() => setTab('schedule')}
         onOpenLeaderboard={() => openSubScreen('leaderboard')}
+        onOpenPapers={() => openSubScreen('papers')}
         onOpenPhotos={() => openSubScreen('photos')}
         onOpenPolls={() => openSubScreen('polls')}
         onOpenIdeathon={() => openSubScreen('ideathon')}
-        onOpenSelfieSpots={() => openSubScreen('selfie_spots')}
+        onOpenCheckpoint={() => openSubScreen('checkpoint')}
+        onOpenStaffTeam={() => openSubScreen('staff_team')}
         onOpenFeed={() => setTab('feed')}
         onOpenProfile={() => setTab('profile')}
         chatBadge={pendingRequests + chatUnread}
       />
     ),
-    schedule: <ScheduleTab tokens={tokens} />,
+    schedule: <ScheduleTab tokens={tokens} onOpenPaper={(paperId) => openSubScreen('papers', { search: paperId })} />,
     qr: <QRScreen user={user} tokens={tokens} />,
     network: (
       <NetworkScreen
@@ -393,6 +523,7 @@ export default function MainApp({
         onOpenChat={openChat}
         onEditProfile={() => setSubScreen('edit_profile')}
         onShake={() => openSubScreen('shake_connect')}
+        onOpenQR={() => setTab('qr')}
       />
     ),
     profile: (
@@ -403,6 +534,10 @@ export default function MainApp({
         onOpenNotifications={() => openSubScreen('notifications')}
         onOpenChats={() => openSubScreen('chat_list')}
         onOpenRecap={() => openSubScreen('recap')}
+        onOpenLeaderboard={() => openSubScreen('leaderboard')}
+        onOpenSchedule={() => setTab('schedule')}
+        onOpenStaffTeam={() => openSubScreen('staff_team')}
+        onOpenChatRoom={(convId) => openSubScreen('chat_room', { conversationId: convId })}
       />
     ),
     admin: <AdminTab user={user} tokens={tokens} onLogout={onLogout} />,
@@ -411,16 +546,34 @@ export default function MainApp({
 
   return (
     <View style={{ flex: 1, backgroundColor: COLORS.bg }}>
-      {SCREENS[tab] || SCREENS.home}
+      {subScreen ? renderSubScreenContent() : (SCREENS[tab] || SCREENS.home)}
 
-      <WarningModal visible={warningVisible} text={warningText} onClose={() => setWarningVisible(false)} />
+      {activeCall && (
+        <Modal visible={true} animationType="slide" hardwareAccelerated>
+          <VoiceCallScreen
+            callMode={activeCall.mode}
+            targetUser={activeCall.targetUser}
+            incomingSessionId={activeCall.incomingSessionId}
+            tokens={tokens}
+            currentUser={user}
+            onEndCall={() => setActiveCall(null)}
+          />
+        </Modal>
+      )}
 
-      <BottomTabBar active={tab} onTab={setTab} tabs={tabs} networkBadge={pendingRequests} />
+      <WarningModal
+        visible={warningVisible}
+        text={warningText}
+        onAcknowledge={handleAcknowledgeWarning}
+        loading={ackLoading}
+      />
+
+      {!subScreen && (
+        <BottomTabBar active={tab} onTab={setTab} tabs={tabs} networkBadge={pendingRequests} />
+      )}
     </View>
   );
 }
-
-// --- STYLES ---
 
 const st = StyleSheet.create({
   barWrapper: {
@@ -447,93 +600,90 @@ const st = StyleSheet.create({
   },
   tabItem: {
     flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
     height: '100%',
-    alignItems: 'center',
-    justifyContent: 'center',
+    zIndex: 2,
   },
-  iconWrap: {
-    position: 'absolute',
+  tabInner: {
     alignItems: 'center',
     justifyContent: 'center',
+    gap: 3,
   },
-  textWrap: {
-    position: 'absolute',
-    bottom: 12,
+  iconBox: {
+    width: 38,
+    height: 38,
+    borderRadius: RADIUS.full,
     alignItems: 'center',
     justifyContent: 'center',
+    position: 'relative',
+  },
+  iconBoxActive: {
+    backgroundColor: COLORS.primaryLight,
+  },
+  tabLabel: {
+    fontSize: 10,
+    fontWeight: FONT.w6,
+    color: COLORS.textSec,
   },
   tabLabelActive: {
-    fontSize: FONT.xs,
+    color: COLORS.primary,
     fontWeight: FONT.w8,
-    color: COLORS.brand,
-    letterSpacing: 0.2,
   },
-  activeDot: {
+  badgeDot: {
     position: 'absolute',
-    bottom: 6,
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: COLORS.brand,
-    ...SHADOW.brand, 
-  },
-  tabBadge: {
-    position: 'absolute', 
-    top: -8, 
-    right: -12,
-    minWidth: 20, 
-    height: 20, 
-    borderRadius: 10,
-    backgroundColor: COLORS.rose,
-    alignItems: 'center', 
+    top: 2,
+    right: 2,
+    backgroundColor: COLORS.danger,
+    borderRadius: RADIUS.full,
+    minWidth: 16,
+    height: 16,
+    paddingHorizontal: 4,
+    alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 4, 
-    borderWidth: 2, 
+    borderWidth: 1.5,
     borderColor: COLORS.surface,
-    ...SHADOW.sm,
   },
-  tabBadgeText: { 
-    fontSize: 9, 
-    fontWeight: FONT.w9, 
-    color: COLORS.textInverse 
+  badgeText: {
+    color: COLORS.surface,
+    fontSize: 8,
+    fontWeight: FONT.w8,
   },
   fabWrapper: {
-    flex: 1,
+    width: 68,
+    height: 68,
+    top: -24, 
     alignItems: 'center',
     justifyContent: 'center',
-    height: '100%',
+    zIndex: 10,
   },
   fabShadowLayer: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    backgroundColor: 'transparent',
-    marginTop: -40, 
-    ...SHADOW.brand, 
+    width: 62,
+    height: 62,
+    borderRadius: 31,
+    backgroundColor: COLORS.primary,
+    ...SHADOW.accent,
   },
   fabButton: {
-    width: 58,
-    height: 58,
-    borderRadius: 29,
-    backgroundColor: COLORS.brand,
+    width: 62,
+    height: 62,
+    borderRadius: 31,
+    backgroundColor: COLORS.primary,
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 3,
+    borderWidth: 4,
     borderColor: COLORS.surface,
-    borderBottomWidth: 5, 
-    borderBottomColor: COLORS.brandDark,
-  }
+    ...SHADOW.accent,
+  },
 });
 
 const wm = StyleSheet.create({
   overlay: { 
     flex: 1, 
-    backgroundColor: 'rgba(15, 23, 42, 0.75)',
+    backgroundColor: 'rgba(15, 23, 42, 0.75)', 
     justifyContent: 'center', 
     alignItems: 'center', 
-    padding: SPACE.xxl 
+    padding: SPACE.xl 
   },
   card: { 
     backgroundColor: COLORS.surface, 
@@ -567,14 +717,14 @@ const wm = StyleSheet.create({
   },
   body: { 
     fontSize: FONT.md, 
-    color: COLORS.textSec, 
+    color: COLORS.brandDeeper, 
     lineHeight: 24, 
     textAlign: 'center', 
     marginBottom: SPACE.lg 
   },
   hint: { 
     fontSize: FONT.sm, 
-    color: COLORS.textTer, 
+    color: COLORS.brandDeeper, 
     textAlign: 'center', 
     marginBottom: SPACE.xxl 
   },

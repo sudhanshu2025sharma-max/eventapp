@@ -50,8 +50,7 @@ def _send_push(to_user, title, body, data=None):
             return
 
         push_data = data or {}
-        push_data['silent_push'] = 'true'  # marker so app knows not to store
-
+        push_data['type'] = push_data.get('type', 'chat')
         success, failed, bad = _send_hybrid(tokens, title, body, push_data)
         if bad:
             DeviceToken.objects.filter(token__in=bad).update(is_active=False)
@@ -161,7 +160,7 @@ def _conversation_data(conv, user, request):
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def send_request(request):
-    receiver_id  = request.data.get('receiver_id', '').strip()
+    receiver_id  = str(request.data.get('receiver_id') or '').strip()
     request_type = request.data.get('request_type', 'contact')
     topic        = request.data.get('topic', 'networking')
     custom_topic = request.data.get('custom_topic', '').strip()
@@ -239,6 +238,20 @@ def send_request(request):
     else:
         push_title = f'{sender_name} sent you a Contact Card'
         push_body  = f'Topic: {req.topic_display}. Accept to start chatting.'
+    try:
+        from apps.notifications.models import Notification as Notif, UserNotification
+        notif_record = Notif.objects.create(
+            title=push_title,
+            body=push_body,
+            target_type='user',
+            target_user=receiver,
+            sent_by=request.user,
+            status='sent',
+            data={'type': 'connection_request', 'request_id': str(req.id)},
+        )
+        UserNotification.objects.create(user=receiver, notification=notif_record)
+    except Exception as ex:
+        print('Notification create error:', ex)
     _send_push(receiver, push_title, push_body, {'type': 'connection_request', 'request_id': str(req.id)})
 
     return Response({'success': True, 'request_id': str(req.id), 'message': 'Request sent.'})
@@ -684,25 +697,19 @@ def bulk_connection_check(request):
 def shake_connect(request):
     """
     POST /api/v1/chat/shake/
-    Body:
-      { action: 'shake' }
-      { action: 'status' }
-      { action: 'pick', pick_user_id: '<uuid>' }
-
-    shake:
-      - stores a short-lived shake event for current user
-      - logs one real shake timestamp
-
-    status:
-      - checks who else shook near the user's last shake timestamp
-      - does NOT refresh shake time and does NOT create logs
-
-    pick:
-      - instantly creates a mutual accepted connection with the chosen shaker
+    Supports 1-on-1 and Multi-User (3+ people) group shaking.
+    Actions:
+      - 'shake': Registers user shake timestamp, searches for active shakers
+      - 'status': Polls for shakers and collects incoming matches initiated by others
+      - 'pick': Connects with a specific user or list of users ('pick_user_ids')
     """
     import time
     from django.core.cache import cache
     from django.db.models import Q
+    from django.utils import timezone
+    from apps.accounts.models import User
+    from apps.chat.models import ConnectionRequest, Conversation, BlockedUser, ShakeLog
+    from apps.notifications.fcm import send_to_user
 
     me = request.user
     action = (request.data.get('action') or 'shake').strip()
@@ -727,9 +734,11 @@ def shake_connect(request):
             if str(b) != str(me.id):
                 blocked_ids.add(str(b))
 
+        historical_cutoff = timezone.now() - timezone.timedelta(seconds=15)
         accepted = ConnectionRequest.objects.filter(
             Q(sender=me) | Q(receiver=me),
             status='accepted',
+            created_at__lt=historical_cutoff,
         )
         connected_ids = set()
         for r in accepted:
@@ -740,11 +749,9 @@ def shake_connect(request):
         shakers = []
         for uid, ts in (active_dict or {}).items():
             uid = str(uid)
-            if uid == str(me.id):
+            if uid == str(me.id) or uid in blocked_ids:
                 continue
-            if uid in blocked_ids:
-                continue
-            if abs(float(ts) - float(my_ts)) > 4:
+            if abs(float(ts) - float(my_ts)) > 3.0:
                 continue
 
             u = User.objects.filter(id=uid, is_active=True).first()
@@ -760,85 +767,57 @@ def shake_connect(request):
                 'already_connected': uid in connected_ids,
             })
 
-        print(f'[SHAKE DEBUG] Matched {len(shakers)} shakers for user {me.email}')
         return shakers
 
-    if action == 'shake':
-        now = time.time()
-        # Store in shared dict — no Redis scan needed
-        active = cache.get('shake:active', {}) or {}
-        # Prune expired entries (>6s old)
-        active = {uid: ts for uid, ts in active.items() if now - float(ts) < 6}
-        active[str(me.id)] = now
-        cache.set('shake:active', active, timeout=30)
-        cache.set(f'shake:{me.id}', now, timeout=6)
-        print(f'[SHAKE DEBUG] User {me.email} shook at {now}. Active: {list(active.keys())}')
-        ShakeLog.objects.create(user=me, event_type='shake')
-        shakers = _find_shakers(now, active)
-        return Response({
-            'shakers': shakers,
-            'count': len(shakers),
-            'your_shake_at': now,
-        })
-
-    if action == 'status':
-        my_ts = cache.get(f'shake:{me.id}')
-        active = cache.get('shake:active', {}) or {}
-        print(f'[SHAKE DEBUG] User {me.email} status check, my_ts={my_ts}, active={list(active.keys())}')
-        if not my_ts:
-            return Response({
-                'shakers': [],
-                'count': 0,
-                'your_shake_at': None,
-            })
-        shakers = _find_shakers(my_ts, active)
-        return Response({
-            'shakers': shakers,
-            'count': len(shakers),
-            'your_shake_at': my_ts,
-        })
-
-    if action == 'pick':
-        pick_id = (request.data.get('pick_user_id') or '').strip()
-        if not pick_id:
-            return Response({'error': 'pick_user_id required'}, status=400)
-
-        try:
-            other = User.objects.get(id=pick_id, is_active=True)
-        except User.DoesNotExist:
-            return Response({'error': 'User not found'}, status=404)
-
-        if other.id == me.id:
-            return Response({'error': 'Cannot connect with yourself'}, status=400)
-
-        already = ConnectionRequest.objects.filter(
-            Q(sender=me, receiver=other) | Q(sender=other, receiver=me),
+    def _pair_with(other_user):
+        """Helper to create connection between me and other_user safely."""
+        historical_cutoff = timezone.now() - timezone.timedelta(seconds=15)
+        
+        # 1. Existing historical connection
+        hist = ConnectionRequest.objects.filter(
+            Q(sender=me, receiver=other_user) | Q(sender=other_user, receiver=me),
             status='accepted',
-        ).exists()
+            created_at__lt=historical_cutoff,
+        ).first()
 
-        if already:
+        if hist:
             conv = Conversation.objects.filter(
-                Q(participant_a=me, participant_b=other) |
-                Q(participant_a=other, participant_b=me)
+                Q(participant_a=me, participant_b=other_user) |
+                Q(participant_a=other_user, participant_b=me)
             ).first()
-            return Response({
-                'success': True,
+            return {
                 'already_connected': True,
                 'conversation_id': str(conv.id) if conv else None,
-                'connected_with': {
-                    'id': str(other.id),
-                    'name': other.get_full_name(),
-                },
-            })
+                'connected_with': {'id': str(other_user.id), 'name': other_user.get_full_name()},
+            }
 
+        # 2. Connection just created by partner (<15s)
+        recent = ConnectionRequest.objects.filter(
+            Q(sender=me, receiver=other_user) | Q(sender=other_user, receiver=me),
+            status='accepted',
+            created_at__gte=historical_cutoff,
+        ).first()
+
+        if recent:
+            conv = Conversation.objects.filter(
+                Q(participant_a=me, participant_b=other_user) |
+                Q(participant_a=other_user, participant_b=me)
+            ).first()
+            return {
+                'already_connected': False,
+                'conversation_id': str(conv.id) if conv else None,
+                'connected_with': {'id': str(other_user.id), 'name': other_user.get_full_name()},
+            }
+
+        # 3. Create fresh connection
         ConnectionRequest.objects.filter(
-            Q(sender=me, receiver=other) | Q(sender=other, receiver=me),
+            Q(sender=me, receiver=other_user) | Q(sender=other_user, receiver=me),
             status__in=['pending', 'later'],
         ).delete()
 
         req = ConnectionRequest.objects.create(
             sender=me,
-            receiver=other,
+            receiver=other_user,
             status='accepted',
             topic='other',
             custom_topic='Shake Connect — met at ETD 2026',
@@ -848,48 +827,140 @@ def shake_connect(request):
         conv = Conversation.objects.create(
             request=req,
             participant_a=me,
-            participant_b=other,
+            participant_b=other_user,
             topic='other',
             custom_topic='Shake Connect',
         )
 
-        ShakeLog.objects.create(user=me, event_type='connect', partner=other)
-        ShakeLog.objects.create(user=other, event_type='connect', partner=me)
+        ShakeLog.objects.create(user=me, event_type='connect', partner=other_user)
+        ShakeLog.objects.create(user=other_user, event_type='connect', partner=me)
 
+        # Notify partner in cache for status polling
+        incoming = cache.get(f'shake:matches:{other_user.id}', []) or []
+        incoming.append({
+            'conversation_id': str(conv.id),
+            'connected_with': {'id': str(me.id), 'name': me.get_full_name()},
+        })
+        cache.set(f'shake:matches:{other_user.id}', incoming, timeout=12)
+
+        # Push Notification
         try:
             _send_push(
-                other,
+                other_user,
                 title=f'🤝 {me.get_full_name()} connected with you!',
-                body='You shook phones at ETD 2026. Say hi!',
-                data={'type': 'new_message', 'conversation_id': str(conv.id)},
+                body='You shook phones at ETD 2026! Tap to say hello.',
+                data={
+                    'type': 'chat',
+                    'screen': 'chat_room',
+                    'conversation_id': str(conv.id),
+                    'other_user_id': str(me.id),
+                },
             )
         except Exception:
             pass
 
+        # Leaderboard Points
         try:
             from apps.leaderboard.utils import award_points
             from apps.leaderboard.models import PointAction
-            award_points(me, PointAction.NETWORKING, f'Shake connect: {other.get_full_name()}')
-            award_points(other, PointAction.NETWORKING, f'Shake connect: {me.get_full_name()}')
+            award_points(me, PointAction.NETWORKING, f'Shake connect: {other_user.get_full_name()}')
+            award_points(other_user, PointAction.NETWORKING, f'Shake connect: {me.get_full_name()}')
         except Exception:
             pass
 
-        return Response({
-            'success': True,
+        return {
             'already_connected': False,
             'conversation_id': str(conv.id),
-            'connected_with': {
-                'id': str(other.id),
-                'name': other.get_full_name(),
-            },
+            'connected_with': {'id': str(other_user.id), 'name': other_user.get_full_name()},
+        }
+
+    # ── Action Handlers ──
+
+    if action == 'shake':
+        now = time.time()
+        active = cache.get('shake:active', {}) or {}
+        active = {uid: ts for uid, ts in active.items() if now - float(ts) < 4}
+        active[str(me.id)] = now
+        cache.set('shake:active', active, timeout=15)
+        cache.set(f'shake:{me.id}', now, timeout=4)
+        
+        ShakeLog.objects.create(user=me, event_type='shake')
+        shakers = _find_shakers(now, active)
+        return Response({
+            'shakers': shakers,
+            'count': len(shakers),
+            'your_shake_at': now,
+        })
+
+    if action == 'status':
+        # Check if anyone paired with me
+        incoming_matches = cache.get(f'shake:matches:{me.id}', [])
+        if incoming_matches:
+            cache.delete(f'shake:matches:{me.id}')
+            return Response({
+                'success': True,
+                'matched': True,
+                'matches': incoming_matches,
+                'conversation_id': incoming_matches[0].get('conversation_id'),
+                'connected_with': incoming_matches[0].get('connected_with'),
+            })
+
+        my_ts = cache.get(f'shake:{me.id}')
+        active = cache.get('shake:active', {}) or {}
+        if not my_ts:
+            return Response({'shakers': [], 'count': 0, 'your_shake_at': None})
+
+        shakers = _find_shakers(my_ts, active)
+        return Response({
+            'shakers': shakers,
+            'count': len(shakers),
+            'your_shake_at': my_ts,
+        })
+
+    if action == 'pick':
+        pick_ids = request.data.get('pick_user_ids') or []
+        single_id = request.data.get('pick_user_id')
+        if single_id:
+            pick_ids.append(single_id)
+
+        if not pick_ids:
+            return Response({'error': 'pick_user_id or pick_user_ids required'}, status=400)
+
+        results = []
+        for uid in pick_ids:
+            try:
+                target = User.objects.get(id=str(uid).strip(), is_active=True)
+                if target.id != me.id:
+                    results.append(_pair_with(target))
+            except Exception:
+                continue
+
+        if not results:
+            return Response({'error': 'No valid users to connect with'}, status=400)
+
+        # If single pick
+        if len(results) == 1:
+            res = results[0]
+            return Response({
+                'success': True,
+                'already_connected': res.get('already_connected', False),
+                'conversation_id': res.get('conversation_id'),
+                'connected_with': res.get('connected_with'),
+            })
+
+        # If multi-user pick (Connect All)
+        return Response({
+            'success': True,
+            'multi': True,
+            'connections_count': len(results),
+            'matches': results,
+            'conversation_id': results[0].get('conversation_id'),
+            'connected_with': results[0].get('connected_with'),
         })
 
     return Response({'error': 'action must be shake, status or pick'}, status=400)
 
 
-
-@api_view(['POST'])
-@permission_classes([IsAuthenticated])
 def disconnect_user(request):
     """
     POST /api/v1/chat/disconnect/
@@ -923,3 +994,151 @@ def disconnect_user(request):
     ).delete()
 
     return Response({'success': True, 'disconnected': True})
+
+
+# ─── Staff Coordination Group Chat Endpoints ─────────────────────────
+
+from rest_framework.decorators import api_view, permission_classes
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.response import Response
+from .models import StaffGroupMessage
+
+@api_view(['GET', 'POST'])
+@permission_classes([IsAuthenticated])
+def staff_group_chat_view(request):
+    """
+    Staff-only Coordination Group Chat.
+    Only accessible by super_admin, mgmt_admin, team_head, and staff.
+    """
+    if request.user.role not in ['super_admin', 'mgmt_admin', 'team_head', 'staff']:
+        return Response({'success': False, 'message': 'Access restricted to organizers.'}, status=403)
+
+    if request.method == 'GET':
+        msgs = StaffGroupMessage.objects.select_related('sender', 'sender__staff_profile').order_by('created_at')[:100]
+        result = []
+        for m in msgs:
+            sender_photo = None
+            if hasattr(m.sender, 'staff_profile') and m.sender.staff_profile and m.sender.staff_profile.photo:
+                sender_photo = request.build_absolute_uri(m.sender.staff_profile.photo.url)
+            elif m.sender.profile_photo:
+                sender_photo = request.build_absolute_uri(m.sender.profile_photo.url)
+
+            result.append({
+                'id': str(m.id),
+                'content': m.content,
+                'created_at': m.created_at.strftime('%I:%M %p'),
+                'is_me': m.sender_id == request.user.id,
+                'sender': {
+                    'id': str(m.sender_id),
+                    'full_name': m.sender.get_full_name(),
+                    'role': m.sender.role,
+                    'designation': getattr(getattr(m.sender, 'staff_profile', None), 'designation', ''),
+                    'photo_url': sender_photo,
+                }
+            })
+        return Response({'success': True, 'messages': result})
+
+    elif request.method == 'POST':
+        content = request.data.get('content', '').strip()
+        if not content:
+            return Response({'success': False, 'message': 'Message cannot be empty.'}, status=400)
+
+        msg = StaffGroupMessage.objects.create(sender=request.user, content=content)
+        return Response({
+            'success': True,
+            'message': {
+                'id': str(msg.id),
+                'content': msg.content,
+                'created_at': msg.created_at.strftime('%I:%M %p'),
+                'is_me': True,
+                'sender': {
+                    'id': str(request.user.id),
+                    'full_name': request.user.get_full_name(),
+                    'role': request.user.role,
+                    'designation': getattr(getattr(request.user, 'staff_profile', None), 'designation', ''),
+                }
+            }
+        }, status=201)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def call_logs_api(request):
+    """Mobile API: Returns call logs for admin users."""
+    from apps.chat.models import CallSession
+    from apps.accounts.views import _is_admin
+
+    if not _is_admin(request.user):
+        return Response({'success': False, 'detail': 'Admin only'}, status=403)
+
+    status_filter = request.query_params.get('status', '')
+    page_num = int(request.query_params.get('page', 1))
+
+    qs = CallSession.objects.select_related('caller', 'callee').order_by('-created_at')
+
+    if status_filter in ('ringing', 'active', 'ended', 'missed'):
+        qs = qs.filter(status=status_filter)
+
+    # Simple pagination
+    per_page = 20
+    start = (page_num - 1) * per_page
+    end = start + per_page
+    logs = qs[start:end]
+
+    results = []
+    for log in logs:
+        duration_secs = None
+        if log.ended_at and log.created_at:
+            duration_secs = int((log.ended_at - log.created_at).total_seconds())
+
+        results.append({
+            'id': str(log.id),
+            'caller': {
+                'id': str(log.caller.id),
+                'name': log.caller.get_full_name() or log.caller.email,
+                'email': log.caller.email,
+                'role': log.caller.role,
+            },
+            'callee': {
+                'id': str(log.callee.id),
+                'name': log.callee.get_full_name() or log.callee.email,
+                'email': log.callee.email,
+                'role': log.callee.role,
+            },
+            'status': log.status,
+            'duration_secs': duration_secs,
+            'created_at': log.created_at.strftime('%Y-%m-%d %H:%M:%S'),
+            'ended_at': log.ended_at.strftime('%Y-%m-%d %H:%M:%S') if log.ended_at else None,
+        })
+
+    return Response({
+        'success': True,
+        'total': qs.count(),
+        'page': page_num,
+        'logs': results,
+    })
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def mark_messages_read(request, conversation_id):
+    """Mark all unread messages in a conversation as read for the current user."""
+    try:
+        conv = Conversation.objects.get(id=conversation_id)
+    except Conversation.DoesNotExist:
+        return Response({'success': False, 'message': 'Conversation not found.'}, status=404)
+
+    # Verify user is a participant
+    if request.user not in [conv.participant_a, conv.participant_b]:
+        return Response({'success': False, 'message': 'Not a participant.'}, status=403)
+
+    from django.utils import timezone
+    now = timezone.now()
+    updated = Message.objects.filter(
+        conversation=conv,
+        read=False
+    ).exclude(
+        sender=request.user
+    ).update(read=True, read_at=now)
+
+    return Response({'success': True, 'marked_read': updated})

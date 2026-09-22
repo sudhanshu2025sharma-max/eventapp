@@ -1,0 +1,7 @@
+# ETD 2026 Load Test Dependencies
+# Install: pip3 install -r requirements.txt --break-system-packages
+locust==2.29.1
+matplotlib==3.9.2
+reportlab==4.2.5
+websocket-client==1.8.0
+numpy==1.26.4

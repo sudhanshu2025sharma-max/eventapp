@@ -1,0 +1,282 @@
+{% extends "panel/base.html" %}
+
+{% block title %}Staff Management & Permissions — ETD 2026{% endblock %}
+
+{% block content %}
+<style>
+.staff-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 1rem; margin-top: 1.5rem; }
+.s-card { background: #fff; border-radius: 12px; border: 1px solid #e2e8f0; padding: 1.25rem; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
+.s-card-head { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
+.s-avatar { width: 48px; height: 48px; border-radius: 50%; object-fit: cover; border: 2px solid #4f46e5; }
+.s-avatar-ph { width: 48px; height: 48px; border-radius: 50%; background: #4f46e5; color: #fff; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 16px; }
+.s-name { font-weight: 700; font-size: 1rem; color: #1e293b; margin: 0; }
+.s-desig { font-size: 0.8rem; color: #4f46e5; font-weight: 600; }
+.s-email { font-size: 0.75rem; color: #64748b; }
+.s-actions { display: flex; gap: 8px; margin-top: 10px; padding-top: 10px; border-top: 1px solid #f1f5f9; }
+.s-btn { padding: 6px 12px; border-radius: 6px; font-size: 0.8rem; font-weight: 600; cursor: pointer; border: none; display: inline-flex; align-items: center; gap: 4px; }
+.s-btn-edit { background: #eef2ff; color: #4f46e5; }
+.s-btn-del { background: #fef2f2; color: #ef4444; }
+.s-btn-perm { background: #f0fdf4; color: #16a34a; }
+.s-btn-add { background: #4f46e5; color: #fff; padding: 10px 20px; font-size: 0.9rem; border-radius: 8px; }
+.tier-badge { font-size: 0.7rem; padding: 2px 8px; border-radius: 999px; font-weight: 600; }
+.tier-librarian { background: #e0e7ff; color: #4338ca; }
+.tier-deputy { background: #cffafe; color: #0891b2; }
+.tier-assistant { background: #d1fae5; color: #059669; }
+.tier-staff { background: #fef3c7; color: #d97706; }
+.perm-tags { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 8px; }
+.perm-tag { font-size: 0.65rem; padding: 2px 6px; border-radius: 4px; background: #f1f5f9; color: #475569; }
+.modal-overlay { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 1000; align-items: center; justify-content: center; }
+.modal-overlay.active { display: flex; }
+.modal-box { background: #fff; border-radius: 12px; padding: 2rem; max-width: 550px; width: 90%; max-height: 85vh; overflow-y: auto; }
+.modal-box h3 { margin: 0 0 1rem; }
+.form-group { margin-bottom: 12px; }
+.form-group label { display: block; font-size: 0.85rem; font-weight: 600; color: #475569; margin-bottom: 4px; }
+.form-group input, .form-group select { width: 100%; padding: 8px 12px; border: 1px solid #e2e8f0; border-radius: 6px; font-size: 0.9rem; box-sizing: border-box; }
+.form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+</style>
+
+<div style="display: flex; justify-content: space-between; align-items: center;">
+  <span style="color: #64748b; font-size: 0.9rem;">
+    <i class="fas fa-users"></i> {{ staff_users|length }} staff members
+  </span>
+  <button class="s-btn s-btn-add" onclick="openModal('add')">
+    <i class="fas fa-plus"></i> Add Staff Member
+  </button>
+</div>
+
+<div class="staff-grid">
+  {% for s in staff_users %}
+  <div class="s-card">
+    <div class="s-card-head">
+      {% if s.staff_profile.photo %}
+        <img src="{{ s.staff_profile.photo.url }}" class="s-avatar" alt="">
+      {% else %}
+        <div class="s-avatar-ph">{{ s.first_name|first }}{{ s.last_name|first }}</div>
+      {% endif %}
+      <div>
+        <div style="display: flex; align-items: center; gap: 6px;">
+          <h4 class="s-name">{{ s.get_full_name }}</h4>
+          <span class="tier-badge tier-{{ s.staff_profile.tier }}">{{ s.staff_profile.get_tier_display }}</span>
+        </div>
+        <div class="s-desig">{{ s.staff_profile.designation }}</div>
+        <div class="s-email">{{ s.email }} &bull; {{ s.staff_profile.phone }}</div>
+      </div>
+    </div>
+
+    {% with uid=s.id|stringformat:"s" %}
+    {% if uid in user_perms_map %}
+    <div class="perm-tags">
+      {% for p in user_perms_map|default_if_none:"" %}
+        {% if forloop.first %}
+          {% for pair in user_perms_map.items %}
+            {% if pair.0 == uid %}
+              {% for mod in pair.1 %}
+                <span class="perm-tag">{{ mod }}</span>
+              {% endfor %}
+            {% endif %}
+          {% endfor %}
+        {% endif %}
+      {% endfor %}
+    </div>
+    {% endif %}
+    {% endwith %}
+
+    <div class="s-actions">
+      <button class="s-btn s-btn-edit" onclick="openModal('edit', '{{ s.id }}', '{{ s.first_name }}', '{{ s.last_name }}', '{{ s.email }}', '{{ s.staff_profile.phone }}', '{{ s.staff_profile.designation }}', '{{ s.staff_profile.department }}', '{{ s.staff_profile.tier }}', '{{ s.role }}', '{{ s.staff_profile.linkedin_url }}', '{{ s.staff_profile.profile_url }}', '{{ s.staff_profile.scholar_url }}')">
+        <i class="fas fa-pen"></i> Edit
+      </button>
+      <button type="button" class="s-btn s-btn-perm" onclick="openPermsModal('{{ s.id }}', '{{ s.get_full_name }}')">
+        <i class="fas fa-shield-alt"></i> Permissions
+      </button>
+      <form method="POST" style="display: inline;" onsubmit="return confirm('Delete {{ s.get_full_name }}?');">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="delete">
+        <input type="hidden" name="user_id" value="{{ s.id }}">
+        <button type="submit" class="s-btn s-btn-del"><i class="fas fa-trash"></i> Delete</button>
+      </form>
+    </div>
+  </div>
+  {% empty %}
+  <div style="grid-column: 1/-1; text-align: center; padding: 3rem; color: #64748b;">
+    <i class="fas fa-users-slash" style="font-size: 2.5rem; color: #cbd5e1;"></i>
+    <p>No staff members. Click "Add Staff Member" to get started.</p>
+  </div>
+  {% endfor %}
+</div>
+
+<!-- Add/Edit Modal -->
+<div class="modal-overlay" id="staffModal">
+  <div class="modal-box">
+    <h3 id="modalTitle">Add Staff Member</h3>
+    <form method="POST" enctype="multipart/form-data">
+      {% csrf_token %}
+      <input type="hidden" name="action" id="formAction" value="create">
+      <input type="hidden" name="user_id" id="formUserId" value="">
+      <div class="form-row">
+        <div class="form-group">
+          <label>First Name *</label>
+          <input type="text" name="first_name" id="fFirstName" required>
+        </div>
+        <div class="form-group">
+          <label>Last Name</label>
+          <input type="text" name="last_name" id="fLastName">
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Email *</label>
+        <input type="email" name="email" id="fEmail" required>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Phone</label>
+          <input type="text" name="phone" id="fPhone">
+        </div>
+        <div class="form-group">
+          <label>Password (new only)</label>
+          <input type="text" name="password" id="fPassword" placeholder="Staff@123">
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Designation</label>
+        <input type="text" name="designation" id="fDesignation">
+      </div>
+      <div class="form-group">
+        <label>Department</label>
+        <input type="text" name="department" id="fDepartment">
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Tier</label>
+          <select name="tier" id="fTier">
+            <option value="librarian">Librarian & Head</option>
+            <option value="deputy">Deputy Librarian</option>
+            <option value="assistant">Assistant Librarian</option>
+            <option value="staff" selected>Staff</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Role</label>
+          <select name="role" id="fRole">
+            <option value="team_head">Team Head</option>
+            <option value="staff" selected>Staff</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-group">
+        <label>LinkedIn URL</label>
+        <input type="url" name="linkedin_url" id="fLinkedin" placeholder="https://linkedin.com/in/...">
+      </div>
+      <div class="form-group">
+        <label>Academic/Profile URL</label>
+        <input type="url" name="profile_url" id="fProfile" placeholder="https://web.iitd.ac.in/~...">
+      </div>
+      <div class="form-group">
+        <label>Google Scholar URL</label>
+        <input type="url" name="scholar_url" id="fScholar" placeholder="https://scholar.google.com/...">
+      </div>
+      <div class="form-group">
+        <label>Photo</label>
+        <input type="file" name="photo" accept="image/*">
+      </div>
+      <div style="display: flex; gap: 8px; margin-top: 16px;">
+        <button type="submit" class="s-btn s-btn-add" style="flex: 1;">Save</button>
+        <button type="button" class="s-btn s-btn-del" onclick="closeModal()">Cancel</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Permissions Modal -->
+<div class="modal-overlay" id="permsModal">
+  <div class="modal-box" style="max-width: 600px;">
+    <h3 id="permsModalTitle">Assign Permissions</h3>
+    <form method="POST">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="permissions">
+      <input type="hidden" name="user_id" id="permsUserId" value="">
+      <div id="permsCheckboxContainer" style="max-height: 400px; overflow-y: auto; padding: 12px; background: #f8fafc; border-radius: 8px; border: 1px solid #e2e8f0;"></div>
+      <div style="display: flex; gap: 8px; margin-top: 16px;">
+        <button type="submit" class="s-btn s-btn-add" style="flex: 1;">Save Permissions</button>
+        <button type="button" class="s-btn s-btn-del" onclick="closePermsModal()">Cancel</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+function openModal(mode, id, fn, ln, em, ph, desig, dept, tier, role, linkedin, profile, scholar) {
+  document.getElementById('modalTitle').textContent = mode === 'edit' ? 'Edit Staff' : 'Add Staff Member';
+  document.getElementById('formAction').value = mode === 'edit' ? 'edit' : 'create';
+  document.getElementById('formUserId').value = id || '';
+  document.getElementById('fFirstName').value = fn || '';
+  document.getElementById('fLastName').value = ln || '';
+  document.getElementById('fEmail').value = em || '';
+  document.getElementById('fPhone').value = ph || '';
+  document.getElementById('fDesignation').value = desig || '';
+  document.getElementById('fDepartment').value = dept || '';
+  document.getElementById('fTier').value = tier || 'staff';
+  document.getElementById('fRole').value = role || 'staff';
+  document.getElementById('fPassword').value = '';
+  document.getElementById('fLinkedin').value = linkedin || '';
+  document.getElementById('fProfile').value = profile || '';
+  document.getElementById('fScholar').value = scholar || '';
+  document.getElementById('staffModal').classList.add('active');
+}
+
+function closeModal() {
+  document.getElementById('staffModal').classList.remove('active');
+}
+
+// Permissions Modal logic
+const USER_PERMS = {
+  {% for uid, perms in user_perms_map.items %}
+    "{{ uid }}": [{% for p in perms %}"{{ p }}"{% if not forloop.last %},{% endif %}{% endfor %}]{% if not forloop.last %},{% endif %}
+  {% endfor %}
+};
+
+const MODULE_CATEGORIES = [
+  {% for cat in module_categories %}
+  {
+    name: "{{ cat.name }}",
+    items: [
+      {% for k, label in cat.items %}
+      { key: "{{ k }}", label: "{{ label }}" }{% if not forloop.last %},{% endif %}
+      {% endfor %}
+    ]
+  }{% if not forloop.last %},{% endif %}
+  {% endfor %}
+];
+
+function openPermsModal(userId, userName) {
+  document.getElementById('permsModalTitle').textContent = 'Permissions for ' + userName;
+  document.getElementById('permsUserId').value = userId;
+  const userPerms = USER_PERMS[userId] || [];
+  const container = document.getElementById('permsCheckboxContainer');
+  container.innerHTML = '';
+  MODULE_CATEGORIES.forEach(cat => {
+    const catDiv = document.createElement('div');
+    catDiv.style.marginBottom = '12px';
+    catDiv.innerHTML = '<div style="font-weight:700;color:#4f46e5;font-size:0.75rem;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:6px;">' + cat.name + '</div>';
+    cat.items.forEach(item => {
+      const checked = userPerms.includes(item.key) ? 'checked' : '';
+      catDiv.innerHTML += '<label style="display:flex;align-items:center;gap:6px;padding:4px 0;font-size:0.85rem;cursor:pointer;"><input type="checkbox" name="modules" value="' + item.key + '" ' + checked + ' style="accent-color:#4f46e5;"> ' + item.label + '</label>';
+    });
+    container.appendChild(catDiv);
+  });
+  document.getElementById('permsModal').classList.add('active');
+}
+
+function closePermsModal() {
+  document.getElementById('permsModal').classList.remove('active');
+}
+
+window.addEventListener('DOMContentLoaded', () => {
+  const urlParams = new URLSearchParams(window.location.search);
+  const editPermsUserId = urlParams.get('edit_perms');
+  if (editPermsUserId) {
+    const btn = document.querySelector(`button[onclick*="${editPermsUserId}"]`);
+    if (btn) btn.click();
+  }
+});
+</script>
+{% endblock %}

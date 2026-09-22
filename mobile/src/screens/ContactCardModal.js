@@ -368,11 +368,19 @@ export default function ContactCardModal({ visible, onClose, onSent, sender, rec
 
   /* ── CLOSE ANIMATION ────────────────────────────────────────────────── */
   const animateClose = () => {
+    let closed = false;
+    const finish = () => {
+      if (closed) return;
+      closed = true;
+      onClose?.();
+    };
     Animated.parallel([
-      Animated.timing(backdrop, { toValue: 0, duration: 300, useNativeDriver: true }),
-      Animated.timing(modalSlide, { toValue: H, duration: 400, easing: Easing.in(Easing.cubic), useNativeDriver: true }),
-      Animated.timing(modalScale, { toValue: 0.85, duration: 400, useNativeDriver: true }),
-    ]).start(() => onClose?.());
+      Animated.timing(backdrop, { toValue: 0, duration: 250, useNativeDriver: true }),
+      Animated.timing(modalSlide, { toValue: H, duration: 320, easing: Easing.in(Easing.cubic), useNativeDriver: true }),
+      Animated.timing(modalScale, { toValue: 0.85, duration: 320, useNativeDriver: true }),
+    ]).start(({ finished }) => finish());
+    // Failsafe: always unlock parent state so next open works
+    setTimeout(finish, 400);
   };
 
   /* ── SEND HANDLER ───────────────────────────────────────────────────── */
@@ -403,11 +411,12 @@ export default function ContactCardModal({ visible, onClose, onSent, sender, rec
 
   if (!sender || !receiver) return null;
 
-  const interests = (sender.research_interests || '').split(',').map(t => t.trim()).filter(Boolean);
-  const receiverName = receiver.name || `${receiver.first_name || ''} ${receiver.last_name || ''}`.trim();
-  const senderName = `${sender.first_name || ''} ${sender.last_name || ''}`.trim();
-  const senderPhoto = fixMediaUrl(sender.profile_photo_url);
-  const receiverPhoto = fixMediaUrl(receiver.profile_photo_url);
+  const interests = String(sender.research_interests || '').split(',').map(t => t.trim()).filter(Boolean);
+  const receiverName = receiver.name || `${receiver.first_name || ''} ${receiver.last_name || ''}`.trim() || 'Attendee';
+  const senderName = `${sender.first_name || ''} ${sender.last_name || ''}`.trim() || sender.name || 'You';
+  // Accept profile_photo_url | photo | absolute/relative — fixMediaUrl is idempotent on full URLs
+  const senderPhoto = fixMediaUrl(sender.profile_photo_url || sender.photo || null);
+  const receiverPhoto = fixMediaUrl(receiver.profile_photo_url || receiver.photo || null);
 
   const flyRotate = cardFlyRot.interpolate({ inputRange: [0, 2], outputRange: ['0deg', '25deg'] });
   const floatY = cardFloat.interpolate({ inputRange: [0, 1], outputRange: [0, -8] });

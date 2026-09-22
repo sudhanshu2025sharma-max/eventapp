@@ -8,10 +8,14 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = config('SECRET_KEY')
 DEBUG = config('DEBUG', default=True, cast=bool)
 
-# Allow all hosts in development
 ALLOWED_HOSTS = ['*']
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+USE_X_FORWARDED_HOST = True
+USE_X_FORWARDED_PORT = True
 
 DJANGO_APPS = [
+    'daphne',
+    'channels',
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
@@ -25,7 +29,6 @@ THIRD_PARTY_APPS = [
     'rest_framework_simplejwt',
     'rest_framework_simplejwt.token_blacklist',
     'corsheaders',
-    'channels',
 ]
 
 LOCAL_APPS = [
@@ -39,7 +42,6 @@ LOCAL_APPS = [
     'apps.polls',
     'apps.posts',
     'apps.checkins',
-    
     'apps.leaderboard',
     'apps.chat',
     'apps.schedule',
@@ -70,6 +72,7 @@ TEMPLATES = [
             'context_processors': [
                 'django.template.context_processors.debug',
                 'django.template.context_processors.request',
+                'apps.accounts.context_processors.staff_permissions_context',
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
             ],
@@ -80,7 +83,6 @@ TEMPLATES = [
 WSGI_APPLICATION = 'confhub.wsgi.application'
 ASGI_APPLICATION = 'confhub.asgi.application'
 
-# Database - SQLite for development
 if config('USE_POSTGRES', default=False, cast=bool):
     DATABASES = {
         'default': {
@@ -90,6 +92,7 @@ if config('USE_POSTGRES', default=False, cast=bool):
             'PASSWORD': config('DB_PASSWORD'),
             'HOST': config('DB_HOST'),
             'PORT': config('DB_PORT'),
+            'CONN_MAX_AGE': 0,
         }
     }
 else:
@@ -100,7 +103,6 @@ else:
         }
     }
 
-# Cache
 REDIS_URL = config('REDIS_URL', default='redis://localhost:6379/0')
 CACHES = {
     'default': {
@@ -116,9 +118,11 @@ CHANNEL_LAYERS = {
             'hosts': [REDIS_URL],
         },
     },
+    "check-meal-notifications": {
+        "task": "apps.checkins.tasks.check_meal_notifications", "schedule": 60.0,
+    },
 }
 
-# Auth
 AUTH_USER_MODEL = 'accounts.User'
 
 AUTHENTICATION_BACKENDS = [
@@ -131,15 +135,13 @@ AUTH_PASSWORD_VALIDATORS = [
      'OPTIONS': {'min_length': 8}},
 ]
 
-# JWT
 SIMPLE_JWT = {
     'ACCESS_TOKEN_LIFETIME': timedelta(hours=24),
     'REFRESH_TOKEN_LIFETIME': timedelta(days=30),
-    'ROTATE_REFRESH_TOKENS': True,
-    'BLACKLIST_AFTER_ROTATION': True,
+    'ROTATE_REFRESH_TOKENS': False,
+    'BLACKLIST_AFTER_ROTATION': False,
 }
 
-# REST Framework
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': [
         'rest_framework_simplejwt.authentication.JWTAuthentication',
@@ -147,11 +149,19 @@ REST_FRAMEWORK = {
     'DEFAULT_PERMISSION_CLASSES': [
         'rest_framework.permissions.IsAuthenticated',
     ],
+    'DEFAULT_THROTTLE_CLASSES': [
+        'rest_framework.throttling.AnonRateThrottle',
+        'rest_framework.throttling.UserRateThrottle',
+    ],
+    'DEFAULT_THROTTLE_RATES': {
+        'anon': '10000/min',
+        'user': '20000/min',
+        'login': '300/min',
+    },
     'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
     'PAGE_SIZE': 20,
 }
 
-# CORS - Allow everything in development
 CORS_ALLOW_ALL_ORIGINS = True
 CORS_ALLOWED_ORIGIN_REGEXES = [
     r"^https://.*\.exp\.direct$",
@@ -173,10 +183,15 @@ CORS_ALLOW_HEADERS = [
     'x-public-origin',
 ]
 
-# CSRF
-CSRF_TRUSTED_ORIGINS = ['https://*.app.github.dev', 'http://localhost:8000', 'https://*.ngrok-free.app', 'https://*.ngrok-free.dev', 'https://cautious-eureka-jj56xxggr9vpcq9qj-8000.app.github.dev', 'https://cautious-eureka-jj56xxggr9vpcq9qj-8081.app.github.dev']
+CSRF_TRUSTED_ORIGINS = [
+    'https://etd2026.iitd.ac.in',
+    'https://*.app.github.dev',
+    'http://localhost:8000',
+    'http://10.17.9.48:8000',
+    'https://*.ngrok-free.app',
+    'https://*.ngrok-free.dev',
+]
 
-# Static & Media
 STATIC_URL = '/static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
 STATICFILES_DIRS = [BASE_DIR / 'static']
@@ -192,8 +207,6 @@ USE_TZ = True
 LOGIN_URL = '/panel/login/'
 LOGIN_REDIRECT_URL = '/panel/'
 
-
-# ── Email (IITD SMTP) ──────────────────────────────────────────────────────
 EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
 EMAIL_HOST     = config('EMAIL_HOST', default='smtp.iitd.ac.in')
 EMAIL_PORT     = config('EMAIL_PORT', default=587, cast=int)
@@ -203,7 +216,7 @@ EMAIL_HOST_USER     = config('EMAIL_HOST_USER', default='')
 EMAIL_HOST_PASSWORD = config('EMAIL_HOST_PASSWORD', default='')
 DEFAULT_FROM_EMAIL  = config('DEFAULT_FROM_EMAIL', default=EMAIL_HOST_USER)
 EMAIL_TIMEOUT  = 30
-# Celery
+
 CELERY_BROKER_URL = REDIS_URL
 CELERY_RESULT_BACKEND = REDIS_URL
 CELERY_ACCEPT_CONTENT = ["json"]

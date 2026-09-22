@@ -1,0 +1,28 @@
+{
+  "layer": 4,
+  "name": "WebRTC Voice Calling",
+  "score": 75.0,
+  "passed": true,
+  "coturn_alive": true,
+  "tests": [
+    {
+      "test": "coturn_service",
+      "passed": true
+    },
+    {
+      "test": "stun",
+      "passed": false,
+      "output": "0: : IPv4. UDP reflexive addr: 10.17.9.48:46669\n0: : IPv4. UDP reflexive addr: 10.17.9.48:46669\n"
+    },
+    {
+      "test": "turn",
+      "passed": true,
+      "output": "sgs=5, tot_send_bytes ~ 500, tot_recv_bytes ~ 500\n6: : start_mclient: msz=2, tot_send_msgs=5, tot_recv_msgs=5, tot_send_bytes ~ 500, tot_recv_bytes ~ 500\n6: : start_mclient: tot_send_msgs=10, tot_recv_msgs=10\n6: : start_mclient: tot_send_bytes ~ 1000, tot_recv_bytes ~ 1000\n6: : Total transmit time is 6\n6: : Total lost packets 0 (0.000000%), total send dropped 0 (0.000000%)\n6: : Average round trip delay 4.200000 ms; min = 0 ms, max = 21 ms\n6: : Average jitter 8.100000 ms; min = 0 ms, max = 20 ms\n"
+    },
+    {
+      "test": "coturn_logs",
+      "passed": true,
+      "note": "Cannot access logs"
+    }
+  ]
+}

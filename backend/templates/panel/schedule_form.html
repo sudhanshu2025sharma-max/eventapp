@@ -48,13 +48,11 @@
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
             <div>
                 <label class="form-label">Start Date & Time *</label>
-                <input type="datetime-local" class="form-control" name="start_datetime" required
-                       value="{{ session.start_datetime|date:'Y-m-d\TH:i'|default:'' }}">
+                <input type="datetime-local" class="form-control" name="start_datetime" value="{{ session.start_datetime_iso }}">
             </div>
             <div>
                 <label class="form-label">End Date & Time *</label>
-                <input type="datetime-local" class="form-control" name="end_datetime" required
-                       value="{{ session.end_datetime|date:'Y-m-d\TH:i'|default:'' }}">
+                <input type="datetime-local" class="form-control" name="end_datetime" value="{{ session.end_datetime_iso }}">
             </div>
         </div>
 
@@ -78,6 +76,98 @@
         </div>
     </div>
 </div>
+
+<!-- Presentation Slots (Accepted Papers) -->
+{% if mode == 'edit' %}
+<div class="card" style="margin-bottom:20px;">
+    <div class="card-header">
+        <h3>Presentation Slots / Papers
+            <span style="color:var(--text-tertiary);font-size:13px;font-weight:500;">({{ papers|length|default:"0" }})</span>
+        </h3>
+        <button type="button" class="btn btn-primary btn-sm" onclick="showAddPaper()">
+            <i class="fas fa-plus"></i> Add Slot
+        </button>
+    </div>
+    <div class="card-body" style="padding:0;" id="paperList">
+        {% if papers %}
+        <table class="data-table">
+            <thead><tr><th>Slot Time</th><th>Paper ID</th><th>Title & Authors</th><th>Type</th><th></th></tr></thead>
+            <tbody>
+            {% for p in papers %}
+            <tr id="paperRow{{ p.id }}">
+                <td style="font-size:12px;font-weight:600;color:var(--text-secondary);white-space:nowrap;">
+                    {% if p.slot_start %}{{ p.slot_start|time:"H:i" }}{% if p.slot_end %} – {{ p.slot_end|time:"H:i" }}{% endif %}{% else %}—{% endif %}
+                </td>
+                <td style="font-size:11px;font-family:monospace;font-weight:700;color:var(--primary);">{{ p.paper_id|default:"—" }}</td>
+                <td>
+                    <div style="font-weight:600;font-size:13px;">{{ p.title }}</div>
+                    {% if p.authors %}<div style="font-size:11px;color:var(--text-tertiary);">{{ p.authors }}</div>{% endif %}
+                </td>
+                <td>
+                    <span class="badge {% if p.paper_type == 'paper' %}badge-info{% else %}badge-warning{% endif %}">
+                        {{ p.get_paper_type_display }}
+                    </span>
+                </td>
+                <td>
+                    <button type="button" class="btn btn-danger btn-sm" onclick="deletePaper('{{ p.id }}')">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                </td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <div style="padding:20px;text-align:center;color:var(--text-tertiary);font-size:13px;">
+            No presentation slots yet. Click <strong>Add Slot</strong> to attach a paper/poster presentation.
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- Add Presentation Slot Form -->
+    <div id="addPaperForm" style="display:none;padding:16px;border-top:1px solid var(--border);background:var(--bg);">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;">
+            <div>
+                <label class="form-label">Paper / Submission ID</label>
+                <input class="form-control" id="pPaperId" placeholder="e.g. ETD-2026-042">
+            </div>
+            <div>
+                <label class="form-label">Type</label>
+                <select class="form-control" id="pType">
+                    <option value="paper">Paper Presentation</option>
+                    <option value="poster">Poster Presentation</option>
+                </select>
+            </div>
+            <div style="grid-column:1/-1;">
+                <label class="form-label">Paper Title *</label>
+                <input class="form-control" id="pTitle" placeholder="e.g. Transformer Architectures in AI">
+            </div>
+            <div style="grid-column:1/-1;">
+                <label class="form-label">Authors</label>
+                <input class="form-control" id="pAuthors" placeholder="e.g. A. Sharma, B. Kumar, C. Patel">
+            </div>
+            <div style="grid-column:1/-1;">
+                <label class="form-label">Abstract</label>
+                <textarea class="form-control" id="pAbstract" rows="3" placeholder="Brief summary of presentation"></textarea>
+            </div>
+            <div>
+                <label class="form-label">Slot Start Time</label>
+                <input type="datetime-local" class="form-control" id="pSlotStart">
+            </div>
+            <div>
+                <label class="form-label">Slot End Time</label>
+                <input type="datetime-local" class="form-control" id="pSlotEnd">
+            </div>
+        </div>
+        <div style="display:flex;gap:8px;">
+            <button type="button" class="btn btn-primary btn-sm" onclick="savePaper()">
+                <i class="fas fa-check"></i> Save Presentation Slot
+            </button>
+            <button type="button" class="btn btn-secondary btn-sm" onclick="hideAddPaper()">Cancel</button>
+        </div>
+    </div>
+</div>
+{% endif %}
 
 <!-- Sub-sessions -->
 <div class="card" style="margin-bottom:20px;">
@@ -110,8 +200,7 @@
                 <td style="font-size:12px;color:var(--text-secondary);">{{ sub.start_datetime|date:"H:i"|default:"—" }}</td>
                 <td style="font-size:12px;color:var(--text-secondary);">{{ sub.end_datetime|date:"H:i"|default:"—" }}</td>
                 <td>
-                    <button type="button" class="btn btn-danger btn-sm"
-                            onclick="deleteSub({{ sub.id }}, this)">
+                    <button type="button" class="btn btn-danger btn-sm" onclick="deleteSub('{{ sub.id }}')">
                         <i class="fas fa-trash"></i>
                     </button>
                 </td>
@@ -186,6 +275,28 @@
                 <div style="font-size:11px;color:var(--text-tertiary);">Runs alongside another session same time.</div>
             </div>
         </label>
+        
+        <div style="border-top:1px solid var(--border);padding-top:12px;margin-top:4px;">
+            <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;">
+                <input type="checkbox" name="is_meal" id="is_meal_check" style="margin-top:3px;width:16px;height:16px;"
+                       {% if session and session.is_meal %}checked{% endif %} onchange="toggleMealCategory()">
+                <div>
+                    <div style="font-size:14px;font-weight:600;">🍽️ Is Meal Service?</div>
+                    <div style="font-size:11px;color:var(--text-tertiary);">Check if this session is a meal. Will auto-open Meal QR scanner in App.</div>
+                </div>
+            </label>
+            
+            <div id="meal_category_div" style="margin-top:10px; padding-left:26px; {% if not session or not session.is_meal %}display:none;{% endif %}">
+                <label class="form-label" style="font-size:12px;">Meal Category</label>
+                <select class="form-control" name="meal_category" style="padding:6px; font-size:13px;">
+                    <option value="Lunch" {% if session and session.meal_category == 'Lunch' %}selected{% endif %}>Lunch</option>
+                    <option value="Dinner" {% if session and session.meal_category == 'Dinner' %}selected{% endif %}>Dinner</option>
+                    <option value="High Tea" {% if session and session.meal_category == 'High Tea' %}selected{% endif %}>High Tea</option>
+                    <option value="Breakfast" {% if session and session.meal_category == 'Breakfast' %}selected{% endif %}>Breakfast</option>
+                </select>
+            </div>
+        </div>
+        
     </div>
 </div>
 
@@ -218,9 +329,6 @@
                 {% else %}
                 <span class="badge badge-warning">Feedback CLOSED</span>
                 {% endif %}
-                {% if session.feedback_manual_open %}
-                <span class="badge badge-info">Manually Opened</span>
-                {% endif %}
             </div>
             <div style="display:flex;gap:8px;flex-wrap:wrap;">
                 <a href="{% url 'schedule_feedback_manage' session.pk %}" class="btn btn-primary btn-sm">
@@ -249,15 +357,21 @@
 
 </div><!-- end grid -->
 </form>
+{% endblock %}
 
-{% if mode == 'edit' %}
 {% block scripts %}
 <script>
+function toggleMealCategory() {
+    var check = document.getElementById('is_meal_check').checked;
+    document.getElementById('meal_category_div').style.display = check ? 'block' : 'none';
+}
+
+{% if mode == 'edit' %}
 const SESSION_PK = "{{ session.pk }}";
 const CSRF = document.cookie.match(/csrftoken=([^;]+)/)?.[1] || '';
 
 function showAddSub()  { document.getElementById('addSubForm').style.display='block'; document.getElementById('subTitle').focus(); }
-function hideAddSub()  { document.getElementById('addSubForm').style.display='none'; ['subTitle','subStart','subEnd'].forEach(function(id){document.getElementById(id).value='';}); }
+function hideAddSub()  { document.getElementById('addSubForm').style.display='none'; ['subTitle','subStart','subEnd'].forEach(function(id){ var el = document.getElementById(id); if(el) el.value=''; }); }
 
 async function saveSub() {
     var title = document.getElementById('subTitle').value.trim();
@@ -275,16 +389,56 @@ async function saveSub() {
     else { alert('Error: ' + data.error); }
 }
 
-async function deleteSub(id, btn) {
+async function deleteSub(id) {
     if (!confirm('Remove this sub-session?')) return;
     var res  = await fetch('/panel/schedule/subsessions/' + id + '/delete/', {
         method:'POST', headers:{'X-CSRFToken':CSRF}
     });
     var data = await res.json();
-    if (data.success) { document.getElementById('subRow'+id).remove(); }
+    if (data.success) { 
+        var row = document.getElementById('subRow' + id);
+        if (row) row.remove();
+        location.reload();
+    }
     else { alert('Error: ' + data.error); }
 }
-</script>
-{% endblock %}
+
+function showAddPaper() { document.getElementById('addPaperForm').style.display='block'; document.getElementById('pTitle').focus(); }
+function hideAddPaper() { document.getElementById('addPaperForm').style.display='none'; ['pPaperId','pTitle','pAuthors','pAbstract','pSlotStart','pSlotEnd'].forEach(function(id){ var el = document.getElementById(id); if(el) el.value=''; }); }
+
+async function savePaper() {
+    var title = document.getElementById('pTitle').value.trim();
+    if (!title) { alert('Paper Title is required'); return; }
+    var body = {
+        paper_id: document.getElementById('pPaperId').value.trim(),
+        paper_type: document.getElementById('pType').value,
+        title: title,
+        authors: document.getElementById('pAuthors').value.trim(),
+        abstract: document.getElementById('pAbstract').value.trim(),
+        slot_start: document.getElementById('pSlotStart').value || null,
+        slot_end: document.getElementById('pSlotEnd').value || null,
+    };
+    var res = await fetch('/panel/schedule/' + SESSION_PK + '/papers/add/', {
+        method: 'POST', headers: {'Content-Type': 'application/json', 'X-CSRFToken': CSRF}, body: JSON.stringify(body)
+    });
+    var data = await res.json();
+    if (data.success) { location.reload(); }
+    else { alert('Error: ' + data.error); }
+}
+
+async function deletePaper(id) {
+    if (!confirm('Remove this presentation slot?')) return;
+    var res = await fetch('/panel/schedule/papers/' + id + '/delete/', {
+        method: 'POST', headers: {'X-CSRFToken': CSRF}
+    });
+    var data = await res.json();
+    if (data.success) { 
+        var row = document.getElementById('paperRow' + id);
+        if (row) row.remove();
+        location.reload();
+    }
+    else { alert('Error: ' + data.error); }
+}
 {% endif %}
+</script>
 {% endblock %}

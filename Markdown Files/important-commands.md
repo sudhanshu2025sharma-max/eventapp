@@ -13,13 +13,37 @@ ngrok http 8000
 cd /workspaces/eventapp/mobile && npx expo start --tunnel --port 8081 --clear
 
 # 5 Kill Port
-kill -9 $(lsof -t -i:<PORT>)
+kill -9 $(lsof -t -i:8081)
 
 # See Reminders logs
 tail -f /tmp/session_reminders.log 
 
 Context Gen: Okay its working Now give me the full context to start a new chat with new feature to be build it must cover everything till now and i give you early. 
 Now fundamentally everything is working fine we wont polishing so give me a full detailed context window in which you have to write everything that has done so far form first chat to last so that new chat have context of everything also mention the custom template folder how its link how other files are linked and how everything is working and wired up so give me context window for new chat.
+
+
+# Watch live while you create a new feed post with Send Push ON
+tail -f /home/baadalvm/eventapp/backend/server.log | grep --line-buffered -iE "FEED PUSH|expo|fcm|push|notification"
+
+
+# RESTART SERVER (Always run from backend/ directory)
+cd /home/baadalvm/eventapp/backend
+pkill -f gunicorn || true
+sleep 1.5
+nohup ./start_server.sh > server.log 2>&1 &
+
+# WATCH LIVE LOGS
+tail -f /home/baadalvm/eventapp/backend/server.log | grep --line-buffered -iE "FEED PUSH|EXPO|fcm|push|notification"
+
+
+
+
+# ONLY flush Sessions and add Sessions 
+
+cd /home/baadalvm/eventapp/backend && python3 flush_and_seed.py && pkill -9 -f gunicorn || true && sleep 1.5 && nohup ./start_server.sh > server.log 2>&1 &
+
+
+
 
 ---
 # Git Push 
@@ -166,3 +190,29 @@ EMAIL_2 = "test@iitd.ac.in"
 
 
 cd /home/baadalvm/eventapp/mobile && NODE_TLS_REJECT_UNAUTHORIZED=0 npx eas build --profile development --platform android
+NODE_TLS_REJECT_UNAUTHORIZED=0 npx eas build --profile development --platform ios
+
+Stack:
+
+Signaling: Django Channels + Redis (already running) — WebSocket
+TURN/STUN: coturn (apt package, open source) — system service on VM
+Mobile: react-native-webrtc (open source) — needs one EAS rebuild
+Alert: Existing Expo Push Notification system
+
+
+
+# Reset Manual Registation Count
+
+```bash
+
+python3 manage.py shell -c "
+from apps.accounts.models import User
+# Delete all test participants whose registration IDs start with 'ETD-2026-S-'
+deleted_count = User.objects.filter(role='participant', registration_id__startswith='ETD-2026-S-').delete()
+print(f'Purged {deleted_count[0]} test participant(s). The next manual registration ID is now reset to: ETD-2026-S-001')
+"
+
+```
+
+
+tail -f /home/baadalvm/eventapp/backend/server.log

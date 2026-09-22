@@ -1,0 +1,13 @@
+backend/
+mobile/node_modules/
+mobile/android/
+mobile/ios/
+mobile/.expo/
+node_modules/
+android/
+ios/
+.expo/
+.gradle/
+build/
+dist/
+*.log

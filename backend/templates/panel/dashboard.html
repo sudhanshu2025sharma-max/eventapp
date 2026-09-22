@@ -1,146 +1,386 @@
 {% extends "panel/base.html" %}
 
-{% block title %}Dashboard — ConfHub Admin{% endblock %}
+{% block title %}Command Center — ETD 2026 Admin{% endblock %}
 
 {% block content %}
-<!-- STAT CARDS -->
-<div class="stats-grid">
-    <div class="stat-card">
-        <div class="stat-card-header">
-            <div class="stat-icon" style="background: var(--primary-light); color: var(--primary);">
-                <i class="fas fa-users"></i>
-            </div>
-            <span class="stat-trend up">
-                <i class="fas fa-arrow-up" style="font-size: 10px;"></i> 96%
-            </span>
-        </div>
-        <div class="stat-value">{{ total_participants }}</div>
-        <div class="stat-label">Registered Participants</div>
-        <div class="stat-bar">
-            <div class="stat-bar-fill" style="width: 96%; background: var(--primary);"></div>
-        </div>
-    </div>
+<style>
+.dashboard-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 24px;
+}
+.dashboard-title h2 {
+    font-size: 22px;
+    font-weight: 700;
+    color: var(--text-dark, #1E293B);
+    margin: 0 0 4px 0;
+}
+.dashboard-title p {
+    font-size: 13px;
+    color: var(--text-muted, #64748B);
+    margin: 0;
+}
+.live-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 14px;
+    border-radius: 20px;
+    background: #ECFDF5;
+    color: #059669;
+    font-weight: 600;
+    font-size: 12px;
+    border: 1px solid #A7F3D0;
+}
+.live-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #10B981;
+    box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7);
+    animation: pulse-dot 1.5s infinite;
+}
+@keyframes pulse-dot {
+    0% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7); }
+    70% { box-shadow: 0 0 0 6px rgba(16, 185, 129, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
+}
+.stats-grid-6 {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 16px;
+    margin-bottom: 24px;
+}
+.metric-card {
+    background: #FFFFFF;
+    border-radius: 12px;
+    padding: 18px 20px;
+    border: 1px solid #E2E8F0;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+}
+.metric-card-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 12px;
+}
+.metric-icon {
+    width: 38px;
+    height: 38px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+}
+.metric-val {
+    font-size: 26px;
+    font-weight: 800;
+    color: #0F172A;
+    line-height: 1.1;
+}
+.metric-label {
+    font-size: 12px;
+    font-weight: 600;
+    color: #64748B;
+    margin-top: 4px;
+}
+.metric-sub {
+    font-size: 11px;
+    color: #94A3B8;
+    margin-top: 8px;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
 
-    <div class="stat-card">
-        <div class="stat-card-header">
-            <div class="stat-icon" style="background: var(--success-light); color: var(--success);">
-                <i class="fas fa-check-circle"></i>
-            </div>
-            <span class="stat-trend up">
-                <i class="fas fa-arrow-up" style="font-size: 10px;"></i> {{ checkin_percent }}%
-            </span>
-        </div>
-        <div class="stat-value">{{ checked_in }}</div>
-        <div class="stat-label">Checked In Today</div>
-        <div class="stat-bar">
-            <div class="stat-bar-fill" style="width: {{ checkin_percent }}%; background: var(--success);"></div>
-        </div>
-    </div>
+.content-row {
+    display: grid;
+    grid-template-columns: 1.8fr 1.2fr;
+    gap: 20px;
+}
+@media (max-width: 1024px) {
+    .content-row { grid-template-columns: 1fr; }
+}
 
-    <div class="stat-card">
-        <div class="stat-card-header">
-            <div class="stat-icon" style="background: var(--warning-light); color: var(--warning);">
-                <i class="fas fa-images"></i>
-            </div>
-            <span class="stat-trend pending">
-                {{ photos_pending }} pending
-            </span>
-        </div>
-        <div class="stat-value">{{ photos_uploaded }}</div>
-        <div class="stat-label">Photos Uploaded</div>
-        <div class="stat-bar">
-            <div class="stat-bar-fill" style="width: 72%; background: var(--warning);"></div>
-        </div>
-    </div>
+.panel-card {
+    background: #FFFFFF;
+    border-radius: 12px;
+    border: 1px solid #E2E8F0;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+    margin-bottom: 20px;
+    overflow: hidden;
+}
+.panel-card-head {
+    padding: 16px 20px;
+    border-bottom: 1px solid #F1F5F9;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: #FAFAFA;
+}
+.panel-card-head h3 {
+    margin: 0;
+    font-size: 15px;
+    font-weight: 700;
+    color: #1E293B;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.panel-card-body {
+    padding: 16px 20px;
+}
 
-    <div class="stat-card">
-        <div class="stat-card-header">
-            <div class="stat-icon" style="background: #F3E8FF; color: #8B5CF6;">
-                <i class="fas fa-chart-bar"></i>
-            </div>
-            <span class="stat-trend up">
-                <i class="fas fa-arrow-up" style="font-size: 10px;"></i> Active
-            </span>
-        </div>
-        <div class="stat-value">{{ active_polls }}</div>
-        <div class="stat-label">Active Polls</div>
-        <div class="stat-bar">
-            <div class="stat-bar-fill" style="width: 85%; background: #8B5CF6;"></div>
-        </div>
+.schedule-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 0;
+    border-bottom: 1px solid #F1F5F9;
+}
+.schedule-row:last-child { border-bottom: none; }
+.schedule-time {
+    font-size: 12px;
+    font-weight: 700;
+    color: #0F172A;
+    width: 110px;
+}
+.schedule-info { flex: 1; padding: 0 12px; }
+.schedule-title { font-size: 13px; font-weight: 600; color: #1E293B; margin: 0 0 2px 0; }
+.schedule-room { font-size: 11px; color: #64748B; margin: 0; }
+.badge-status {
+    padding: 4px 10px;
+    border-radius: 12px;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+}
+.badge-live { background: #DCFCE7; color: #15803D; }
+.badge-upcoming { background: #FEF3C7; color: #B45309; }
+.badge-completed { background: #F1F5F9; color: #64748B; }
+
+.checkin-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 0;
+    border-bottom: 1px solid #F1F5F9;
+}
+.checkin-row:last-child { border-bottom: none; }
+.checkin-avatar {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: #0284C7;
+    color: #FFF;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    font-size: 13px;
+    margin-right: 10px;
+}
+.checkin-details { flex: 1; }
+.checkin-name { font-size: 13px; font-weight: 600; color: #0F172A; margin: 0; }
+.checkin-meta { font-size: 11px; color: #64748B; margin: 0; }
+.checkin-time-badge { font-size: 11px; font-weight: 600; color: #059669; }
+
+.quick-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
+}
+.quick-btn {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+    background: #F8FAFC;
+    border: 1px solid #E2E8F0;
+    border-radius: 10px;
+    color: #1E293B;
+    text-decoration: none;
+    font-weight: 600;
+    font-size: 12px;
+    transition: all 0.2s ease;
+}
+.quick-btn:hover {
+    background: #2563EB;
+    color: #FFFFFF;
+    border-color: #2563EB;
+}
+.quick-btn i { font-size: 20px; margin-bottom: 8px; }
+</style>
+
+<div class="dashboard-header">
+    <div class="dashboard-title">
+        <h2>Conference Command Center</h2>
+        <p>Live operational status for ETD 2026 @ IIT Delhi</p>
+    </div>
+    <div class="live-pill">
+        <span class="live-dot"></span> System Live & Syncing
     </div>
 </div>
 
-<!-- CONTENT GRID -->
-<div class="content-grid">
-    <!-- LEFT: Today's Schedule -->
-    <div class="card">
-        <div class="card-header">
-            <h3><i class="fas fa-calendar-day" style="color: var(--primary); margin-right: 8px;"></i> Today's Schedule</h3>
-            <a class="card-header-action">View Full Schedule →</a>
+<!-- 6 KEY STAT CARDS -->
+<div class="stats-grid-6">
+    <!-- Participants -->
+    <div class="metric-card">
+        <div class="metric-card-top">
+            <span class="metric-label">REGISTERED</span>
+            <div class="metric-icon" style="background: #EFF6FF; color: #2563EB;"><i class="fas fa-users"></i></div>
         </div>
-        <div class="card-body">
-            {% for event in today_events %}
-            <div class="schedule-item">
-                <span class="schedule-time">{{ event.time }}</span>
-                <div class="schedule-dot {% if event.status == 'live' %}live{% endif %}"></div>
-                <div class="schedule-info">
-                    <h4>{{ event.title }}</h4>
-                    <span>{{ event.room }}</span>
-                </div>
-                <span class="schedule-badge {{ event.status }}">
-                    {% if event.status == 'live' %}● Live{% else %}Upcoming{% endif %}
-                </span>
-            </div>
-            {% endfor %}
+        <div class="metric-val">{{ total_participants }}</div>
+        <div class="metric-sub"><i class="fas fa-check-circle" style="color:#10B981;"></i> {{ profile_complete_percent }}% profiles complete</div>
+    </div>
+
+    <!-- Checked In -->
+    <div class="metric-card">
+        <div class="metric-card-top">
+            <span class="metric-label">CHECKED IN</span>
+            <div class="metric-icon" style="background: #ECFDF5; color: #059669;"><i class="fas fa-qrcode"></i></div>
+        </div>
+        <div class="metric-val">{{ checked_in }}</div>
+        <div class="metric-sub"><i class="fas fa-chart-line" style="color:#059669;"></i> {{ checkin_percent }}% total attendance</div>
+    </div>
+
+    <!-- Today's Meals -->
+    <div class="metric-card">
+        <div class="metric-card-top">
+            <span class="metric-label">MEALS ISSUED TODAY</span>
+            <div class="metric-icon" style="background: #FFF7ED; color: #D97706;"><i class="fas fa-utensils"></i></div>
+        </div>
+        <div class="metric-val">{{ today_meals_count }}</div>
+        <div class="metric-sub">
+            {% if current_meal_window %}
+            <span style="color:#059669; font-weight:700;">● Window Open</span>
+            {% else %}
+            <span style="color:#64748B;">Window Closed</span>
+            {% endif %}
         </div>
     </div>
 
-    <!-- RIGHT COLUMN -->
-    <div style="display: flex; flex-direction: column; gap: 24px;">
-        <!-- Recent Check-ins -->
-        <div class="card">
-            <div class="card-header">
-                <h3><i class="fas fa-user-check" style="color: var(--success); margin-right: 8px;"></i> Recent Check-Ins</h3>
-                <a class="card-header-action">View All</a>
+    <!-- Ideathon Teams -->
+    <div class="metric-card">
+        <div class="metric-card-top">
+            <span class="metric-label">IDEATHON TEAMS</span>
+            <div class="metric-icon" style="background: #F3E8FF; color: #7C3AED;"><i class="fas fa-lightbulb"></i></div>
+        </div>
+        <div class="metric-val">{{ ideathon_teams_count }}</div>
+        <div class="metric-sub"><i class="fas fa-rocket" style="color:#7C3AED;"></i> Registered & Active</div>
+    </div>
+
+    <!-- Moderation / Photos -->
+    <div class="metric-card">
+        <div class="metric-card-top">
+            <span class="metric-label">GALLERY & PHOTOS</span>
+            <div class="metric-icon" style="background: #FEF2F2; color: #DC2626;"><i class="fas fa-camera"></i></div>
+        </div>
+        <div class="metric-val">{{ photos_uploaded }}</div>
+        <div class="metric-sub">
+            {% if photos_pending > 0 %}
+            <span style="color:#DC2626; font-weight:700;">● {{ photos_pending }} pending approval</span>
+            {% else %}
+            <span style="color:#059669;">All approved</span>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Active Polls -->
+    <div class="metric-card">
+        <div class="metric-card-top">
+            <span class="metric-label">ACTIVE POLLS</span>
+            <div class="metric-icon" style="background: #F0F9FF; color: #0284C7;"><i class="fas fa-poll"></i></div>
+        </div>
+        <div class="metric-val">{{ active_polls }}</div>
+        <div class="metric-sub"><i class="fas fa-signal" style="color:#0284C7;"></i> Audience Engagement</div>
+    </div>
+</div>
+
+<!-- CONTENT LAYOUT -->
+<div class="content-row">
+    <!-- LEFT: Today's Schedule -->
+    <div>
+        <div class="panel-card">
+            <div class="panel-card-head">
+                <h3><i class="fas fa-calendar-alt" style="color: #2563EB;"></i> Today's Schedule</h3>
+                <a href="/panel/schedule/" style="font-size:12px; font-weight:600; color:#2563EB; text-decoration:none;">View Full Schedule →</a>
             </div>
-            <div class="card-body">
-                {% for checkin in recent_checkins %}
-                <div class="checkin-item">
-                    <div class="checkin-avatar" style="background: hsl({{ forloop.counter|add:'200' }}, 60%, 50%);">
-                        {{ checkin.name|truncatechars:1 }}
+            <div class="panel-card-body">
+                {% if today_events %}
+                    {% for event in today_events %}
+                    <div class="schedule-row">
+                        <span class="schedule-time">{{ event.time }}</span>
+                        <div class="schedule-info">
+                            <p class="schedule-title">{{ event.title }}</p>
+                            <p class="schedule-room"><i class="fas fa-map-marker-alt"></i> {{ event.room }} {% if event.speaker %}• {{ event.speaker }}{% endif %}</p>
+                        </div>
+                        <span class="badge-status badge-{{ event.status }}">{{ event.status }}</span>
                     </div>
-                    <div class="checkin-info">
-                        <h4>{{ checkin.name }}</h4>
-                        <span>{{ checkin.id }}</span>
+                    {% endfor %}
+                {% else %}
+                    <p style="color: #64748B; font-size: 13px; text-align: center; margin: 20px 0;">No scheduled sessions found for today.</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- RIGHT: Activity Stream & Actions -->
+    <div>
+        <!-- Recent Check-Ins -->
+        <div class="panel-card">
+            <div class="panel-card-head">
+                <h3><i class="fas fa-user-check" style="color: #059669;"></i> Live Check-In Stream</h3>
+                <a href="/panel/checkins/list/" style="font-size:12px; font-weight:600; color:#059669; text-decoration:none;">View All →</a>
+            </div>
+            <div class="panel-card-body">
+                {% if recent_checkins %}
+                    {% for checkin in recent_checkins %}
+                    <div class="checkin-row">
+                        <div style="display:flex; align-items:center;">
+                            <div class="checkin-avatar">{{ checkin.name|first|upper }}</div>
+                            <div class="checkin-details">
+                                <p class="checkin-name">{{ checkin.name }}</p>
+                                <p class="checkin-meta">{{ checkin.email }}</p>
+                            </div>
+                        </div>
+                        <span class="checkin-time-badge">{{ checkin.time }}</span>
                     </div>
-                    <span class="checkin-time">{{ checkin.time }}</span>
-                </div>
-                {% endfor %}
+                    {% endfor %}
+                {% else %}
+                    <p style="color: #64748B; font-size: 13px; text-align: center; margin: 20px 0;">No check-in activity recorded today yet.</p>
+                {% endif %}
             </div>
         </div>
 
-        <!-- Quick Actions -->
-        <div class="card">
-            <div class="card-header">
-                <h3><i class="fas fa-bolt" style="color: var(--warning); margin-right: 8px;"></i> Quick Actions</h3>
+        <!-- Quick Action Grid -->
+        <div class="panel-card">
+            <div class="panel-card-head">
+                <h3><i class="fas fa-bolt" style="color: #D97706;"></i> Quick Actions</h3>
             </div>
-            <div class="card-body">
-                <div class="quick-actions">
-                    <a href="#" class="quick-action-btn">
-                        <i class="fas fa-qrcode" style="color: var(--primary);"></i>
-                        <span>Scanner</span>
+            <div class="panel-card-body">
+                <div class="quick-grid">
+                    <a href="/panel/checkins/scanner/" class="quick-btn">
+                        <i class="fas fa-qrcode" style="color: #2563EB;"></i>
+                        <span>Check-In Scanner</span>
                     </a>
-                    <a href="#" class="quick-action-btn">
-                        <i class="fas fa-bell" style="color: var(--warning);"></i>
-                        <span>Notify All</span>
+                    <a href="/panel/notifications/" class="quick-btn">
+                        <i class="fas fa-bell" style="color: #D97706;"></i>
+                        <span>Push Notification</span>
                     </a>
-                    <a href="#" class="quick-action-btn">
-                        <i class="fas fa-file-csv" style="color: var(--success);"></i>
+                    <a href="/panel/participants/upload/" class="quick-btn">
+                        <i class="fas fa-file-upload" style="color: #059669;"></i>
                         <span>Import CSV</span>
                     </a>
-                    <a href="#" class="quick-action-btn">
-                        <i class="fas fa-chart-pie" style="color: #8B5CF6;"></i>
-                        <span>New Poll</span>
+                    <a href="/panel/ideathon/" class="quick-btn">
+                        <i class="fas fa-lightbulb" style="color: #7C3AED;"></i>
+                        <span>Ideathon Admin</span>
                     </a>
                 </div>
             </div>

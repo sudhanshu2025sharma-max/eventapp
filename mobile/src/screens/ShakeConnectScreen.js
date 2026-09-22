@@ -44,13 +44,10 @@ function ConfettiPiece({ delay, color, startX }) {
   return (
     <Animated.View
       style={{
-        position: 'absolute',
-        top: 0,
-        width: size,
-        height: isCircle ? size : size * 2.5,
+        position: 'absolute', top: 0,
+        width: size, height: isCircle ? size : size * 2.5,
         borderRadius: isCircle ? size / 2 : 2,
-        backgroundColor: color,
-        opacity,
+        backgroundColor: color, opacity,
         transform: [
           { translateX: x },
           { translateY: y },
@@ -64,23 +61,18 @@ function ConfettiPiece({ delay, color, startX }) {
 function ConfettiBlast() {
   const colors = ['#7c3aed', '#a78bfa', '#34d399', '#fbbf24', '#f472b6', '#60a5fa', '#f87171', '#c084fc'];
   const pieces = Array.from({ length: 40 }, (_, i) => ({
-    id: i,
-    color: colors[i % colors.length],
-    delay: Math.random() * 400,
-    startX: Math.random() * W,
+    id: i, color: colors[i % colors.length], delay: Math.random() * 400, startX: Math.random() * W,
   }));
 
   return (
     <View style={StyleSheet.absoluteFill} pointerEvents="none">
-      {pieces.map(p => (
-        <ConfettiPiece key={p.id} delay={p.delay} color={p.color} startX={p.startX} />
-      ))}
+      {pieces.map(p => <ConfettiPiece key={p.id} delay={p.delay} color={p.color} startX={p.startX} />)}
     </View>
   );
 }
 
 /* ── Ripple Ring ────────────────────────────────────────── */
-function RippleRing({ delay = 0, size = 200, color = '#7c3aed' }) {
+function RippleRing({ delay = 0, size = 240, color = '#7c3aed' }) {
   const scale = useRef(new Animated.Value(0.6)).current;
   const opacity = useRef(new Animated.Value(0.45)).current;
 
@@ -105,14 +97,8 @@ function RippleRing({ delay = 0, size = 200, color = '#7c3aed' }) {
   return (
     <Animated.View
       style={{
-        position: 'absolute',
-        width: size,
-        height: size,
-        borderRadius: size / 2,
-        borderWidth: 2,
-        borderColor: color,
-        opacity,
-        transform: [{ scale }],
+        position: 'absolute', width: size, height: size, borderRadius: size / 2,
+        borderWidth: 2, borderColor: color, opacity, transform: [{ scale }],
       }}
     />
   );
@@ -143,15 +129,9 @@ function GlassOrb({ size, left, top, delay = 0 }) {
   return (
     <Animated.View
       style={{
-        position: 'absolute',
-        width: size,
-        height: size,
-        borderRadius: size / 2,
-        left,
-        top,
-        backgroundColor: 'rgba(124,58,237,0.06)',
-        borderWidth: 1,
-        borderColor: 'rgba(167,139,250,0.08)',
+        position: 'absolute', width: size, height: size, borderRadius: size / 2,
+        left, top, backgroundColor: 'rgba(124,58,237,0.06)',
+        borderWidth: 1, borderColor: 'rgba(167,139,250,0.08)',
         transform: [
           { translateY: y.interpolate({ inputRange: [0, 1], outputRange: [0, -15] }) },
           { translateX: x.interpolate({ inputRange: [0, 1], outputRange: [0, 10] }) },
@@ -161,82 +141,8 @@ function GlassOrb({ size, left, top, delay = 0 }) {
   );
 }
 
-/* ── Wait Dot ───────────────────────────────────────────── */
-function WaitDot({ delay = 0 }) {
-  const a = useRef(new Animated.Value(0.2)).current;
-
-  useEffect(() => {
-    const anim = Animated.loop(
-      Animated.sequence([
-        Animated.delay(delay),
-        Animated.timing(a, { toValue: 1, duration: 350, useNativeDriver: true }),
-        Animated.timing(a, { toValue: 0.2, duration: 350, useNativeDriver: true }),
-      ])
-    );
-    anim.start();
-    return () => anim.stop();
-  }, []);
-
-  return (
-    <Animated.View
-      style={{
-        width: 8, height: 8, borderRadius: 4, marginHorizontal: 4,
-        backgroundColor: '#c4b5fd', opacity: a,
-        transform: [{ scale: a.interpolate({ inputRange: [0.2, 1], outputRange: [0.7, 1.2] }) }],
-      }}
-    />
-  );
-}
-
-/* ── Dual Phone Animation ───────────────────────────────── */
-function DualPhoneAnim({ active }) {
-  const leftX = useRef(new Animated.Value(0)).current;
-  const rightX = useRef(new Animated.Value(0)).current;
-
-  useEffect(() => {
-    if (!active) return;
-    const anim = Animated.loop(
-      Animated.sequence([
-        Animated.parallel([
-          Animated.timing(leftX, { toValue: 8, duration: 200, useNativeDriver: true }),
-          Animated.timing(rightX, { toValue: -8, duration: 200, useNativeDriver: true }),
-        ]),
-        Animated.parallel([
-          Animated.timing(leftX, { toValue: -6, duration: 200, useNativeDriver: true }),
-          Animated.timing(rightX, { toValue: 6, duration: 200, useNativeDriver: true }),
-        ]),
-        Animated.parallel([
-          Animated.timing(leftX, { toValue: 4, duration: 150, useNativeDriver: true }),
-          Animated.timing(rightX, { toValue: -4, duration: 150, useNativeDriver: true }),
-        ]),
-        Animated.parallel([
-          Animated.timing(leftX, { toValue: 0, duration: 150, useNativeDriver: true }),
-          Animated.timing(rightX, { toValue: 0, duration: 150, useNativeDriver: true }),
-        ]),
-        Animated.delay(600),
-      ])
-    );
-    anim.start();
-    return () => anim.stop();
-  }, [active]);
-
-  return (
-    <View style={_s.dualWrap}>
-      <Animated.View style={[_s.dualPhone, { transform: [{ translateX: leftX }, { rotate: '-8deg' }] }]}>
-        <Text style={{ fontSize: 42 }}>📱</Text>
-      </Animated.View>
-      <View style={_s.dualBolt}>
-        <Ionicons name="flash" size={22} color="#fbbf24" />
-      </View>
-      <Animated.View style={[_s.dualPhone, { transform: [{ translateX: rightX }, { rotate: '8deg' }] }]}>
-        <Text style={{ fontSize: 42 }}>📱</Text>
-      </Animated.View>
-    </View>
-  );
-}
-
 /* ── Points Burst ───────────────────────────────────────── */
-function PointsBurst() {
+function PointsBurst({ pts = 15 }) {
   const scale = useRef(new Animated.Value(0)).current;
   const y = useRef(new Animated.Value(0)).current;
   const opacity = useRef(new Animated.Value(0)).current;
@@ -260,38 +166,13 @@ function PointsBurst() {
     <Animated.View style={[_s.pointsBurst, { opacity, transform: [{ scale }, { translateY: y }] }]}>
       <LinearGradient colors={['#fbbf24', '#f59e0b']} style={_s.pointsPill}>
         <Ionicons name="star" size={14} color="#fff" />
-        <Text style={_s.pointsText}>+15 pts</Text>
+        <Text style={_s.pointsText}>+{pts} pts</Text>
       </LinearGradient>
     </Animated.View>
   );
 }
 
-/* ── Met In Person Badge ────────────────────────────────── */
-function MetBadge({ name }) {
-  const scale = useRef(new Animated.Value(0)).current;
-
-  useEffect(() => {
-    Animated.sequence([
-      Animated.delay(700),
-      Animated.spring(scale, { toValue: 1, tension: 180, friction: 9, useNativeDriver: true }),
-    ]).start();
-  }, []);
-
-  return (
-    <Animated.View style={[_s.metBadge, { transform: [{ scale }] }]}>
-      <LinearGradient colors={['rgba(124,58,237,0.15)', 'rgba(99,102,241,0.10)']} style={_s.metBadgeInner}>
-        <Text style={{ fontSize: 20 }}>🤝</Text>
-        <View style={{ flex: 1 }}>
-          <Text style={_s.metBadgeTitle}>Met in person</Text>
-          <Text style={_s.metBadgeSub}>You & {name} connected at ETD 2026</Text>
-        </View>
-      </LinearGradient>
-    </Animated.View>
-  );
-}
-
-
-/* ── Swipe to Connect (iPhone unlock style) ─────────────── */
+/* ── Swipe to Connect ───────────────────────────────────── */
 function SwipeToConnect({ onComplete }) {
   const trackW = Math.min(320, W - 60);
   const knobSize = 56;
@@ -328,40 +209,16 @@ function SwipeToConnect({ onComplete }) {
     })
   ).current;
 
-  const textOpacity = pan.interpolate({
-    inputRange: [0, maxSlide * 0.7],
-    outputRange: [1, 0],
-    extrapolate: 'clamp',
-  });
-
-  const fillOpacity = pan.interpolate({
-    inputRange: [0, maxSlide],
-    outputRange: [0, 1],
-    extrapolate: 'clamp',
-  });
+  const textOpacity = pan.interpolate({ inputRange: [0, maxSlide * 0.7], outputRange: [1, 0], extrapolate: 'clamp' });
+  const fillOpacity = pan.interpolate({ inputRange: [0, maxSlide], outputRange: [0, 1], extrapolate: 'clamp' });
 
   return (
     <View style={[_swipe.wrap, { width: trackW }]}>
       <Animated.View style={[_swipe.fill, { opacity: fillOpacity }]}>
-        <LinearGradient
-          colors={['#7c3aed', '#4f46e5']}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 0 }}
-          style={{ flex: 1, borderRadius: 32 }}
-        />
+        <LinearGradient colors={['#7c3aed', '#4f46e5']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={{ flex: 1, borderRadius: 32 }} />
       </Animated.View>
-
-      <Animated.Text style={[_swipe.label, { opacity: textOpacity }]}>
-        Slide to shake  →
-      </Animated.Text>
-
-      <Animated.View
-        {...responder.panHandlers}
-        style={[
-          _swipe.knob,
-          { width: knobSize, height: knobSize, transform: [{ translateX: pan }] },
-        ]}
-      >
+      <Animated.Text style={[_swipe.label, { opacity: textOpacity }]}>Slide to shake  →</Animated.Text>
+      <Animated.View {...responder.panHandlers} style={[_swipe.knob, { width: knobSize, height: knobSize, transform: [{ translateX: pan }] }]}>
         <Ionicons name={done ? 'checkmark' : 'chevron-forward'} size={24} color="#4f46e5" />
       </Animated.View>
     </View>
@@ -369,46 +226,14 @@ function SwipeToConnect({ onComplete }) {
 }
 
 const _swipe = StyleSheet.create({
-  wrap: {
-    marginTop: 28,
-    height: 64,
-    borderRadius: 32,
-    backgroundColor: 'rgba(255,255,255,0.08)',
-    borderWidth: 1,
-    borderColor: 'rgba(167,139,250,0.28)',
-    padding: 4,
-    justifyContent: 'center',
-    overflow: 'hidden',
-  },
-  fill: {
-    position: 'absolute',
-    top: 4, bottom: 4, left: 4, right: 4,
-    borderRadius: 32,
-  },
-  label: {
-    position: 'absolute',
-    left: 0, right: 0,
-    textAlign: 'center',
-    color: '#c4b5fd',
-    fontWeight: '800',
-    fontSize: 15,
-    letterSpacing: 0.5,
-  },
-  knob: {
-    borderRadius: 999,
-    backgroundColor: '#fff',
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.25,
-    shadowRadius: 8,
-    elevation: 6,
-  },
+  wrap: { marginTop: 28, height: 64, borderRadius: 32, backgroundColor: 'rgba(255,255,255,0.08)', borderWidth: 1, borderColor: 'rgba(167,139,250,0.28)', padding: 4, justifyContent: 'center', overflow: 'hidden' },
+  fill: { position: 'absolute', top: 4, bottom: 4, left: 4, right: 4, borderRadius: 32 },
+  label: { position: 'absolute', left: 0, right: 0, textAlign: 'center', color: '#c4b5fd', fontWeight: '800', fontSize: 15, letterSpacing: 0.5 },
+  knob: { borderRadius: 999, backgroundColor: '#fff', alignItems: 'center', justifyContent: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.25, shadowRadius: 8, elevation: 6 },
 });
 
 /* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-   MAIN SCREEN
+   MAIN COMPONENT
    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
 export default function ShakeConnectScreen({ tokens, user, onConnected, onBack }) {
   const [phase, setPhase] = useState('idle');
@@ -467,13 +292,17 @@ export default function ShakeConnectScreen({ tokens, user, onConnected, onBack }
     return r.json();
   };
 
-  const connectTo = async (pickId) => {
+  const connectTo = async (pickIds) => {
     setPhase('waiting');
     try {
+      const payload = Array.isArray(pickIds)
+        ? { action: 'pick', pick_user_ids: pickIds }
+        : { action: 'pick', pick_user_id: pickIds };
+
       const r = await fetch(`${API_URL}/chat/shake/`, {
         method: 'POST',
         headers: authH(tokens),
-        body: JSON.stringify({ action: 'pick', pick_user_id: pickId }),
+        body: JSON.stringify(payload),
       });
       const d = await r.json();
       if (!d.success) {
@@ -481,13 +310,20 @@ export default function ShakeConnectScreen({ tokens, user, onConnected, onBack }
         setPhase('error');
         return;
       }
-      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      Vibration.vibrate([0, 70, 50, 90]);
+
       setConnected(d);
-      setShowConfetti(true);
-      setPhase('success');
+
+      if (d.already_connected) {
+        try { Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning); } catch (_) {}
+        setPhase('already_connected');
+      } else {
+        try { Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); } catch (_) {}
+        Vibration.vibrate([0, 70, 50, 90]);
+        setShowConfetti(true);
+        setPhase('success');
+        Animated.spring(successScale, { toValue: 1, tension: 150, friction: 9, useNativeDriver: true }).start();
+      }
       cleanup();
-      Animated.spring(successScale, { toValue: 1, tension: 150, friction: 9, useNativeDriver: true }).start();
     } catch {
       setErrorMsg('Network error.');
       setPhase('error');
@@ -504,13 +340,27 @@ export default function ShakeConnectScreen({ tokens, user, onConnected, onBack }
       }
       try {
         const d = await postStatus();
+        
+        // Partner paired with me!
+        if (d.matched && d.connected_with) {
+          stopPolling();
+          setConnected(d);
+          try { Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); } catch (_) {}
+          Vibration.vibrate([0, 70, 50, 90]);
+          setShowConfetti(true);
+          setPhase('success');
+          cleanup();
+          Animated.spring(successScale, { toValue: 1, tension: 150, friction: 9, useNativeDriver: true }).start();
+          return;
+        }
+
         const list = (d.shakers || []).map(s => ({ ...s, profile_photo_url: fixMediaUrl(s.profile_photo_url) }));
         if (list.length === 1) {
           stopPolling();
           await connectTo(list[0].id);
         } else if (list.length > 1) {
           stopPolling();
-          await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+          try { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); } catch (_) {}
           setShakers(list);
           setPhase('picking');
         }
@@ -524,24 +374,22 @@ export default function ShakeConnectScreen({ tokens, user, onConnected, onBack }
     lastShakeAt.current = now;
     wiggle();
     setPhase('waiting');
-    await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+    try { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy); } catch (_) {}
     try {
       const d = await postShake();
       const list = (d.shakers || []).map(s => ({ ...s, profile_photo_url: fixMediaUrl(s.profile_photo_url) }));
 
-      // Immediate match from initial shake response
       if (list.length === 1) {
         await connectTo(list[0].id);
         return;
       }
       if (list.length > 1) {
-        await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+        try { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); } catch (_) {}
         setShakers(list);
         setPhase('picking');
         return;
       }
 
-      // No match yet — start polling for the other person to shake
       deadline.current = Date.now() + MATCH_WINDOW;
       startPolling();
     } catch {
@@ -557,9 +405,7 @@ export default function ShakeConnectScreen({ tokens, user, onConnected, onBack }
       accelSub.current = Accelerometer.addListener(({ x, y, z }) => {
         if (Math.sqrt(x * x + y * y + z * z) >= SHAKE_THRESHOLD) onShakeDetected();
       });
-    } catch (e) {
-      // Accelerometer not available (web) — manual button only
-    }
+    } catch (e) {}
   }, [onShakeDetected]);
 
   useEffect(() => { beginListening(); return stopListening; }, [beginListening]);
@@ -578,7 +424,6 @@ export default function ShakeConnectScreen({ tokens, user, onConnected, onBack }
   return (
     <Animated.View style={[_s.root, { opacity: fade }]}>
       <LinearGradient colors={['#0a0a1a', '#12102e', '#0d1b3e']} style={_s.bg}>
-        {/* Glass orbs */}
         <GlassOrb size={120} left={-30} top={80} delay={0} />
         <GlassOrb size={90} left={W - 60} top={140} delay={500} />
         <GlassOrb size={70} left={40} top={H - 250} delay={300} />
@@ -586,7 +431,7 @@ export default function ShakeConnectScreen({ tokens, user, onConnected, onBack }
 
         {showConfetti && <ConfettiBlast />}
 
-        {/* Glassmorphism header */}
+        {/* Header */}
         <Animated.View style={[_s.header, { transform: [{ translateY: glassY }] }]}>
           <View style={_s.headerGlass}>
             <TouchableOpacity onPress={() => { cleanup(); onBack?.(); }} style={_s.backBtn}>
@@ -603,21 +448,15 @@ export default function ShakeConnectScreen({ tokens, user, onConnected, onBack }
         {/* ── Idle / Waiting ────────────────────────────────── */}
         {(phase === 'idle' || phase === 'waiting') && (
           <View style={_s.heroWrap}>
-            {/* Ripple rings */}
             <RippleRing delay={0} size={240} color={phase === 'waiting' ? '#34d399' : '#7c3aed'} />
             <RippleRing delay={500} size={240} color={phase === 'waiting' ? '#34d399' : '#7c3aed'} />
             <RippleRing delay={1000} size={240} color={phase === 'waiting' ? '#34d399' : '#7c3aed'} />
 
-            {/* Core circle — glassmorphism */}
             <View style={_s.coreOuter}>
               <View style={_s.coreGlass}>
-                {phase === 'waiting' ? (
-                  <DualPhoneAnim active={true} />
-                ) : (
-                  <Animated.View style={{ transform: [{ translateX: iconShift }, { rotate: iconShift.interpolate({ inputRange: [-14, 14], outputRange: ['-8deg', '8deg'] }) }] }}>
-                    <Text style={{ fontSize: 68 }}>📱</Text>
-                  </Animated.View>
-                )}
+                <Animated.View style={{ transform: [{ translateX: iconShift }, { rotate: iconShift.interpolate({ inputRange: [-14, 14], outputRange: ['-8deg', '8deg'] }) }] }}>
+                  <Text style={{ fontSize: 68 }}>📱</Text>
+                </Animated.View>
               </View>
             </View>
 
@@ -627,23 +466,15 @@ export default function ShakeConnectScreen({ tokens, user, onConnected, onBack }
 
             <Text style={_s.heroSub}>
               {phase === 'idle'
-                ? 'Both people shake at the same time to connect instantly'
-                : 'Hold on — matching your shake with nearby phones'}
+                ? 'Shake phones at the same time to connect with people nearby'
+                : 'Matching your shake with nearby phones...'}
             </Text>
-
-            {phase === 'waiting' && (
-              <View style={_s.waitRow}>
-                <WaitDot delay={0} />
-                <WaitDot delay={150} />
-                <WaitDot delay={300} />
-              </View>
-            )}
 
             {phase === 'idle' && (
               <View style={_s.howItWorks}>
                 <View style={_s.stepRow}>
                   <View style={_s.stepNum}><Text style={_s.stepNumT}>1</Text></View>
-                  <Text style={_s.stepText}>Both open this screen</Text>
+                  <Text style={_s.stepText}>Open this screen</Text>
                 </View>
                 <View style={_s.stepRow}>
                   <View style={_s.stepNum}><Text style={_s.stepNumT}>2</Text></View>
@@ -660,15 +491,29 @@ export default function ShakeConnectScreen({ tokens, user, onConnected, onBack }
           </View>
         )}
 
-        {/* ── Picking ──────────────────────────────────────── */}
+        {/* ── Picking (3+ Simultaneous Shakers) ─────────────── */}
         {phase === 'picking' && (
           <View style={_s.panel}>
             <View style={_s.panelGlass}>
               <View style={_s.panelTop}>
                 <Text style={{ fontSize: 28 }}>👥</Text>
-                <Text style={_s.panelTitle}>{shakers.length} people shook nearby</Text>
-                <Text style={_s.panelSub}>Tap the person you're standing with</Text>
+                <Text style={_s.panelTitle}>{shakers.length} people shook nearby!</Text>
+                <Text style={_s.panelSub}>Connect with individuals or all at once</Text>
               </View>
+
+              {/* Connect with All Button */}
+              {shakers.length > 1 && (
+                <TouchableOpacity
+                  activeOpacity={0.88}
+                  style={_s.connectAllBtn}
+                  onPress={() => connectTo(shakers.map(s => s.id))}
+                >
+                  <LinearGradient colors={['#7C3AED', '#4F46E5']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={_s.connectAllGradient}>
+                    <Ionicons name="people" size={18} color="#FFF" />
+                    <Text style={_s.connectAllText}>Connect with Everyone ({shakers.length})</Text>
+                  </LinearGradient>
+                </TouchableOpacity>
+              )}
 
               <FlatList
                 data={shakers}
@@ -684,9 +529,15 @@ export default function ShakeConnectScreen({ tokens, user, onConnected, onBack }
                       <View style={{ flex: 1, marginLeft: 12 }}>
                         <Text style={_s.shakerName} numberOfLines={1}>{item.name}</Text>
                         {!!item.affiliation && <Text style={_s.shakerAff} numberOfLines={1}>{item.affiliation}</Text>}
+                        {item.already_connected && (
+                          <View style={_s.connectedChip}>
+                            <Ionicons name="checkmark-circle" size={12} color="#10B981" />
+                            <Text style={_s.connectedChipText}>Already Connected</Text>
+                          </View>
+                        )}
                       </View>
                       <LinearGradient colors={['#7c3aed', '#4f46e5']} style={_s.shakerPickBtn}>
-                        <Ionicons name="hand-left" size={16} color="#fff" />
+                        <Ionicons name="link" size={16} color="#fff" />
                       </LinearGradient>
                     </View>
                   </TouchableOpacity>
@@ -694,22 +545,24 @@ export default function ShakeConnectScreen({ tokens, user, onConnected, onBack }
               />
 
               <TouchableOpacity onPress={reset} style={_s.secondaryBtn}>
-                <Text style={_s.secondaryBtnT}>Not them? Shake again</Text>
+                <Text style={_s.secondaryBtnT}>Shake again</Text>
               </TouchableOpacity>
             </View>
           </View>
         )}
 
-        {/* ── Success ──────────────────────────────────────── */}
+        {/* ── Success (Match Celebration) ──────────────────── */}
         {phase === 'success' && connected && (
           <Animated.View style={[_s.successWrap, { transform: [{ scale: successScale }] }]}>
-            <PointsBurst />
+            <PointsBurst pts={connected.multi ? connected.connections_count * 15 : 15} />
 
             <Text style={_s.successEmoji}>🎉</Text>
             <Text style={_s.successTitle}>Connected!</Text>
-            <Text style={_s.successName}>{connected.connected_with?.name}</Text>
-
-            <MetBadge name={connected.connected_with?.name || 'them'} />
+            <Text style={_s.successName}>
+              {connected.multi
+                ? `${connected.connections_count} People Connected!`
+                : connected.connected_with?.name}
+            </Text>
 
             <TouchableOpacity
               activeOpacity={0.9}
@@ -726,6 +579,36 @@ export default function ShakeConnectScreen({ tokens, user, onConnected, onBack }
               <Text style={_s.secondaryBtnT}>Connect with someone else</Text>
             </TouchableOpacity>
           </Animated.View>
+        )}
+
+        {/* ── Already Connected View ───────────────────────── */}
+        {phase === 'already_connected' && connected && (
+          <View style={_s.successWrap}>
+            <View style={_s.alreadyBadgeWrap}>
+              <Ionicons name="checkmark-circle" size={48} color="#10B981" />
+            </View>
+
+            <Text style={_s.successTitle}>Already Connected!</Text>
+            <Text style={_s.successName}>{connected.connected_with?.name}</Text>
+            <Text style={_s.alreadySub}>
+              You and {connected.connected_with?.name} are already connected. Tap below to chat!
+            </Text>
+
+            <TouchableOpacity
+              activeOpacity={0.9}
+              onPress={() => onConnected?.(connected.conversation_id)}
+              style={{ marginTop: 24 }}
+            >
+              <LinearGradient colors={['#10B981', '#059669']} style={_s.primaryBtn}>
+                <Ionicons name="chatbubble-ellipses" size={18} color="#fff" />
+                <Text style={_s.primaryBtnT}>Open Conversation</Text>
+              </LinearGradient>
+            </TouchableOpacity>
+
+            <TouchableOpacity onPress={reset} style={{ marginTop: 14 }}>
+              <Text style={_s.secondaryBtnT}>Shake with someone else</Text>
+            </TouchableOpacity>
+          </View>
         )}
 
         {/* ── Error ────────────────────────────────────────── */}
@@ -748,7 +631,7 @@ export default function ShakeConnectScreen({ tokens, user, onConnected, onBack }
           <View style={_s.tipRow}>
             <View style={_s.tipGlass}>
               <Ionicons name="sparkles" size={14} color="#c4b5fd" />
-              <Text style={_s.tipText}>Works within a 4-second window • No Bluetooth needed</Text>
+              <Text style={_s.tipText}>Works within a 3-second window • Zero Bluetooth needed</Text>
             </View>
           </View>
         )}
@@ -787,7 +670,6 @@ const _s = StyleSheet.create({
   },
   heroTitle: { fontSize: 26, fontWeight: '900', color: '#fff', textAlign: 'center', letterSpacing: -0.4 },
   heroSub: { fontSize: 14, fontWeight: '500', color: 'rgba(255,255,255,0.55)', textAlign: 'center', lineHeight: 22, marginTop: 10, maxWidth: 300 },
-  waitRow: { flexDirection: 'row', alignItems: 'center', marginTop: 18 },
 
   howItWorks: { marginTop: 30, gap: 12, width: '100%', maxWidth: 260 },
   stepRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
@@ -800,14 +682,6 @@ const _s = StyleSheet.create({
   stepNumT: { fontSize: 13, fontWeight: '900', color: '#c4b5fd' },
   stepText: { fontSize: 14, fontWeight: '600', color: 'rgba(255,255,255,0.65)' },
 
-  dualWrap: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  dualPhone: {},
-  dualBolt: {
-    width: 34, height: 34, borderRadius: 17,
-    backgroundColor: 'rgba(251,191,36,0.15)',
-    alignItems: 'center', justifyContent: 'center',
-  },
-
   panel: { flex: 1, paddingHorizontal: SPACE.xl, paddingTop: 12 },
   panelGlass: {
     flex: 1,
@@ -818,6 +692,10 @@ const _s = StyleSheet.create({
   panelTop: { alignItems: 'center', marginBottom: 16, gap: 6 },
   panelTitle: { fontSize: 22, fontWeight: '900', color: '#fff', textAlign: 'center' },
   panelSub: { fontSize: 13, fontWeight: '500', color: 'rgba(255,255,255,0.5)', textAlign: 'center' },
+
+  connectAllBtn: { marginBottom: 14, borderRadius: 16, overflow: 'hidden' },
+  connectAllGradient: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 14, paddingHorizontal: 16 },
+  connectAllText: { color: '#FFF', fontSize: 14, fontWeight: '800' },
 
   shakerCard: {
     flexDirection: 'row', alignItems: 'center',
@@ -830,31 +708,33 @@ const _s = StyleSheet.create({
   shakerAff: { fontSize: 12, fontWeight: '600', color: 'rgba(255,255,255,0.5)', marginTop: 2 },
   shakerPickBtn: { width: 38, height: 38, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
 
+  connectedChip: {
+    flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 4,
+    backgroundColor: 'rgba(16, 185, 129, 0.12)', paddingHorizontal: 8, paddingVertical: 2,
+    borderRadius: 10, alignSelf: 'flex-start',
+  },
+  connectedChipText: { fontSize: 10, fontWeight: '700', color: '#10B981' },
+
   successWrap: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: SPACE.xl },
   successEmoji: { fontSize: 80, marginBottom: 12 },
   successTitle: { fontSize: 32, fontWeight: '900', color: '#fff', letterSpacing: -0.5 },
   successName: { fontSize: 22, fontWeight: '800', color: '#c4b5fd', marginTop: 6, textAlign: 'center' },
 
-  pointsBurst: { position: 'absolute', top: -50, zIndex: 10 },
-  pointsPill: {
-    flexDirection: 'row', alignItems: 'center', gap: 6,
-    paddingHorizontal: 16, paddingVertical: 8, borderRadius: 999,
+  alreadyBadgeWrap: {
+    width: 80, height: 80, borderRadius: 40,
+    backgroundColor: 'rgba(16, 185, 129, 0.12)', justifyContent: 'center', alignItems: 'center',
+    marginBottom: 16, borderWidth: 2, borderColor: 'rgba(16, 185, 129, 0.3)',
   },
+  alreadySub: {
+    fontSize: 14, fontWeight: '500', color: 'rgba(255,255,255,0.6)',
+    textAlign: 'center', marginTop: 10, maxWidth: 280, lineHeight: 20,
+  },
+
+  pointsBurst: { position: 'absolute', top: -50, zIndex: 10 },
+  pointsPill: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 16, paddingVertical: 8, borderRadius: 999 },
   pointsText: { fontSize: 15, fontWeight: '900', color: '#fff' },
 
-  metBadge: { marginTop: 20, width: '100%' },
-  metBadgeInner: {
-    flexDirection: 'row', alignItems: 'center', gap: 12,
-    padding: 14, borderRadius: 16,
-    borderWidth: 1, borderColor: 'rgba(167,139,250,0.2)',
-  },
-  metBadgeTitle: { fontSize: 14, fontWeight: '900', color: '#c4b5fd' },
-  metBadgeSub: { fontSize: 12, fontWeight: '500', color: 'rgba(255,255,255,0.5)', marginTop: 2 },
-
-  primaryBtn: {
-    flexDirection: 'row', alignItems: 'center', gap: 10,
-    paddingHorizontal: 30, paddingVertical: 16, borderRadius: 16,
-  },
+  primaryBtn: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 30, paddingVertical: 16, borderRadius: 16 },
   primaryBtnT: { fontSize: 16, fontWeight: '900', color: '#fff' },
   secondaryBtn: { alignSelf: 'center', marginTop: 10, paddingVertical: 10 },
   secondaryBtnT: { fontSize: 13, fontWeight: '700', color: 'rgba(255,255,255,0.45)' },
@@ -866,52 +746,8 @@ const _s = StyleSheet.create({
   tipRow: { paddingHorizontal: SPACE.xl, paddingBottom: 32 },
   tipGlass: {
     flexDirection: 'row', alignItems: 'center', gap: 8,
-    backgroundColor: 'rgba(255,255,255,0.05)',
-    borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)',
+    backgroundColor: 'rgba(255,255,255,0.05)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)',
     borderRadius: 14, padding: 12, justifyContent: 'center',
   },
   tipText: { fontSize: 12, fontWeight: '500', color: 'rgba(255,255,255,0.4)' },
-
-  manualBtn: {
-    width: '100%',
-    maxWidth: 320,
-    marginTop: 28,
-  },
-  manualBtnBox: {
-    minHeight: 64,
-    borderRadius: 20,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.18)',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.18,
-    shadowRadius: 18,
-    elevation: 8,
-  },
-  manualBtnIconWrap: {
-    width: 40,
-    height: 40,
-    borderRadius: 14,
-    backgroundColor: 'rgba(79,70,229,0.10)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  manualBtnT: {
-    fontSize: 15,
-    fontWeight: '900',
-    color: '#111827',
-    letterSpacing: -0.2,
-  },
-  manualBtnSub: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#64748b',
-    marginTop: 3,
-    lineHeight: 16,
-  },
 });

@@ -1,0 +1,73 @@
+{
+  "layer": 5,
+  "name": "Security Testing",
+  "score": 50.0,
+  "tests_run": 6,
+  "tests_passed": 3,
+  "tests": [
+    {
+      "test": "sql_injection",
+      "payloads_tested": 7,
+      "vulnerabilities": [],
+      "passed": true
+    },
+    {
+      "test": "xss",
+      "payloads_tested": 5,
+      "reflections": [
+        {
+          "payload": "<script>alert('XSS')</script>",
+          "issue": "Payload stored and reflected without escaping"
+        }
+      ],
+      "passed": false
+    },
+    {
+      "test": "jwt_tampering",
+      "attempts": [
+        {
+          "attack": "payload_modification",
+          "status": 401,
+          "vulnerable": false
+        },
+        {
+          "attack": "none_algorithm",
+          "status": 401,
+          "vulnerable": false
+        }
+      ],
+      "vulnerabilities": [],
+      "passed": true
+    },
+    {
+      "test": "auth_bypass",
+      "endpoints_tested": 7,
+      "bypasses": [
+        {
+          "endpoint": "/auth/staff/",
+          "status": 200,
+          "issue": "Endpoint accessible without authentication"
+        },
+        {
+          "endpoint": "/schedule/sessions/",
+          "status": 200,
+          "issue": "Endpoint accessible without authentication"
+        }
+      ],
+      "passed": false
+    },
+    {
+      "test": "rate_limiting",
+      "attempts": 50,
+      "rate_limited": false,
+      "all_rejected": false,
+      "passed": false
+    },
+    {
+      "test": "sensitive_data_leak",
+      "leaks": [],
+      "passed": true
+    }
+  ],
+  "passed": false
+}

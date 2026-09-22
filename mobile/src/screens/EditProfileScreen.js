@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useMemo } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, ScrollView, Image,
   StatusBar, Platform, StyleSheet, Alert, Modal, Keyboard,
@@ -9,66 +9,141 @@ import { COLORS, FONT, SPACE, RADIUS, SHADOW, API_URL } from '../theme';
 import { Card, FadeIn, GradientAvatar, PrimaryButton, Divider } from '../components';
 import { useKeyboardHeight } from '../useKeyboard';
 
+const PRESET_INTERESTS = [
+  'AI & ML in Libraries',
+  'ETD Repositories',
+  'Open Access',
+  'Scholarly Publishing',
+  'Metadata & Ontologies',
+  'Digital Preservation',
+  'Information Retrieval',
+  'Research Data Management',
+  'Copyright & IP',
+  'Generative AI & LLMs',
+  'Bibliometrics',
+  'Knowledge Graphs',
+];
+
 // ── Field ─────────────────────────────────────────────────────────────────────
-function Field({ label, icon, value, onChange, placeholder, multiline, keyboardType, fieldRef }) {
+function Field({ label, icon, value, onChange, placeholder, multiline, keyboardType, fieldRef, hint }) {
   return (
     <View style={st.fieldGroup} ref={fieldRef} collapsable={false}>
-      <Text style={st.label}>{label}</Text>
-      <View style={[st.fieldRow, multiline && { height: 90, alignItems: 'flex-start', paddingTop: SPACE.md }]}>
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: SPACE.sm }}>
+        <Text style={st.label}>{label}</Text>
+        {hint ? <Text style={st.fieldHint}>{hint}</Text> : null}
+      </View>
+      <View style={[st.fieldRow, multiline && { height: 95, alignItems: 'flex-start', paddingTop: SPACE.md }]}>
         <Ionicons name={icon} size={17} color={COLORS.textTer} style={{ marginRight: SPACE.sm, marginTop: multiline ? 2 : 0 }} />
         <TextInput
-          style={[st.fieldInput, multiline && { textAlignVertical: 'top', height: 70 }]}
+          style={[st.fieldInput, multiline && { textAlignVertical: 'top', height: 75 }]}
           value={value}
           onChangeText={onChange}
           placeholder={placeholder}
           placeholderTextColor={COLORS.textTer}
           multiline={multiline}
           keyboardType={keyboardType || 'default'}
-          autoCapitalize={keyboardType === 'email-address' ? 'none' : 'words'}
+          autoCapitalize={keyboardType === 'email-address' ? 'none' : 'sentences'}
         />
       </View>
     </View>
   );
 }
 
-// ── TagInput ──────────────────────────────────────────────────────────────────
+// ── TagInput with min 3, max 5 enforcement + 1-tap presets ───────────────────
 function TagInput({ label, value, onChange }) {
   const [text, setText] = useState('');
-  const tags = (value || '').split(',').map(t => t.trim()).filter(Boolean);
+  const tags = useMemo(() => (value || '').split(',').map(t => t.trim()).filter(Boolean), [value]);
 
-  const addTag = () => {
-    const t = text.trim();
-    if (t && !tags.includes(t)) onChange([...tags, t].join(', '));
+  const addTag = (val) => {
+    const candidate = (val || text).trim();
+    if (!candidate) return;
+    if (tags.length >= 5) {
+      Alert.alert('Maximum Reached', 'You can select up to 5 research interests.');
+      return;
+    }
+    const exists = tags.some(t => t.toLowerCase() === candidate.toLowerCase());
+    if (!exists) {
+      onChange([...tags, candidate].join(', '));
+    }
     setText('');
   };
 
-  const removeTag = (tag) => onChange(tags.filter(t => t !== tag).join(', '));
+  const removeTag = (tag) => {
+    onChange(tags.filter(t => t !== tag).join(', '));
+  };
+
+  const togglePreset = (preset) => {
+    if (tags.some(t => t.toLowerCase() === preset.toLowerCase())) {
+      removeTag(preset);
+    } else {
+      addTag(preset);
+    }
+  };
+
+  const countColor = tags.length < 3 ? COLORS.warning : tags.length <= 5 ? COLORS.success : COLORS.error;
 
   return (
     <View style={st.fieldGroup}>
-      <Text style={st.label}>{label}</Text>
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: SPACE.sm }}>
+        <Text style={st.label}>{label} *</Text>
+        <Text style={[st.tagCounter, { color: countColor }]}>
+          {tags.length}/5 (Min 3 required)
+        </Text>
+      </View>
+
+      {/* Selected tags */}
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: SPACE.xs, marginBottom: tags.length ? SPACE.sm : 0 }}>
         {tags.map(tag => (
-          <TouchableOpacity key={tag} onPress={() => removeTag(tag)} style={st.tag} activeOpacity={0.7}>
-            <Text style={st.tagText}>{tag}</Text>
-            <Ionicons name="close-circle" size={14} color={COLORS.brand} style={{ marginLeft: 4 }} />
+          <TouchableOpacity key={tag} onPress={() => removeTag(tag)} style={st.tagActive} activeOpacity={0.75}>
+            <Text style={st.tagTextActive}>{tag}</Text>
+            <Ionicons name="close-circle" size={15} color={COLORS.brand} style={{ marginLeft: 4 }} />
           </TouchableOpacity>
         ))}
       </View>
+
+      {/* Custom input */}
       <View style={st.fieldRow}>
         <Ionicons name="pricetag-outline" size={17} color={COLORS.textTer} style={{ marginRight: SPACE.sm }} />
         <TextInput
           style={st.fieldInput}
           value={text}
           onChangeText={setText}
-          placeholder="Type interest and press Add"
+          placeholder="Type custom topic & tap Add..."
           placeholderTextColor={COLORS.textTer}
-          onSubmitEditing={addTag}
+          onSubmitEditing={() => addTag(text)}
           returnKeyType="done"
+          editable={tags.length < 5}
         />
-        <TouchableOpacity onPress={addTag} style={st.addBtn}>
+        <TouchableOpacity
+          onPress={() => addTag(text)}
+          style={[st.addBtn, tags.length >= 5 && { opacity: 0.5 }]}
+          disabled={tags.length >= 5 || !text.trim()}
+        >
           <Text style={st.addBtnText}>Add</Text>
         </TouchableOpacity>
+      </View>
+
+      {/* Preset Suggestions */}
+      <Text style={st.presetLabel}>Suggested ETD & AI Topics (tap to add):</Text>
+      <View style={st.presetWrap}>
+        {PRESET_INTERESTS.map(preset => {
+          const isSelected = tags.some(t => t.toLowerCase() === preset.toLowerCase());
+          return (
+            <TouchableOpacity
+              key={preset}
+              onPress={() => togglePreset(preset)}
+              style={[st.presetChip, isSelected && st.presetChipActive]}
+              activeOpacity={0.7}
+            >
+              <Ionicons
+                name={isSelected ? "checkmark-circle" : "add-circle-outline"}
+                size={13}
+                color={isSelected ? COLORS.brand : COLORS.textSec}
+              />
+              <Text style={[st.presetText, isSelected && st.presetTextActive]}>{preset}</Text>
+            </TouchableOpacity>
+          );
+        })}
       </View>
     </View>
   );
@@ -84,11 +159,11 @@ function PointsModal({ visible, points, message, onDismiss }) {
           <View style={st.modalTrophy}>
             <Ionicons name="trophy" size={40} color={COLORS.accent} />
           </View>
-          <Text style={st.modalTitle}>Points Earned!</Text>
+          <Text style={st.modalTitle}>Achievement Unlocked</Text>
           <Text style={st.modalPoints}>+{points} pts</Text>
           <Text style={st.modalMsg}>{message}</Text>
           <TouchableOpacity onPress={onDismiss} style={st.modalBtn} activeOpacity={0.8}>
-            <Text style={st.modalBtnText}>Awesome!</Text>
+            <Text style={st.modalBtnText}>Dismiss</Text>
           </TouchableOpacity>
         </View>
       </TouchableOpacity>
@@ -117,33 +192,95 @@ export default function EditProfileScreen({ user, tokens, onBack, onProfileUpdat
   const [success, setSuccess]     = useState(false);
   const [pointsModal, setPointsModal] = useState({ visible: false, points: 0, message: '' });
 
-  // Keyboard + scroll ────────────────────────────────────────────────────────
+  // Keyboard + scroll
   const kbHeight  = useKeyboardHeight();
   const scrollRef = useRef(null);
 
-  // Refs for each field so we can measureLayout against the ScrollView
   const bioRef      = useRef(null);
-  const resRef      = useRef(null);
-  const desigRef    = useRef(null);
   const phoneRef    = useRef(null);
   const linkedinRef = useRef(null);
   const affRef      = useRef(null);
 
-  const scrollToRef = (ref) => {
-    if (!ref?.current || !scrollRef?.current) return;
-    setTimeout(() => {
-      ref.current.measureLayout(
-        scrollRef.current,
-        (_x, y) => {
-          scrollRef.current.scrollTo({ y: Math.max(0, y - 120), animated: true });
-        },
-        () => {}
-      );
-    }, 150);
-  };
-
   const GENDERS = ['Male', 'Female', 'Other', 'Prefer not to say'];
   const set = (key, val) => setForm(f => ({ ...f, [key]: val }));
+
+  // Mathematical profile completeness score (0 - 100%)
+  const { scorePct, breakdown } = useMemo(() => {
+    let score = 0;
+    const items = [];
+
+    // 1. Name (15%)
+    if (form.first_name.trim() && form.last_name.trim()) {
+      score += 15;
+      items.push({ name: 'Full Name', done: true, pts: 15 });
+    } else if (form.first_name.trim()) {
+      score += 8;
+      items.push({ name: 'Last Name', done: false, pts: 7 });
+    } else {
+      items.push({ name: 'Name', done: false, pts: 15 });
+    }
+
+    // 2. Photo (15%)
+    if (photoUri || user?.profile_photo_url) {
+      score += 15;
+      items.push({ name: 'Profile Photo', done: true, pts: 15 });
+    } else {
+      items.push({ name: 'Profile Photo', done: false, pts: 15 });
+    }
+
+    // 3. Affiliation (15%)
+    if (form.affiliation.trim().length >= 2) {
+      score += 15;
+      items.push({ name: 'Affiliation', done: true, pts: 15 });
+    } else {
+      items.push({ name: 'Affiliation', done: false, pts: 15 });
+    }
+
+    // 4. Designation (10%)
+    if (form.designation.trim().length >= 2) {
+      score += 10;
+      items.push({ name: 'Designation', done: true, pts: 10 });
+    } else {
+      items.push({ name: 'Designation', done: false, pts: 10 });
+    }
+
+    // 5. Bio (15%) >= 20 characters
+    const bioLen = form.bio.trim().length;
+    if (bioLen >= 20) {
+      score += 15;
+      items.push({ name: 'Bio (20+ chars)', done: true, pts: 15 });
+    } else if (bioLen > 0) {
+      score += 5;
+      items.push({ name: 'Bio too short (<20 chars)', done: false, pts: 10 });
+    } else {
+      items.push({ name: 'Bio', done: false, pts: 15 });
+    }
+
+    // 6. Research Interests (20%) - 3 to 5 tags
+    const tags = form.research_interests.split(',').map(t => t.trim()).filter(Boolean);
+    if (tags.length >= 3 && tags.length <= 5) {
+      score += 20;
+      items.push({ name: '3–5 Research Interests', done: true, pts: 20 });
+    } else if (tags.length === 2) {
+      score += 12;
+      items.push({ name: 'Add 1 more interest', done: false, pts: 8 });
+    } else if (tags.length === 1) {
+      score += 6;
+      items.push({ name: 'Add 2 more interests', done: false, pts: 14 });
+    } else {
+      items.push({ name: 'Research Interests (Min 3)', done: false, pts: 20 });
+    }
+
+    // 7. Contact/LinkedIn (10%)
+    if (form.linkedin_url.trim().length >= 8 || form.phone.trim().length >= 6) {
+      score += 10;
+      items.push({ name: 'Contact / LinkedIn', done: true, pts: 10 });
+    } else {
+      items.push({ name: 'LinkedIn or Phone', done: false, pts: 10 });
+    }
+
+    return { scorePct: Math.min(100, score), breakdown: items };
+  }, [form, photoUri, user]);
 
   const pickImage = async () => {
     try {
@@ -169,9 +306,28 @@ export default function EditProfileScreen({ user, tokens, onBack, onProfileUpdat
   };
 
   const handleSave = async () => {
-    if (!form.first_name.trim()) { Alert.alert('Required', 'First name is required.'); return; }
+    if (!form.first_name.trim()) {
+      Alert.alert('Required Field', 'First name is required.');
+      return;
+    }
+
+    const tags = form.research_interests.split(',').map(t => t.trim()).filter(Boolean);
+    if (tags.length < 3) {
+      Alert.alert(
+        'Research Interests Required',
+        `Please select at least 3 research interests (currently selected: ${tags.length}). You can choose from the suggestions below.`
+      );
+      return;
+    }
+    if (tags.length > 5) {
+      Alert.alert('Too Many Interests', 'Please select a maximum of 5 research interests.');
+      return;
+    }
+
     Keyboard.dismiss();
-    setSaving(true); setSuccess(false);
+    setSaving(true);
+    setSuccess(false);
+
     try {
       const formData = new FormData();
       Object.entries(form).forEach(([key, val]) => {
@@ -180,29 +336,43 @@ export default function EditProfileScreen({ user, tokens, onBack, onProfileUpdat
       if (newPhoto) {
         const uri = newPhoto.uri;
         const ext = (uri.split('.').pop() || 'jpg').toLowerCase();
-        formData.append('profile_photo', { uri, name: `profile.${ext}`, type: `image/${ext === 'jpg' ? 'jpeg' : ext}` });
+        formData.append('profile_photo', {
+          uri,
+          name: `profile.${ext}`,
+          type: `image/${ext === 'jpg' ? 'jpeg' : ext}`,
+        });
       }
-      const res  = await fetch(`${API_URL}/auth/update-profile/`, {
+
+      const res = await fetch(`${API_URL}/auth/update-profile/`, {
         method: 'POST',
-        headers: { Authorization: `Bearer ${tokens.access}`, Accept: 'application/json', 'ngrok-skip-browser-warning': 'true' },
+        headers: {
+          Authorization: `Bearer ${tokens.access}`,
+          Accept: 'application/json',
+          'ngrok-skip-browser-warning': 'true',
+        },
         body: formData,
       });
       const data = await res.json();
       if (res.ok && data.success) {
         setSuccess(true);
         if (onProfileUpdated) onProfileUpdated(data.user);
-        if (data.points_awarded) setPointsModal({ visible: true, points: data.points_awarded, message: data.points_message || '' });
+        if (data.points_awarded) {
+          setPointsModal({
+            visible: true,
+            points: data.points_awarded,
+            message: data.points_message || 'Profile complete! Points added to leaderboard.',
+          });
+        }
         if (data.user?.profile_photo_url) setPhotoUri(data.user.profile_photo_url);
         setTimeout(() => setSuccess(false), 3000);
       } else {
         Alert.alert('Error', data.message || 'Failed to update profile.');
       }
-    } catch { Alert.alert('Error', 'Connection failed. Please try again.'); }
+    } catch {
+      Alert.alert('Error', 'Connection failed. Please try again.');
+    }
     setSaving(false);
   };
-
-  const fields = [form.first_name, form.last_name, form.affiliation, form.bio || form.research_interests, form.phone, form.designation];
-  const pct    = Math.round((fields.filter(Boolean).length / fields.length) * 100);
 
   return (
     <View style={{ flex: 1 }}>
@@ -234,16 +404,30 @@ export default function EditProfileScreen({ user, tokens, onBack, onProfileUpdat
               <Ionicons name="camera" size={16} color={COLORS.textInverse} />
             </View>
           </TouchableOpacity>
-          <Text style={st.photoHint}>Tap to change photo</Text>
+          <Text style={st.photoHint}>Tap to change photo (+15%)</Text>
 
+          {/* Progress Bar with mathematical breakdown */}
           <View style={st.progressWrap}>
             <View style={st.progressRow}>
-              <Text style={st.progressLabel}>Profile Completion</Text>
-              <Text style={st.progressPct}>{pct}%</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <Ionicons
+                  name={scorePct >= 85 ? "shield-checkmark" : "analytics-outline"}
+                  size={14}
+                  color={scorePct >= 85 ? COLORS.success : COLORS.accent}
+                />
+                <Text style={st.progressLabel}>Profile Strength</Text>
+              </View>
+              <Text style={[st.progressPct, scorePct >= 85 && { color: '#86efac' }]}>{scorePct}%</Text>
             </View>
             <View style={st.progressBar}>
-              <View style={[st.progressFill, { width: `${pct}%` }]} />
+              <View style={[
+                st.progressFill,
+                { width: `${scorePct}%`, backgroundColor: scorePct >= 85 ? '#86efac' : COLORS.accent }
+              ]} />
             </View>
+            <Text style={st.progressSub}>
+              {scorePct >= 85 ? '🌟 Profile is complete! 50 leaderboard points unlocked.' : 'Complete key fields to reach 100% and earn +50 points!'}
+            </Text>
           </View>
         </LinearGradient>
 
@@ -298,32 +482,39 @@ export default function EditProfileScreen({ user, tokens, onBack, onProfileUpdat
               ))}
             </View>
 
-            <Field fieldRef={desigRef} label="Designation" icon="briefcase-outline"
+            <Field label="Designation / Title" icon="briefcase-outline"
               value={form.designation} onChange={v => set('designation', v)}
-              placeholder="e.g. Associate Professor" />
-            <Field fieldRef={phoneRef} label="Phone" icon="call-outline"
+              placeholder="e.g. Associate Professor / Research Scholar" hint="+10%" />
+            <Field fieldRef={phoneRef} label="Phone Number" icon="call-outline"
               value={form.phone} onChange={v => set('phone', v)}
-              placeholder="Mobile number" keyboardType="phone-pad" />
+              placeholder="Mobile number with country code" keyboardType="phone-pad" />
           </Card>
 
-          {/* Academic */}
+          {/* Academic & Research */}
           <Card style={st.section} shadow="sm">
             <View style={st.sectionHeader}>
               <Ionicons name="school-outline" size={18} color={COLORS.brand} />
-              <Text style={st.sectionTitle}>Academic Details</Text>
+              <Text style={st.sectionTitle}>Academic &amp; Research</Text>
             </View>
             <Divider style={{ marginBottom: SPACE.lg }} />
 
-            <Field fieldRef={affRef} label="Affiliation / Organisation" icon="business-outline"
+            <Field fieldRef={affRef} label="Affiliation / Organisation *" icon="business-outline"
               value={form.affiliation} onChange={v => set('affiliation', v)}
-              placeholder="e.g. IIT Delhi" />
-            <Field fieldRef={bioRef} label="Bio" icon="document-text-outline"
+              placeholder="e.g. IIT Delhi / Library of Congress" hint="+15%" />
+
+            <Field fieldRef={bioRef} label="Bio (min 20 characters)" icon="document-text-outline"
               value={form.bio} onChange={v => set('bio', v)}
-              placeholder="A short bio about yourself..." multiline />
-            <TagInput label="Research Interests" value={form.research_interests} onChange={v => set('research_interests', v)} />
+              placeholder="Write a concise overview of your research, institutional role, and interests..."
+              multiline hint={form.bio.trim().length >= 20 ? 'Verified (+15%)' : `${form.bio.trim().length}/20 chars`} />
+
+            <TagInput
+              label="Research Interests (3 to 5 Mandatory)"
+              value={form.research_interests}
+              onChange={v => set('research_interests', v)}
+            />
           </Card>
 
-          {/* Social */}
+          {/* Social & Privacy */}
           <Card style={st.section} shadow="sm">
             <View style={st.sectionHeader}>
               <Ionicons name="link-outline" size={18} color={COLORS.brand} />
@@ -333,12 +524,12 @@ export default function EditProfileScreen({ user, tokens, onBack, onProfileUpdat
 
             <Field fieldRef={linkedinRef} label="LinkedIn Profile" icon="logo-linkedin"
               value={form.linkedin_url} onChange={v => set('linkedin_url', v)}
-              placeholder="https://linkedin.com/in/..." />
+              placeholder="https://linkedin.com/in/yourprofile" hint="+10%" />
 
             <View style={st.toggleRow}>
               <View style={{ flex: 1 }}>
-                <Text style={st.toggleLabel}>Show phone to attendees</Text>
-                <Text style={st.toggleSub}>Others can see your phone in the directory</Text>
+                <Text style={st.toggleLabel}>Show phone in directory</Text>
+                <Text style={st.toggleSub}>Visible only to checked-in attendees</Text>
               </View>
               <TouchableOpacity onPress={() => set('show_phone', !form.show_phone)}
                 style={[st.toggle, form.show_phone && st.toggleOn]}>
@@ -348,8 +539,8 @@ export default function EditProfileScreen({ user, tokens, onBack, onProfileUpdat
 
             <View style={[st.toggleRow, { borderBottomWidth: 0 }]}>
               <View style={{ flex: 1 }}>
-                <Text style={st.toggleLabel}>Show LinkedIn to attendees</Text>
-                <Text style={st.toggleSub}>Others can see your LinkedIn profile</Text>
+                <Text style={st.toggleLabel}>Show LinkedIn on profile</Text>
+                <Text style={st.toggleSub}>Allows attendees to connect on LinkedIn</Text>
               </View>
               <TouchableOpacity onPress={() => set('show_linkedin', !form.show_linkedin)}
                 style={[st.toggle, form.show_linkedin && st.toggleOn]}>
@@ -358,7 +549,7 @@ export default function EditProfileScreen({ user, tokens, onBack, onProfileUpdat
             </View>
           </Card>
 
-          <PrimaryButton label={saving ? 'Saving…' : 'Save Changes'} onPress={handleSave} loading={saving} style={{ marginBottom: SPACE.sm }} />
+          <PrimaryButton label={saving ? 'Saving Changes…' : 'Save Changes'} onPress={handleSave} loading={saving} style={{ marginBottom: SPACE.sm }} />
           <TouchableOpacity onPress={onBack} style={st.cancelBtn} activeOpacity={0.7}>
             <Text style={st.cancelText}>Cancel</Text>
           </TouchableOpacity>
@@ -371,19 +562,20 @@ export default function EditProfileScreen({ user, tokens, onBack, onProfileUpdat
 
 const st = StyleSheet.create({
   header:       { paddingTop: Platform.OS === 'ios' ? 58 : 46, paddingBottom: SPACE.xl, paddingHorizontal: SPACE.xl, alignItems: 'center' },
-  headerRow:    { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', width: '100%', marginBottom: SPACE.xl },
+  headerRow:    { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', width: '100%', marginBottom: SPACE.lg },
   backBtn:      { width: 40, height: 40, borderRadius: RADIUS.md, backgroundColor: 'rgba(255,255,255,0.12)', alignItems: 'center', justifyContent: 'center' },
   headerTitle:  { fontSize: FONT.lg, fontWeight: FONT.w7, color: COLORS.textInverse },
-  photoWrap:    { position: 'relative', marginBottom: SPACE.sm },
+  photoWrap:    { position: 'relative', marginBottom: SPACE.xs },
   photo:        { width: 96, height: 96, borderRadius: 30, borderWidth: 3, borderColor: 'rgba(255,255,255,0.25)' },
   cameraIcon:   { position: 'absolute', bottom: 0, right: 0, width: 32, height: 32, borderRadius: 16, backgroundColor: COLORS.brand, borderWidth: 3, borderColor: COLORS.textInverse, alignItems: 'center', justifyContent: 'center' },
-  photoHint:    { fontSize: FONT.xs, color: 'rgba(255,255,255,0.50)' },
-  progressWrap: { width: '100%', marginTop: SPACE.lg, backgroundColor: 'rgba(255,255,255,0.10)', borderRadius: RADIUS.lg, padding: SPACE.md },
-  progressRow:  { flexDirection: 'row', justifyContent: 'space-between', marginBottom: SPACE.sm },
-  progressLabel:{ fontSize: FONT.xs, color: 'rgba(255,255,255,0.65)', fontWeight: FONT.w6 },
-  progressPct:  { fontSize: FONT.xs, color: COLORS.accent, fontWeight: FONT.w8 },
-  progressBar:  { height: 4, backgroundColor: 'rgba(255,255,255,0.15)', borderRadius: 2, overflow: 'hidden' },
-  progressFill: { height: '100%', backgroundColor: COLORS.accent, borderRadius: 2 },
+  photoHint:    { fontSize: FONT.xs, color: 'rgba(255,255,255,0.70)', marginTop: 4 },
+  progressWrap: { width: '100%', marginTop: SPACE.md, backgroundColor: 'rgba(255,255,255,0.12)', borderRadius: RADIUS.lg, padding: SPACE.md },
+  progressRow:  { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 },
+  progressLabel:{ fontSize: FONT.xs, color: 'rgba(255,255,255,0.85)', fontWeight: FONT.w7 },
+  progressPct:  { fontSize: FONT.xs, color: COLORS.accent, fontWeight: FONT.w9 },
+  progressBar:  { height: 6, backgroundColor: 'rgba(255,255,255,0.20)', borderRadius: 3, overflow: 'hidden' },
+  progressFill: { height: '100%', backgroundColor: COLORS.accent, borderRadius: 3 },
+  progressSub:  { fontSize: 10, color: 'rgba(255,255,255,0.70)', marginTop: 6 },
   curve:        { flex: 1, backgroundColor: COLORS.bg, borderTopLeftRadius: RADIUS.xxxl, borderTopRightRadius: RADIUS.xxxl },
   scrollContent:{ paddingHorizontal: SPACE.xl, paddingTop: SPACE.lg, paddingBottom: 160 },
   successBanner:{ flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.successLight, padding: SPACE.md, borderRadius: RADIUS.md, marginBottom: SPACE.lg },
@@ -392,17 +584,25 @@ const st = StyleSheet.create({
   sectionHeader:{ flexDirection: 'row', alignItems: 'center', gap: SPACE.sm, marginBottom: SPACE.sm },
   sectionTitle: { fontSize: FONT.md, fontWeight: FONT.w7, color: COLORS.text },
   fieldGroup:   { marginBottom: SPACE.lg },
-  label:        { fontSize: FONT.sm, fontWeight: FONT.w6, color: COLORS.textSec, marginBottom: SPACE.sm },
+  label:        { fontSize: FONT.sm, fontWeight: FONT.w6, color: COLORS.textSec },
+  fieldHint:    { fontSize: 10, fontWeight: FONT.w7, color: COLORS.brand },
   fieldRow:     { flexDirection: 'row', alignItems: 'center', height: 50, borderWidth: 1.5, borderColor: COLORS.border, borderRadius: RADIUS.lg, backgroundColor: COLORS.bg, paddingHorizontal: SPACE.md },
   fieldInput:   { flex: 1, fontSize: FONT.base, color: COLORS.text },
   genderChip:   { paddingHorizontal: SPACE.md, paddingVertical: SPACE.sm, borderRadius: RADIUS.full, borderWidth: 1.5, borderColor: COLORS.border, backgroundColor: COLORS.bg },
   genderChipActive: { borderColor: COLORS.brand, backgroundColor: COLORS.brandLight },
   genderText:   { fontSize: FONT.sm, fontWeight: FONT.w5, color: COLORS.textSec },
   genderTextActive: { color: COLORS.brand, fontWeight: FONT.w7 },
-  tag:          { flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.brandLight, paddingHorizontal: SPACE.md, paddingVertical: SPACE.xs, borderRadius: RADIUS.full },
-  tagText:      { fontSize: FONT.xs, fontWeight: FONT.w6, color: COLORS.brand },
+  tagCounter:   { fontSize: 11, fontWeight: FONT.w7 },
+  tagActive:    { flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.brandLight, paddingHorizontal: SPACE.md, paddingVertical: 6, borderRadius: RADIUS.full, borderWidth: 1, borderColor: 'rgba(3,51,182,0.15)' },
+  tagTextActive:{ fontSize: FONT.xs, fontWeight: FONT.w7, color: COLORS.brand },
   addBtn:       { paddingHorizontal: SPACE.md, paddingVertical: SPACE.sm, backgroundColor: COLORS.brandLight, borderRadius: RADIUS.md },
   addBtnText:   { fontSize: FONT.sm, fontWeight: FONT.w7, color: COLORS.brand },
+  presetLabel:  { fontSize: 11, fontWeight: FONT.w7, color: COLORS.textTer, marginTop: SPACE.md, marginBottom: SPACE.xs },
+  presetWrap:   { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
+  presetChip:   { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 10, paddingVertical: 6, borderRadius: RADIUS.full, backgroundColor: '#f1f5f9', borderWidth: 1, borderColor: '#e2e8f0' },
+  presetChipActive: { backgroundColor: COLORS.brandLight, borderColor: COLORS.brand },
+  presetText:   { fontSize: 11, color: COLORS.textSec, fontWeight: FONT.w5 },
+  presetTextActive: { color: COLORS.brand, fontWeight: FONT.w7 },
   toggleRow:    { flexDirection: 'row', alignItems: 'center', paddingVertical: SPACE.md, borderBottomWidth: 1, borderBottomColor: COLORS.borderLight },
   toggleLabel:  { fontSize: FONT.sm, fontWeight: FONT.w6, color: COLORS.text },
   toggleSub:    { fontSize: FONT.xs, color: COLORS.textTer, marginTop: 2 },

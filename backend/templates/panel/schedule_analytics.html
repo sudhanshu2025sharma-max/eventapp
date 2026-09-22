@@ -103,10 +103,10 @@
                             {% if stat.q.question_type == 'rating' %}
                                 <span style="color:#f59e0b;font-weight:700;">{{ ans.rating_value }}★</span>
                             {% elif stat.q.question_type == 'boolean' %}
-                                {% if ans.boolean_value %}<span class="badge badge-success">Yes</span>
+                                {% if ans.answer_text == 'Yes' or ans.answer_text == 'true' %}<span class="badge badge-success">Yes</span>
                                 {% else %}<span class="badge badge-danger">No</span>{% endif %}
                             {% else %}
-                                <span style="color:var(--text-secondary);">{{ ans.text_value|truncatechars:40 }}</span>
+                                <span style="color:var(--text-secondary);">{{ ans.answer_text|truncatechars:40 }}</span>
                             {% endif %}
                         {% endif %}
                     {% endfor %}

@@ -1,0 +1,22 @@
+{
+  "layer": 8,
+  "name": "Data Integrity",
+  "score": 100.0,
+  "tests_run": 2,
+  "tests_passed": 2,
+  "tests": [
+    {
+      "test": "concurrent_voting",
+      "attempts": 20,
+      "successful": 0,
+      "expected_max": 1,
+      "passed": true
+    },
+    {
+      "test": "connection_race",
+      "skipped": true,
+      "passed": true
+    }
+  ],
+  "passed": true
+}

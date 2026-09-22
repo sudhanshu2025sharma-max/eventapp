@@ -10,6 +10,9 @@ export const COLORS = {
   brandDeeper:   '#070614',
   brandLight:    '#e8eeff',
   brandMid:      'rgba(3,51,182,0.10)',
+  primary:       '#0333b6',
+  primaryLight:  '#e8eeff',
+  danger:        '#ef4444',
   accent:        '#f59e0b',
   accentDark:    '#d97706',
   accentLight:   '#fef3c7',
@@ -95,10 +98,27 @@ export const TOP = Platform.OS === 'ios' ? 54 : 44;
 // Phone → ngrok
 // Web   → Codespaces public port
 // const NGROK      = 'https://bauble-aftermost-buffalo.ngrok-free.dev/api/v1';
-const NGROK = 'http://10.17.9.48:8000/api/v1'; // Use the VM IP
-const CODESPACES = 'https://cautious-eureka-jj56xxggr9vpcq9qj-8000.app.github.dev/api/v1';
+// const NGROK = 'http://10.17.9.48:8000/api/v1'; // Use the VM IP
+// const CODESPACES = 'https://cautious-eureka-jj56xxggr9vpcq9qj-8000.app.github.dev/api/v1';
 
-export const API_URL  = NGROK; // both web + native use ngrok
+// export const API_URL  = 'http://10.17.9.48:8000/api/v1'; // both web + native use ngrok
+// export const API_ROOT = API_URL.replace(/\/api\/v1$/, '');
+
+// const BASE_HEADERS = {
+//   'Content-Type': 'application/json',
+//   'Accept': 'application/json',
+//   'x-public-origin': API_ROOT,
+// };
+
+
+// mobile/src/theme.js & eventapp/mobile/src/theme.js
+
+const PRODUCTION = 'http://10.17.9.48:8000/api/v1';
+
+const DEV_API_URL  = 'http://10.17.9.48:8000/api/v1';
+const PROD_API_URL = 'https://etd2026.iitd.ac.in/api/v1';
+
+export const API_URL  = __DEV__ ? DEV_API_URL : PROD_API_URL;
 export const API_ROOT = API_URL.replace(/\/api\/v1$/, '');
 
 const BASE_HEADERS = {
@@ -106,6 +126,7 @@ const BASE_HEADERS = {
   'Accept': 'application/json',
   'x-public-origin': API_ROOT,
 };
+
 
 export const API_HEADERS = { ...BASE_HEADERS, 'ngrok-skip-browser-warning': 'true' };
 

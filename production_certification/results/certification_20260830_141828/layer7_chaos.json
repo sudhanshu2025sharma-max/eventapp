@@ -1,0 +1,14 @@
+{
+  "layer": 7,
+  "name": "Chaos Engineering",
+  "score": 100.0,
+  "tests": [
+    {
+      "test": "redis_restart",
+      "skipped": true,
+      "passed": true,
+      "score": 100
+    }
+  ],
+  "passed": true
+}

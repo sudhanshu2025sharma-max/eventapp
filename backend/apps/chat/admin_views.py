@@ -393,3 +393,63 @@ def chat_shakes_panel(request):
         'shake_count': shake_count,
         'connect_count': connect_count,
     })
+
+
+@admin_required
+def call_logs_panel(request):
+    """Call logs dashboard — shows all voice call sessions."""
+    from apps.chat.models import CallSession
+    from django.db.models import Q, Count, F, ExpressionWrapper, DurationField
+    from django.utils import timezone
+
+    # Filters
+    status_filter = request.GET.get('status', '')
+    search = request.GET.get('q', '').strip()
+    date_from = request.GET.get('date_from', '')
+    date_to = request.GET.get('date_to', '')
+
+    qs = CallSession.objects.select_related('caller', 'callee').order_by('-created_at')
+
+    if status_filter in ('ringing', 'active', 'ended', 'missed'):
+        qs = qs.filter(status=status_filter)
+
+    if search:
+        qs = qs.filter(
+            Q(caller__first_name__icontains=search) |
+            Q(caller__last_name__icontains=search) |
+            Q(caller__email__icontains=search) |
+            Q(callee__first_name__icontains=search) |
+            Q(callee__last_name__icontains=search) |
+            Q(callee__email__icontains=search)
+        )
+
+    if date_from:
+        qs = qs.filter(created_at__date__gte=date_from)
+    if date_to:
+        qs = qs.filter(created_at__date__lte=date_to)
+
+    # Stats
+    total = qs.count()
+    active_count = qs.filter(status='active').count()
+    ended_count = qs.filter(status='ended').count()
+    missed_count = qs.filter(status='missed').count()
+    ringing_count = qs.filter(status='ringing').count()
+
+    # Pagination
+    from django.core.paginator import Paginator
+    paginator = Paginator(qs, 25)
+    page = request.GET.get('page', 1)
+    logs = paginator.get_page(page)
+
+    return render(request, 'panel/call_logs.html', {
+        'logs': logs,
+        'total': total,
+        'active_count': active_count,
+        'ended_count': ended_count,
+        'missed_count': missed_count,
+        'ringing_count': ringing_count,
+        'status_filter': status_filter,
+        'search': search,
+        'date_from': date_from,
+        'date_to': date_to,
+    })

@@ -1,0 +1,31 @@
+{
+  "layer": 2,
+  "name": "Infrastructure Stress",
+  "score": 100.0,
+  "postgresql": {
+    "test": "pgbench",
+    "clients": 50,
+    "threads": 4,
+    "duration": 60,
+    "tps": 2239.325567,
+    "latency_ms": 22.328,
+    "success": true,
+    "raw_output": "pgbench (16.15 (Ubuntu 16.15-0ubuntu0.24.04.1))\ntransaction type: <builtin: TPC-B (sort of)>\nscaling factor: 5\nquery mode: simple\nnumber of clients: 50\nnumber of threads: 4\nmaximum number of tries: 1\nduration: 60 s\nnumber of transactions actually processed: 133470\nnumber of failed transactions: 0 (0.000%)\nlatency average = 22.328 ms\ninitial connection time = 456.788 ms\ntps = 2239.325567 (without initial connection time)\nstatement latencies in milliseconds and failures:\n         0.002           0  \\set aid random(1, 100000 * :scale)\n         0.001           0  \\set bid random(1, 1 * :scale)\n         0.001           0  \\set tid random(1, 10 * :scale)\n         0.001           0  \\set delta random(-5000, 5000)\n         0.150           0  BEGIN;\n         0.316           0  UPDATE pgbench_accounts SET abalance = abalance + :delta WHERE aid = :aid;\n         0.261           0  SELECT abalance FROM pgbench_accounts WHERE aid = :aid;\n        11.065           0  UPDATE pgbench_tellers SET tbalance = tbalance + :delta WHERE tid = :tid;\n         8.580           0  UPDATE pgbench_branches SET bbalance = bbalance + :delta WHERE bid = :bid;\n         0.261           0  INSERT INTO pgbench_history (tid, bid, aid, delta, mtime) VALUES (:tid, :bid, :aid, :delta, CURRENT_TIMESTAMP);\n         1.674           0  END;\n\nstarting vacuum...end.\n",
+    "score": 100.0
+  },
+  "redis": {
+    "test": "redis-benchmark",
+    "duration": 30,
+    "operations": {
+      "SET": 84033.61,
+      "GET": 83056.48,
+      "INCR": 83752.09,
+      "LPUSH": 80128.2,
+      "LPOP": 86058.52
+    },
+    "success": true,
+    "score": 100,
+    "avg_ops_per_sec": 83405.78
+  },
+  "passed": true
+}

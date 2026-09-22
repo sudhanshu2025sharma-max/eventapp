@@ -61,3 +61,13 @@ yarn-error.log*
 *.p12
 *.mobileprovision
 *.orig.*
+*.apk
+*.log
+server.log
+backend/.env
+mobile/node_modules/
+mobile/.expo/
+mobile/android/
+mobile/ios/
+*.pyc
+__pycache__/

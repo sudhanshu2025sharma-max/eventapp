@@ -7,7 +7,7 @@ from django.utils.dateparse import parse_datetime
 from zoneinfo import ZoneInfo
 
 from apps.accounts.admin_views import admin_required
-from .ideathon_models import IdeathonConfig, IdeathonTeam, IdeathonMember
+from .ideathon_models import IdeathonConfig, IdeathonTeam, IdeathonMember, IdeathonInterest
 from .models import Poll, PollOption, PollAuditLog
 
 IST = ZoneInfo("Asia/Kolkata")
@@ -28,6 +28,27 @@ def _parse_dt(val):
 def ideathon_panel(request):
     cfg = IdeathonConfig.get()
     teams = IdeathonTeam.objects.prefetch_related('members__user').all()
+    
+    # Pre-calculate interested users and their team details
+    interests = IdeathonInterest.objects.select_related('user').all()
+    memberships = {
+        m.user_id: m.team
+        for m in IdeathonMember.objects.select_related('team').all()
+    }
+    
+    interested_list = []
+    interested_no_team_count = 0
+    
+    for interest in interests:
+        user_team = memberships.get(interest.user_id)
+        if not user_team:
+            interested_no_team_count += 1
+            
+        interested_list.append({
+            'user': interest.user,
+            'team': user_team,
+            'interest_id': interest.id,
+        })
 
     if request.method == 'POST':
         action = request.POST.get('action')
@@ -36,7 +57,7 @@ def ideathon_panel(request):
             cfg.registration_open = request.POST.get('registration_open') == 'on'
             cfg.reg_starts_at = _parse_dt(request.POST.get('reg_starts_at'))
             cfg.reg_ends_at = _parse_dt(request.POST.get('reg_ends_at'))
-            cfg.min_team_size = int(request.POST.get('min_team_size') or 2)
+            cfg.min_team_size = int(request.POST.get('min_team_size') or 3)
             cfg.max_team_size = int(request.POST.get('max_team_size') or 5)
             cfg.description = request.POST.get('description', '').strip()
             cfg.updated_by = request.user
@@ -56,7 +77,7 @@ def ideathon_panel(request):
                     from apps.notifications.fcm import send_to_all
                     notif = Notif.objects.create(
                         title='🏆 Ideathon Team Registration is Open!',
-                        body='Form your teams now in the app. Teams of 2-5 members.',
+                        body='Form your teams now in the app. Teams of 3-5 members.',
                         target_type='all', sent_by=request.user, status='pending',
                         data={'type': 'poll'},
                     )
@@ -97,6 +118,30 @@ def ideathon_panel(request):
                     messages.success(request, f'{name} removed from team.')
             except IdeathonMember.DoesNotExist:
                 messages.error(request, 'Member not found.')
+
+        elif action == 'remove_interest':
+            interest_id = request.POST.get('interest_id')
+            try:
+                interest = IdeathonInterest.objects.get(pk=interest_id)
+                user_name = interest.user.get_full_name() or interest.user.email
+                if IdeathonMember.objects.filter(user=interest.user).exists():
+                    messages.error(request, f"Cannot remove interest for {user_name} because they are currently in a team.")
+                else:
+                    interest.delete()
+                    messages.success(request, f"Removed interest registration for {user_name}.")
+            except IdeathonInterest.DoesNotExist:
+                messages.error(request, 'Interest entry not found.')
+
+        elif action == 'clear_all_interests':
+            team_members_count = IdeathonMember.objects.count()
+            if team_members_count > 0:
+                # Keep those who are inside teams to prevent database consistency breakages
+                active_member_ids = list(IdeathonMember.objects.values_list('user_id', flat=True))
+                deleted_count, _ = IdeathonInterest.objects.exclude(user_id__in=active_member_ids).delete()
+                messages.success(request, f"Cleared {deleted_count} non-teamed interested participants. Kept active team members.")
+            else:
+                IdeathonInterest.objects.all().delete()
+                messages.success(request, "Cleared all interested participant records.")
 
         elif action == 'create_voting_poll':
             if teams.count() < 2:
@@ -140,4 +185,7 @@ def ideathon_panel(request):
         'teams': teams,
         'total_teams': teams.count(),
         'total_members': IdeathonMember.objects.count(),
+        'interested_list': interested_list,
+        'total_interested': len(interested_list),
+        'interested_no_team_count': interested_no_team_count,
     })

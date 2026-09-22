@@ -1,0 +1,199 @@
+{% extends "panel/base.html" %}
+{% block title %}Meal Pass Manager{% endblock %}
+{% block page_title %}Meal Pass Management{% endblock %}
+{% block page_subtitle %}Issue passes to Staff/Attendees or Walk-ins, with instant QR email delivery{% endblock %}
+
+{% block content %}
+<div style="display:grid; grid-template-columns:1.2fr 1fr; gap:24px; margin-bottom:32px;">
+
+  <!-- Issue Meal Pass Form -->
+  <div style="background:#fff; border-radius:16px; padding:24px; border:1px solid #e2e8f0; box-shadow:0 2px 6px rgba(0,0,0,0.03);">
+    <h3 style="margin:0 0 16px; color:#1e3a5f; display:flex; align-items:center; gap:8px;">
+      <span>🎫</span> Issue Meal Pass
+    </h3>
+    <form method="POST">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="create_pass">
+      
+      <!-- Assignment Mode Picker -->
+      <div style="display:flex; gap:16px; margin-bottom:16px; padding:12px; background:#f8fafc; border-radius:10px; border:1px solid #e2e8f0;">
+        <label style="display:flex; align-items:center; gap:6px; font-size:13px; font-weight:700; color:#1e3a5f; cursor:pointer;">
+          <input type="radio" name="assign_type" value="registered" checked onchange="toggleAssignType('registered')">
+          Assign to Registered Staff / Attendee
+        </label>
+        <label style="display:flex; align-items:center; gap:6px; font-size:13px; font-weight:700; color:#1e3a5f; cursor:pointer;">
+          <input type="radio" name="assign_type" value="walkin" onchange="toggleAssignType('walkin')">
+          Issue Walk-in / Guest Pass
+        </label>
+      </div>
+
+      <!-- Registered User Selection -->
+      <div id="registered_section" style="margin-bottom:14px;">
+        <label style="font-size:12px; font-weight:700; color:#64748b; margin-bottom:4px; display:block;">Select Staff or Attendee *</label>
+        <select name="user_id" id="user_select" style="width:100%; padding:10px; border:1px solid #cbd5e1; border-radius:8px; font-size:14px;">
+          <option value="">-- Select Person --</option>
+          {% for u in all_users %}
+            <option value="{{ u.id }}">{{ u.get_full_name|default:u.email }} ({{ u.email }}) — {{ u.role|title }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <!-- Walkin Section -->
+      <div id="walkin_section" style="display:none; margin-bottom:14px;">
+        <div style="display:grid; gap:12px;">
+          <div>
+            <label style="font-size:12px; font-weight:700; color:#64748b;">Guest Full Name *</label>
+            <input name="guest_name" placeholder="e.g. Dr. John Doe" style="width:100%; padding:10px; border:1px solid #cbd5e1; border-radius:8px; font-size:14px;">
+          </div>
+          <div>
+            <label style="font-size:12px; font-weight:700; color:#64748b;">Guest Email (QR code will be emailed here)</label>
+            <input name="guest_email" type="email" placeholder="guest@example.com" style="width:100%; padding:10px; border:1px solid #cbd5e1; border-radius:8px; font-size:14px;">
+          </div>
+          <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
+            <div>
+              <label style="font-size:12px; font-weight:700; color:#64748b;">Phone</label>
+              <input name="guest_phone" placeholder="+91..." style="width:100%; padding:10px; border:1px solid #cbd5e1; border-radius:8px; font-size:14px;">
+            </div>
+            <div>
+              <label style="font-size:12px; font-weight:700; color:#64748b;">Registration ID (Optional)</label>
+              <input name="guest_reg_no" placeholder="ETD-GUEST-01" style="width:100%; padding:10px; border:1px solid #cbd5e1; border-radius:8px; font-size:14px;">
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Meal Type & Date -->
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:16px;">
+        <div>
+          <label style="font-size:12px; font-weight:700; color:#64748b;">Meal Session</label>
+          <select name="meal_type" style="width:100%; padding:10px; border:1px solid #cbd5e1; border-radius:8px; font-size:14px; font-weight:600;">
+            <option value="meal" selected>🍴 Meal Pass (Unified)</option>
+            <option value="lunch">🍱 Lunch Meal Pass</option>
+            <option value="dinner">🍽️ Dinner Meal Pass</option>
+          </select>
+        </div>
+        <div>
+          <label style="font-size:12px; font-weight:700; color:#64748b;">Date</label>
+          <input name="date" type="date" value="{{ today|date:'Y-m-d' }}" style="width:100%; padding:10px; border:1px solid #cbd5e1; border-radius:8px; font-size:14px;">
+        </div>
+      </div>
+
+      <button type="submit" style="width:100%; padding:12px; background:#1856ff; color:#fff; border:none; border-radius:10px; font-weight:700; font-size:14px; cursor:pointer; box-shadow:0 2px 4px rgba(24,86,255,0.2);">
+        Generate Pass &amp; Send QR Code Email
+      </button>
+    </form>
+  </div>
+
+  <!-- Schedule Meal Window Form -->
+  <div style="background:#fff; border-radius:16px; padding:24px; border:1px solid #e2e8f0; box-shadow:0 2px 6px rgba(0,0,0,0.03);">
+    <h3 style="margin:0 0 16px; color:#1e3a5f; display:flex; align-items:center; gap:8px;">
+      <span>⏰</span> Schedule Meal Times
+    </h3>
+    <form method="POST">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="schedule_window">
+      <div style="display:grid; gap:12px;">
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
+          <div>
+            <label style="font-size:12px; font-weight:700; color:#64748b;">Meal Type</label>
+            <select name="meal_type" style="width:100%; padding:10px; border:1px solid #cbd5e1; border-radius:8px; font-size:14px; font-weight:600;">
+              <option value="meal" selected>🍴 Meal (Unified)</option>
+              <option value="lunch">🍱 Lunch</option>
+              <option value="dinner">🍽️ Dinner</option>
+            </select>
+          </div>
+          <div>
+            <label style="font-size:12px; font-weight:700; color:#64748b;">Date</label>
+            <input name="date" type="date" value="{{ today|date:'Y-m-d' }}" style="width:100%; padding:10px; border:1px solid #cbd5e1; border-radius:8px; font-size:14px;">
+          </div>
+        </div>
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
+          <div>
+            <label style="font-size:12px; font-weight:700; color:#64748b;">Start Serving Time</label>
+            <input name="start_time" type="time" value="12:30" style="width:100%; padding:10px; border:1px solid #cbd5e1; border-radius:8px; font-size:14px;">
+          </div>
+          <div>
+            <label style="font-size:12px; font-weight:700; color:#64748b;">End Serving Time</label>
+            <input name="end_time" type="time" value="14:30" style="width:100%; padding:10px; border:1px solid #cbd5e1; border-radius:8px; font-size:14px;">
+          </div>
+        </div>
+        <button type="submit" style="padding:12px; background:#059669; color:#fff; border:none; border-radius:10px; font-weight:700; font-size:14px; cursor:pointer;">
+          Save Schedule &amp; Enable Auto-Notifications
+        </button>
+      </div>
+    </form>
+
+    <h4 style="margin:24px 0 8px; color:#64748b; font-size:12px; letter-spacing:0.5px;">ACTIVE SCHEDULED WINDOWS</h4>
+    {% for w in windows %}
+    <div style="padding:10px 14px; background:#f8fafc; border-radius:10px; margin-bottom:8px; font-size:13px; display:flex; justify-content:space-between; align-items:center; border:1px solid #e2e8f0;">
+      <span><strong>{{ w.get_meal_type_display }}</strong> — {{ w.date|date:"d M Y" }}</span>
+      <span style="display:flex; align-items:center; gap:8px;">
+        <span style="color:#64748b;">{{ w.start_time|time:"g:i A" }} – {{ w.end_time|time:"g:i A" }}</span>
+        {% if w.is_open %}<span style="background:#d1fae5; color:#059669; font-size:11px; font-weight:700; padding:2px 8px; borderRadius:6px;">OPEN NOW</span>{% endif %}
+      </span>
+    </div>
+    {% empty %}
+    <p style="color:#94a3b8; font-size:13px; padding:12px 0;">No future windows scheduled yet.</p>
+    {% endfor %}
+  </div>
+</div>
+
+<!-- Issued Meal Passes Log -->
+<div style="background:#fff; border-radius:16px; padding:24px; border:1px solid #e2e8f0; box-shadow:0 2px 6px rgba(0,0,0,0.03);">
+  <h3 style="margin:0 0 16px; color:#1e3a5f;">Issued Passes History</h3>
+  <table style="width:100%; border-collapse:collapse; font-size:13px;">
+    <thead>
+      <tr style="border-bottom:2px solid #e2e8f0; text-align:left; color:#64748b;">
+        <th style="padding:10px 8px;">Attendee / Guest</th>
+        <th style="padding:10px 8px;">Pass Type</th>
+        <th style="padding:10px 8px;">Date</th>
+        <th style="padding:10px 8px;">Email</th>
+        <th style="padding:10px 8px;">Status</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for p in recent_passes %}
+      <tr style="border-bottom:1px solid #f1f5f9;">
+        <td style="padding:10px 8px; font-weight:700; color:#1e293b;">
+          {{ p.display_name }}
+          {% if p.user %}<span style="font-size:10px; background:#eff6ff; color:#1856ff; padding:2px 6px; border-radius:4px; margin-left:4px;">{{ p.user.role|title }}</span>{% else %}<span style="font-size:10px; background:#f1f5f9; color:#64748b; padding:2px 6px; border-radius:4px; margin-left:4px;">Walk-in</span>{% endif %}
+        </td>
+        <td style="padding:10px 8px; font-weight:600;">
+          {% if p.meal_type == 'lunch' %}🍱 Lunch Meal Pass{% elif p.meal_type == 'dinner' %}🍽️ Dinner Meal Pass{% else %}🍴 Meal Pass{% endif %}
+        </td>
+        <td style="padding:10px 8px; color:#64748b;">{{ p.date|date:"d M Y" }}</td>
+        <td style="padding:10px 8px; color:#64748b;">
+          <!-- SAFE GUEST/USER EMAIL RESOLUTION TO PREVENT DJANGO TEMPLATE ENGINE LOOKUP ERRORS -->
+          {% if p.user %}
+            {{ p.user.email }}
+          {% else %}
+            {{ p.guest_email|default:"—" }}
+          {% endif %}
+        </td>
+        <td style="padding:10px 8px;">
+          {% if p.used %}
+            <span style="color:#059669; font-weight:700; background:#d1fae5; padding:3px 8px; border-radius:6px; font-size:11px;">✓ Scanned</span>
+          {% else %}
+            <span style="color:#1856ff; font-weight:700; background:#eff6ff; padding:3px 8px; border-radius:6px; font-size:11px;">Active</span>
+          {% endif %}
+        </td>
+      </tr>
+      {% empty %}
+      <tr><td colspan="5" style="padding:24px; text-align:center; color:#94a3b8;">No meal passes recorded yet.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<script>
+function toggleAssignType(type) {
+  if (type === 'registered') {
+    document.getElementById('registered_section').style.display = 'block';
+    document.getElementById('walkin_section').style.display = 'none';
+  } else {
+    document.getElementById('registered_section').style.display = 'none';
+    document.getElementById('walkin_section').style.display = 'block';
+  }
+}
+</script>
+{% endblock %}

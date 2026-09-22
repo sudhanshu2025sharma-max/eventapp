@@ -1,0 +1,196 @@
+{% extends "panel/base.html" %}
+
+{% block title %}Accepted Papers & Posters — ETD 2026 Admin{% endblock %}
+
+{% block content %}
+<style>
+.header-banner {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 24px;
+}
+.header-banner h2 { font-size: 22px; font-weight: 700; color: #1E293B; margin: 0; }
+.header-banner p { font-size: 13px; color: #64748B; margin: 4px 0 0 0; }
+
+.stats-row { display: flex; gap: 16px; margin-bottom: 24px; }
+.stat-box {
+    background: #FFF; border: 1px solid #E2E8F0; border-radius: 12px;
+    padding: 16px 20px; flex: 1; display: flex; align-items: center; gap: 14px;
+}
+.stat-icon {
+    width: 42px; height: 42px; border-radius: 10px;
+    display: flex; align-items: center; justify-content: center; font-size: 18px;
+}
+.stat-val { font-size: 22px; font-weight: 800; color: #0F172A; }
+.stat-lbl { font-size: 12px; color: #64748B; font-weight: 600; }
+
+.form-card {
+    background: #FFF; border: 1px solid #E2E8F0; border-radius: 12px;
+    padding: 20px; margin-bottom: 24px;
+}
+.form-card h3 { font-size: 16px; font-weight: 700; margin-bottom: 16px; color: #1E293B; }
+.grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; }
+.form-group { margin-bottom: 14px; }
+.form-group label { display: block; font-size: 12px; font-weight: 700; color: #475569; margin-bottom: 6px; }
+.form-control {
+    width: 100%; padding: 10px 12px; border-radius: 8px; border: 1px solid #CBD5E1;
+    font-size: 13px; background: #F8FAFC; color: #0F172A;
+}
+
+.table-card {
+    background: #FFF; border: 1px solid #E2E8F0; border-radius: 12px; overflow: hidden;
+}
+.table-card table { width: 100%; border-collapse: collapse; text-align: left; }
+.table-card th { background: #F8FAFC; padding: 12px 16px; font-size: 12px; color: #64748B; border-bottom: 1px solid #E2E8F0; }
+.table-card td { padding: 14px 16px; border-bottom: 1px solid #F1F5F9; font-size: 13px; }
+.badge { padding: 4px 8px; border-radius: 6px; font-size: 11px; font-weight: 700; }
+.badge-paper { background: #CCFBF1; color: #0F766E; }
+.badge-poster { background: #FFE4E6; color: #BE123C; }
+</style>
+
+<div class="header-banner">
+    <div>
+        <h2>Accepted Papers & Posters</h2>
+        <p>Manage accepted submissions and link them to schedule presentation slots</p>
+    </div>
+</div>
+
+<div class="stats-row">
+    <div class="stat-box">
+        <div class="stat-icon" style="background: #CCFBF1; color: #0F766E;"><i class="fas fa-file-alt"></i></div>
+        <div>
+            <div class="stat-val">{{ paper_count }}</div>
+            <div class="stat-lbl">Research Papers</div>
+        </div>
+    </div>
+    <div class="stat-box">
+        <div class="stat-icon" style="background: #FFE4E6; color: #BE123C;"><i class="fas fa-image"></i></div>
+        <div>
+            <div class="stat-val">{{ poster_count }}</div>
+            <div class="stat-lbl">Posters</div>
+        </div>
+    </div>
+</div>
+
+<!-- Add Form -->
+<div class="form-card">
+    <h3><i class="fas fa-plus-circle" style="color: #2563EB;"></i> Add New Paper / Poster</h3>
+    <form method="post" enctype="multipart/form-data">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="create">
+        
+        <div class="grid-3">
+            <div class="form-group">
+                <label>Submission Type *</label>
+                <select name="paper_type" class="form-control">
+                    <option value="paper">📄 Research Paper</option>
+                    <option value="poster">🖼️ Poster Presentation</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Paper ID (e.g. ETD-042)</label>
+                <input type="text" name="paper_id" class="form-control" placeholder="e.g. ETD-042">
+            </div>
+            <div class="form-group">
+                <label>Track / Category</label>
+                <input type="text" name="track" class="form-control" placeholder="e.g. AI in ETDs">
+            </div>
+        </div>
+
+        <div class="form-group">
+            <label>Paper / Poster Title *</label>
+            <input type="text" name="title" class="form-control" required placeholder="Full title of the paper">
+        </div>
+
+        <div class="form-group">
+            <label>Authors *</label>
+            <input type="text" name="authors" class="form-control" required placeholder="John Doe, Jane Smith, Prof. Sharma">
+        </div>
+
+        <div class="grid-2">
+            <div class="form-group">
+                <label>Linked Schedule Session</label>
+                <select name="session_id" class="form-control">
+                    <option value="">-- Optional: Select Presentation Session --</option>
+                    {% for s in sessions %}
+                    <option value="{{ s.id }}">Day {{ s.day }} | {{ s.title }} ({{ s.room }})</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Presentation Time / Location String</label>
+                <input type="date" name="presentation_date" class="form-control" style="margin-bottom:8px;">
+                <input type="text" name="presentation_time" class="form-control" placeholder="e.g. Day 2 · 11:15 AM @ Hall A">
+            </div>
+        </div>
+
+        <div class="form-group">
+            <label>Abstract</label>
+            <label>Attach Document (PDF/Word)</label>
+            <input type="file" name="document" class="form-control" style="margin-bottom:12px;">
+            <textarea name="abstract" class="form-control" rows="3" placeholder="Short description or paper abstract..."></textarea>
+        </div>
+
+        <button type="submit" class="btn btn-primary" style="padding: 10px 20px; font-weight: 700;">
+            <i class="fas fa-save"></i> Save Submission
+        </button>
+    </form>
+</div>
+
+<!-- List Table -->
+<div class="table-card">
+    <table>
+        <thead>
+            <tr>
+                <th>Type</th>
+                <th>ID</th>
+                <th>Title & Authors</th>
+                <th>Track</th>
+                <th>Presentation Slot</th>
+                <th style="text-align: right;">Action</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for p in papers %}
+            <tr>
+                <td>
+                    {% if p.paper_type == 'paper' %}
+                    <span class="badge badge-paper">Paper</span>
+                    {% else %}
+                    <span class="badge badge-poster">Poster</span>
+                    {% endif %}
+                </td>
+                <td style="font-weight: 700; font-family: monospace;">{{ p.paper_id|default:"-" }}</td>
+                <td>
+                    <div style="font-weight: 700; color: #0F172A;">{{ p.title }}</div>
+                    <div style="font-size: 11px; color: #64748B;">{{ p.authors }}</div>
+                </td>
+                <td><span style="font-size: 11px; font-weight: 600; color: #475569;">{{ p.track|default:"General" }}</span></td>
+                <td>
+                    {% if p.session %}
+                    <div style="font-size: 12px; font-weight: 600; color: #2563EB;">{{ p.session.title }}</div>
+                    <div style="font-size: 11px; color: #64748B;">Day {{ p.session.day }} • {{ p.session.room }}</div>
+                    {% elif p.presentation_time %}
+                    <div style="font-size: 12px; font-weight: 600; color: #059669;">{{ p.presentation_time }}</div>
+                    {% else %}
+                    <span style="color: #94A3B8; font-size: 11px;">Unscheduled</span>
+                    {% endif %}
+                </td>
+                <td style="text-align: right;">
+                    <form method="post" style="display:inline;" onsubmit="return confirm('Delete item?');">
+                        {% csrf_token %}
+                        <input type="hidden" name="action" value="delete">
+                        <input type="hidden" name="pk" value="{{ p.pk }}">
+                        <button type="submit" class="btn btn-sm btn-secondary" style="color: #DC2626;"><i class="fas fa-trash"></i></button>
+                    </form>
+                </td>
+            </tr>
+            {% empty %}
+            <tr>
+                <td colspan="6" style="text-align: center; color: #94A3B8; padding: 30px;">No accepted papers or posters added yet.</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}

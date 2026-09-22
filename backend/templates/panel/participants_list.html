@@ -1,7 +1,7 @@
 {% extends "panel/base.html" %}
 {% block title %}Participants — ETD 2026{% endblock %}
 {% block page_title %}Participants{% endblock %}
-{% block page_subtitle %}Manage registered participants{% endblock %}
+{% block page_subtitle %}Manage registered participants and check-in status{% endblock %}
 
 {% block content %}
 {% if messages %}
@@ -13,23 +13,27 @@
   {% endfor %}
 {% endif %}
 
-<!-- Stats -->
-<div class="stats-grid" style="margin-bottom:24px;">
+<!-- Stats Cards -->
+<div class="stats-grid" style="margin-bottom:24px;display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:16px;">
   <div class="stat-card">
     <div class="stat-value">{{ total }}</div>
-    <div class="stat-label">Total Participants</div>
+    <div class="stat-label">Total Registered</div>
   </div>
   <div class="stat-card">
-    <div class="stat-value" style="color:var(--success);">{{ password_set }}</div>
-    <div class="stat-label">Password Changed</div>
+    <div class="stat-value" style="color:var(--success);">{{ total_checked_in }}</div>
+    <div class="stat-label">Checked In</div>
   </div>
   <div class="stat-card">
-    <div class="stat-value" style="color:var(--warning);">{{ password_pending }}</div>
-    <div class="stat-label">Pending First Login</div>
+    <div class="stat-value" style="color:var(--warning);">{{ total_not_checked_in }}</div>
+    <div class="stat-label">Not Checked In</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-value" style="color:#6366F1;">{{ password_set }}</div>
+    <div class="stat-label">Password Active</div>
   </div>
 </div>
 
-<!-- Actions -->
+<!-- Actions & Filters -->
 <div style="display:flex;gap:12px;align-items:center;margin-bottom:20px;flex-wrap:wrap;">
   <a href="{% url 'participant_add' %}" class="btn btn-primary">
     <i class="fas fa-user-plus"></i> Add Single
@@ -37,9 +41,17 @@
   <a href="{% url 'participants_upload' %}" class="btn btn-secondary">
     <i class="fas fa-upload"></i> Bulk Import
   </a>
+
+  <!-- Status Filter Links -->
+  <div style="display:flex;gap:6px;align-items:center;background:var(--surface);padding:4px;border-radius:8px;border:1px solid var(--border);">
+    <a href="{% url 'participants_list' %}" class="btn btn-sm {% if not status_filter %}btn-primary{% else %}btn-secondary{% endif %}" style="padding:4px 10px;font-size:12px;">All</a>
+    <a href="{% url 'participants_list' %}?status=checked_in" class="btn btn-sm {% if status_filter == 'checked_in' %}btn-primary{% else %}btn-secondary{% endif %}" style="padding:4px 10px;font-size:12px;">Checked In</a>
+    <a href="{% url 'participants_list' %}?status=not_checked_in" class="btn btn-sm {% if status_filter == 'not_checked_in' %}btn-primary{% else %}btn-secondary{% endif %}" style="padding:4px 10px;font-size:12px;">Not Checked In</a>
+  </div>
+
   <form method="get" style="margin-left:auto;display:flex;gap:8px;">
     <input type="text" name="search" value="{{ search }}" placeholder="Search name, email, reg ID…"
-           class="form-control" style="width:260px;">
+           class="form-control" style="width:240px;">
     <button type="submit" class="btn btn-secondary"><i class="fas fa-search"></i></button>
     {% if search %}<a href="{% url 'participants_list' %}" class="btn btn-sm" style="align-self:center;">Clear</a>{% endif %}
   </form>
@@ -58,7 +70,8 @@
             <th>Reg ID</th>
             <th>Affiliation</th>
             <th>Phone</th>
-            <th>Status</th>
+            <th>Check-in Status</th>
+            <th>Account</th>
             <th style="width:100px;"></th>
           </tr>
         </thead>
@@ -71,17 +84,28 @@
             <td>{{ p.affiliation|default:"—" }}</td>
             <td>{{ p.phone|default:"—" }}</td>
             <td>
+              {% if p.is_checked_in %}
+                <span class="badge badge-success" style="background:#d1fae5;color:#059669;font-weight:700;">
+                  <i class="fas fa-check-circle"></i> Checked In
+                </span>
+              {% else %}
+                <span class="badge" style="background:#f1f5f9;color:#64748b;font-weight:600;">
+                  <i class="fas fa-clock"></i> Not Checked In
+                </span>
+              {% endif %}
+            </td>
+            <td>
               {% if not p.is_active %}
                 <span class="badge badge-danger">Suspended</span>
               {% elif p.must_change_password %}
-                <span class="badge badge-warning">Pending</span>
+                <span class="badge badge-warning" title="Temporary password active">Pending 1st Login</span>
               {% else %}
-                <span class="badge badge-success">Active</span>
+                <span class="badge badge-success" title="Password changed by user">Active</span>
               {% endif %}
             </td>
             <td>
               <div style="display:flex;gap:6px;">
-                <a href="{% url 'participant_edit' p.pk %}" class="btn btn-sm btn-secondary" title="Edit">
+                <a href="{% url 'participant_edit' p.pk %}" class="btn btn-sm btn-secondary" title="Edit & Reset Password">
                   <i class="fas fa-pen"></i>
                 </a>
                 <form method="post" action="{% url 'participant_delete' p.pk %}" style="margin:0;">

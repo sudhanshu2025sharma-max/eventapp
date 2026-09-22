@@ -1,227 +1,130 @@
 {% extends 'panel/base.html' %}
 
-{% block title %}Selfie Points & Geofencing — ETD 2026 Admin{% endblock %}
-{% block page_title %}Selfie Spots & Geofence Verification{% endblock %}
-{% block page_subtitle %}Manage campus photo spots, set GPS geofence radius, and review attendee selfie uploads.{% endblock %}
+{% block title %}Checkpoint & Geofence Manager — ETD 2026 Admin{% endblock %}
+{% block page_title %}Checkpoint Management (Selfie Spots & Sponsor Zones){% endblock %}
+{% block page_subtitle %}Manage circular selfie photo zones and rectangular sponsor stall corridors with live GPS map pinning.{% endblock %}
 
 {% block content %}
 
 <style>
-    /* Window Control Banner */
     .window-control-banner {
         background: var(--surface);
         border: 1px solid var(--border);
         border-radius: 16px;
-        padding: 20px 24px;
+        padding: 18px 24px;
         display: flex;
         align-items: center;
         justify-content: space-between;
         margin-bottom: 24px;
-        box-shadow: 0 4px 6px -1px rgba(0,0,0,0.03);
     }
     .status-pill-large {
         display: inline-flex;
         align-items: center;
         gap: 8px;
-        padding: 8px 16px;
+        padding: 6px 14px;
         border-radius: 30px;
         font-weight: 700;
         font-size: 13px;
-        letter-spacing: 0.5px;
     }
-    .status-open { background: rgba(16, 185, 129, 0.12); color: #059669; border: 1px solid rgba(16, 185, 129, 0.2); }
-    .status-closed { background: rgba(239, 68, 68, 0.12); color: #dc2626; border: 1px solid rgba(239, 68, 68, 0.2); }
+    .status-open { background: rgba(16, 185, 129, 0.12); color: #059669; }
+    .status-closed { background: rgba(239, 68, 68, 0.12); color: #dc2626; }
 
-    /* Dashboard Stats */
     .dashboard-stats-grid {
         display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-        gap: 20px;
-        margin-bottom: 30px;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 16px;
+        margin-bottom: 28px;
     }
     .stat-card-premium {
         background: var(--surface);
         border: 1px solid var(--border);
-        border-radius: 16px;
-        padding: 22px;
+        border-radius: 14px;
+        padding: 18px;
         display: flex;
         align-items: center;
         justify-content: space-between;
-        position: relative;
-        overflow: hidden;
-        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-        box-shadow: 0 4px 6px -1px rgba(0,0,0,0.03);
     }
-    .stat-card-premium:hover {
-        transform: translateY(-3px);
-        border-color: var(--primary);
-    }
-    .stat-card-premium::before {
-        content: '';
-        position: absolute;
-        top: 0;
-        left: 0;
-        width: 4px;
-        height: 100%;
-        background: var(--primary);
-    }
-    .stat-card-premium.success-accent::before { background: var(--success); }
-    .stat-card-premium.warning-accent::before { background: var(--warning); }
-
     .stat-icon-wrapper {
-        width: 50px;
-        height: 50px;
-        border-radius: 12px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 20px;
-        background: rgba(99, 102, 241, 0.1);
-        color: var(--primary);
+        width: 44px; height: 44px; border-radius: 10px;
+        display: flex; align-items: center; justify-content: center;
+        font-size: 18px; background: rgba(99, 102, 241, 0.1); color: var(--primary);
     }
-    .success-accent .stat-icon-wrapper { background: rgba(46, 204, 113, 0.1); color: var(--success); }
-    .warning-accent .stat-icon-wrapper { background: rgba(241, 196, 15, 0.1); color: var(--warning); }
 
-    /* Layout Panel */
     .panel-container {
         display: grid;
-        grid-template-columns: 380px 1fr;
-        gap: 30px;
-        margin-bottom: 40px;
+        grid-template-columns: 420px 1fr;
+        gap: 24px;
+        margin-bottom: 36px;
     }
     @media (max-width: 1024px) {
         .panel-container { grid-template-columns: 1fr; }
+    }
+
+    .type-switcher {
+        display: flex;
+        gap: 8px;
+        background: var(--bg);
+        padding: 4px;
+        border-radius: 12px;
+        margin-bottom: 16px;
+    }
+    .type-btn {
+        flex: 1; padding: 10px; text-align: center;
+        border-radius: 10px; font-weight: 700; font-size: 13px;
+        cursor: pointer; border: none; background: transparent; color: var(--text-sec);
+        transition: all 0.2s;
+    }
+    .type-btn.active {
+        background: var(--surface); color: var(--primary);
+        box-shadow: 0 2px 6px rgba(0,0,0,0.06);
     }
 
     .form-section-card {
         background: var(--surface);
         border: 1px solid var(--border);
         border-radius: 16px;
-        box-shadow: 0 4px 6px -1px rgba(0,0,0,0.03);
-        display: flex;
-        flex-direction: column;
-        overflow: hidden;
+        padding: 20px;
     }
-    .form-group-premium { margin-bottom: 16px; }
+    .form-group-premium { margin-bottom: 14px; }
     .form-label-premium {
-        display: block;
-        font-size: 12px;
-        font-weight: 700;
-        color: var(--text);
-        margin-bottom: 6px;
-        text-transform: uppercase;
-        letter-spacing: 0.5px;
+        display: block; font-size: 11px; font-weight: 700;
+        color: var(--text-sec); margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.5px;
     }
     .form-control-premium {
-        width: 100%;
-        padding: 12px 14px;
-        border-radius: 10px;
-        border: 1px solid var(--border);
-        background: var(--bg);
-        color: var(--text);
-        font-size: 14px;
+        width: 100%; padding: 10px 12px; border-radius: 8px;
+        border: 1px solid var(--border); background: var(--bg); color: var(--text); font-size: 13px;
     }
-    .form-control-premium:focus {
-        border-color: var(--primary);
-        outline: none;
+    .sponsor-checklist {
+        max-height: 140px; overflow-y: auto; border: 1px solid var(--border);
+        border-radius: 8px; padding: 8px; background: var(--bg);
+    }
+    .sponsor-check-item {
+        display: flex; align-items: center; gap: 8px; padding: 4px 6px;
+        font-size: 12px; cursor: pointer;
     }
 
-    /* Table */
     .premium-table-card {
         background: var(--surface);
         border: 1px solid var(--border);
         border-radius: 16px;
-        box-shadow: 0 4px 6px -1px rgba(0,0,0,0.03);
         overflow: hidden;
-        margin-bottom: 40px;
+        margin-bottom: 32px;
     }
-    .table-premium {
-        width: 100%;
-        border-collapse: separate;
-        border-spacing: 0;
-    }
+    .table-premium { width: 100%; border-collapse: separate; border-spacing: 0; }
     .table-premium th {
-        background: var(--bg);
-        color: var(--text-sec);
-        font-weight: 600;
-        font-size: 12px;
-        text-transform: uppercase;
-        padding: 16px 20px;
-        letter-spacing: 0.5px;
-        border-bottom: 1px solid var(--border);
+        background: var(--bg); color: var(--text-sec); font-weight: 600; font-size: 11px;
+        text-transform: uppercase; padding: 14px 18px; border-bottom: 1px solid var(--border);
     }
     .table-premium td {
-        padding: 16px 20px;
-        border-bottom: 1px solid var(--border);
-        color: var(--text);
-        vertical-align: middle;
-        font-size: 14px;
+        padding: 14px 18px; border-bottom: 1px solid var(--border);
+        color: var(--text); vertical-align: middle; font-size: 13px;
     }
     .table-premium tr:last-child td { border-bottom: none; }
-    .table-premium tr:hover td { background: rgba(0, 0, 0, 0.01); }
 
-    /* Thumbnails */
-    .selfie-thumbnail-container {
-        width: 44px;
-        height: 44px;
-        border-radius: 10px;
-        overflow: hidden;
-        border: 2px solid var(--border);
-        transition: all 0.2s ease;
-        cursor: pointer;
+    .selfie-thumb {
+        width: 44px; height: 44px; border-radius: 8px; object-fit: cover;
+        cursor: pointer; border: 1px solid var(--border);
     }
-    .selfie-thumbnail-container:hover {
-        transform: scale(1.1);
-        border-color: var(--primary);
-    }
-    .selfie-thumbnail { width: 100%; height: 100%; object-fit: cover; }
-
-    /* Modal */
-    .premium-modal {
-        display: none;
-        position: fixed;
-        top: 0; left: 0; width: 100%; height: 100%;
-        background: rgba(15, 23, 42, 0.85);
-        backdrop-filter: blur(8px);
-        z-index: 10000;
-        justify-content: center;
-        align-items: center;
-    }
-    .premium-modal.show { display: flex; }
-    .modal-content-wrapper {
-        background: var(--surface);
-        padding: 16px;
-        border-radius: 20px;
-        max-width: 500px;
-        width: 90%;
-        position: relative;
-    }
-    .modal-close-btn {
-        position: absolute;
-        top: -15px; right: -15px;
-        width: 36px; height: 36px;
-        border-radius: 50%;
-        background: var(--surface);
-        border: 1px solid var(--border);
-        color: var(--text);
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        cursor: pointer;
-    }
-
-    .custom-pill {
-        display: inline-flex;
-        align-items: center;
-        gap: 6px;
-        padding: 6px 12px;
-        border-radius: 20px;
-        font-size: 12px;
-        font-weight: 600;
-    }
-    .pill-indigo { background: rgba(99, 102, 241, 0.1); color: #4f46e5; }
-    .pill-amber { background: rgba(245, 158, 11, 0.1); color: #d97706; }
-    .pill-green { background: rgba(16, 185, 129, 0.1); color: #059669; }
 </style>
 
 {% if messages %}
@@ -236,20 +139,20 @@
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
-<!-- Global Challenge Window Control Strip -->
+<!-- Window Toggle Banner -->
 <div class="window-control-banner">
     <div>
-        <div style="font-size: 13px; font-weight: 700; color: var(--text-sec); text-transform: uppercase;">
-            Attendee Challenge Status
+        <div style="font-size: 12px; font-weight: 700; color: var(--text-sec); text-transform: uppercase;">
+            Checkpoint Challenge Status
         </div>
         <div style="margin-top: 4px;">
             {% if cfg.selfie_upload_open %}
                 <span class="status-pill-large status-open">
-                    <i class="fas fa-circle-dot"></i> Challenge Active (Attendees Can Upload)
+                    <i class="fas fa-circle-dot"></i> Open (Attendees Can Check In & Upload)
                 </span>
             {% else %}
                 <span class="status-pill-large status-closed">
-                    <i class="fas fa-lock"></i> Challenge Closed (Uploads Blocked)
+                    <i class="fas fa-lock"></i> Closed (Check-ins Blocked)
                 </span>
             {% endif %}
         </div>
@@ -257,7 +160,7 @@
     <form method="post" style="margin: 0;">
         {% csrf_token %}
         <input type="hidden" name="action" value="toggle_window">
-        <button type="submit" class="btn {% if cfg.selfie_upload_open %}btn-danger{% else %}btn-success{% endif %}" style="padding: 10px 20px; border-radius: 12px; font-weight: 700;">
+        <button type="submit" class="btn {% if cfg.selfie_upload_open %}btn-danger{% else %}btn-success{% endif %}" style="padding: 9px 18px; border-radius: 10px; font-weight: 700; font-size: 13px;">
             {% if cfg.selfie_upload_open %}
                 <i class="fas fa-lock"></i> Close Challenge Window
             {% else %}
@@ -271,368 +174,472 @@
 <div class="dashboard-stats-grid">
     <div class="stat-card-premium">
         <div>
-            <div style="font-size: 12px; color: var(--text-sec); font-weight: 700; letter-spacing: 0.5px; text-transform: uppercase;">Active Spots</div>
-            <div style="font-size: 32px; font-weight: 800; color: var(--text); margin-top: 4px;">{{ points|length }}</div>
+            <div style="font-size: 11px; color: var(--text-sec); font-weight: 700; text-transform: uppercase;">Checkpoints</div>
+            <div style="font-size: 26px; font-weight: 800; color: var(--text); margin-top: 2px;">{{ points|length }}</div>
         </div>
-        <div class="stat-icon-wrapper">
-            <i class="fas fa-map-pin"></i>
-        </div>
+        <div class="stat-icon-wrapper"><i class="fas fa-flag"></i></div>
     </div>
-    <div class="stat-card-premium warning-accent">
+    <div class="stat-card-premium">
         <div>
-            <div style="font-size: 12px; color: var(--text-sec); font-weight: 700; letter-spacing: 0.5px; text-transform: uppercase;">Total Submissions</div>
-            <div style="font-size: 32px; font-weight: 800; color: var(--text); margin-top: 4px;">{{ total_submissions }}</div>
+            <div style="font-size: 11px; color: var(--text-sec); font-weight: 700; text-transform: uppercase;">Submissions</div>
+            <div style="font-size: 26px; font-weight: 800; color: var(--text); margin-top: 2px;">{{ total_submissions }}</div>
         </div>
-        <div class="stat-icon-wrapper">
-            <i class="fas fa-camera"></i>
-        </div>
+        <div class="stat-icon-wrapper"><i class="fas fa-camera"></i></div>
     </div>
-    <div class="stat-card-premium success-accent">
+    <div class="stat-card-premium">
         <div>
-            <div style="font-size: 12px; color: var(--text-sec); font-weight: 700; letter-spacing: 0.5px; text-transform: uppercase;">Geofence Verified</div>
-            <div style="font-size: 32px; font-weight: 800; color: var(--success); margin-top: 4px;">{{ verified_count }}</div>
+            <div style="font-size: 11px; color: var(--text-sec); font-weight: 700; text-transform: uppercase;">Approved</div>
+            <div style="font-size: 26px; font-weight: 800; color: var(--success); margin-top: 2px;">{{ approved_count }}</div>
         </div>
-        <div class="stat-icon-wrapper">
-            <i class="fas fa-shield-halved"></i>
-        </div>
+        <div class="stat-icon-wrapper"><i class="fas fa-check-double"></i></div>
     </div>
 </div>
 
-<!-- Split Form + Map Panel -->
+<!-- Creator Panel & Leaflet Map -->
 <div class="panel-container">
     <div class="form-section-card">
-        <div class="card-header" style="border-bottom: 1px solid var(--border); padding: 20px;">
-            <h3 style="font-size:18px; font-weight:800; display:flex; align-items:center; gap:8px;">
-                <i class="fas fa-circle-plus" style="color:var(--primary);"></i> Add Selfie Spot
-            </h3>
+        <h3 style="font-size: 16px; font-weight: 800; margin-bottom: 14px; display:flex; align-items:center; gap:8px;">
+            <i class="fas fa-circle-plus" style="color:var(--primary);"></i> Add Checkpoint
+        </h3>
+
+        <!-- Type Switcher -->
+        <div class="type-switcher">
+            <button type="button" class="type-btn active" id="btn_selfie" onclick="switchFormType('selfie')">
+                📸 Selfie Spot
+            </button>
+            <button type="button" class="type-btn" id="btn_sponsor" onclick="switchFormType('sponsor_zone')">
+                🏢 Sponsor Zone
+            </button>
         </div>
-        <div class="card-body" style="padding: 20px;">
-            <form method="post" enctype="multipart/form-data">
-                {% csrf_token %}
-                <input type="hidden" name="action" value="create">
 
-                <div class="form-group-premium">
-                    <label class="form-label-premium">Spot Name *</label>
-                    <input class="form-control-premium" name="name" required placeholder="e.g. Dogra Hall Columns">
-                </div>
+        <form method="post" enctype="multipart/form-data" id="checkpoint_form">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="create">
+            <input type="hidden" name="checkpoint_type" id="cp_type_input" value="selfie">
 
-                <div class="form-group-premium">
-                    <label class="form-label-premium">Description / Task Details</label>
-                    <textarea class="form-control-premium" name="description" rows="2" placeholder="Pose with the main foyer glass archway visible behind you."></textarea>
-                </div>
+            <div class="form-group-premium">
+                <label class="form-label-premium">Name *</label>
+                <input class="form-control-premium" name="name" required placeholder="e.g. Central Library Arch or Stall Lane A">
+            </div>
 
-                <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;" class="form-group-premium">
+            <div class="form-group-premium">
+                <label class="form-label-premium">Description / Task</label>
+                <textarea class="form-control-premium" name="description" rows="2" placeholder="Pose in front of the logo or visit all stalls along this corridor."></textarea>
+            </div>
+
+            <!-- Selfie Fields (Circular) -->
+            <div id="selfie_fields">
+                <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;" class="form-group-premium">
                     <div>
                         <label class="form-label-premium">Latitude *</label>
-                        <input class="form-control-premium" id="sf_lat" name="latitude" type="number" step="any" required placeholder="28.5455" oninput="syncSelfieInputs()">
+                        <input class="form-control-premium" id="sf_lat" name="latitude" type="number" step="any" placeholder="28.5456">
                     </div>
                     <div>
                         <label class="form-label-premium">Longitude *</label>
-                        <input class="form-control-premium" id="sf_lng" name="longitude" type="number" step="any" required placeholder="77.1930" oninput="syncSelfieInputs()">
+                        <input class="form-control-premium" id="sf_lng" name="longitude" type="number" step="any" placeholder="77.1923">
                     </div>
                 </div>
-
-                <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;" class="form-group-premium">
-                    <div>
-                        <label class="form-label-premium">Radius (Meters)</label>
-                        <input class="form-control-premium" name="radius_meters" type="number" value="20" required>
-                    </div>
-                    <div>
-                        <label class="form-label-premium">Completion Pts</label>
-                        <input class="form-control-premium" name="points" type="number" value="10" required>
-                    </div>
-                </div>
-
                 <div class="form-group-premium">
-                    <label class="form-label-premium">Sample Reference Photo</label>
-                    <input type="file" class="form-control-premium" name="sample_photo" accept="image/*" style="padding: 8px 12px;">
+                    <label class="form-label-premium">Radius (Meters)</label>
+                    <input class="form-control-premium" id="sf_radius" name="radius_meters" type="number" value="20">
                 </div>
+            </div>
 
-                <div style="margin: 20px 0 24px 0;">
-                    <label style="display:flex; align-items:center; gap:10px; cursor:pointer; font-weight:600; font-size:14px; color:var(--text);">
-                        <input type="checkbox" name="is_active" checked style="width:18px; height:18px; accent-color:var(--primary); cursor:pointer;"> 
-                        Activate this spot immediately
-                    </label>
+            <!-- Sponsor Zone Fields (Corridor A→B) -->
+            <div id="sponsor_fields" style="display:none;">
+                <div style="background:var(--bg); padding:10px; border-radius:8px; margin-bottom:12px; font-size:12px; color:var(--text-sec);">
+                    <i class="fas fa-info-circle" style="color:var(--primary);"></i> Click on map to set <b>Point A</b>, then click again for <b>Point B</b> to define the stall corridor.
                 </div>
+                <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;" class="form-group-premium">
+                    <div>
+                        <label class="form-label-premium">Point A (Lat, Lng)</label>
+                        <input class="form-control-premium" id="pt_a_lat" name="point_a_lat" type="number" step="any" placeholder="Start Lat">
+                        <input class="form-control-premium" id="pt_a_lng" name="point_a_lng" type="number" step="any" placeholder="Start Lng" style="margin-top:4px;">
+                    </div>
+                    <div>
+                        <label class="form-label-premium">Point B (Lat, Lng)</label>
+                        <input class="form-control-premium" id="pt_b_lat" name="point_b_lat" type="number" step="any" placeholder="End Lat">
+                        <input class="form-control-premium" id="pt_b_lng" name="point_b_lng" type="number" step="any" placeholder="End Lng" style="margin-top:4px;">
+                    </div>
+                </div>
+                <div class="form-group-premium">
+                    <label class="form-label-premium">Corridor Width (Meters)</label>
+                    <input class="form-control-premium" id="corridor_w" name="corridor_width_meters" type="number" value="30">
+                </div>
+                <div class="form-group-premium">
+                    <label class="form-label-premium">Select Stalls in this Zone</label>
+                    <div class="sponsor-checklist">
+                        {% for sp in all_sponsors %}
+                        <label class="sponsor-check-item">
+                            <input type="checkbox" name="sponsors" value="{{ sp.id }}"> {{ sp.name }} {% if sp.stall_number %}<small style="color:var(--text-sec);">({{ sp.stall_number }})</small>{% endif %}
+                        </label>
+                        {% empty %}
+                        <div style="font-size:11px; color:var(--text-sec);">No sponsors created yet. Add them at /panel/sponsors/.</div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
 
-                <button type="submit" class="btn btn-primary" style="width:100%; padding:14px; border-radius:12px; font-weight:700; font-size:15px; display:flex; align-items:center; justify-content:center; gap:8px;">
-                    <i class="fas fa-location-arrow"></i> Establish Spot Zone
-                </button>
-            </form>
-        </div>
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;" class="form-group-premium">
+                <div>
+                    <label class="form-label-premium">Points</label>
+                    <input class="form-control-premium" name="points" type="number" value="10" required>
+                </div>
+                <div>
+                    <label class="form-label-premium">Reference Photo</label>
+                    <input type="file" class="form-control-premium" name="sample_photos" accept="image/*" multiple style="padding:6px;">
+                    <small style="color:var(--text-sec);font-size:11px;margin-top:2px;display:block;">Select multiple images for better visual reference</small>
+                </div>
+            </div>
+
+            <div style="margin: 14px 0 18px 0;">
+                <label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-weight:600; font-size:13px;">
+                    <input type="checkbox" name="is_active" checked style="width:16px; height:16px;"> Active Immediately
+                </label>
+            </div>
+
+            <button type="submit" class="btn btn-primary" style="width:100%; padding:12px; border-radius:10px; font-weight:700; font-size:14px;">
+                <i class="fas fa-plus"></i> Save Checkpoint
+            </button>
+        </form>
     </div>
 
-    <!-- Map Card Panel -->
-    <div class="form-section-card">
-        <div class="card-header" style="border-bottom: 1px solid var(--border); padding: 20px; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px;">
-            <h3 style="font-size:18px; font-weight:800; display:flex; align-items:center; gap:8px;">
-                <i class="fas fa-map-location-dot" style="color:var(--primary);"></i> Campus Pinpointer
+    <!-- Map Viewport -->
+    <div style="background:var(--surface); border:1px solid var(--border); border-radius:16px; padding:16px; display:flex; flex-direction:column;">
+        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:12px;">
+            <h3 style="font-size:15px; font-weight:800;">
+                <i class="fas fa-map-location-dot" style="color:var(--primary);"></i> Campus Map Pinning
             </h3>
-            <button type="button" class="btn btn-sm btn-secondary" onclick="useCurrentGps('sf_lat', 'sf_lng', updateSelfieMarker)" style="border-radius:8px; font-weight:600; display:flex; align-items:center; gap:6px; padding: 8px 14px;">
+            <button type="button" class="btn btn-sm btn-secondary" onclick="useCurrentGps()">
                 <i class="fas fa-crosshairs"></i> Use GPS
             </button>
         </div>
-        <div class="card-body" style="padding:16px; background:var(--bg);">
-            <div id="selfie_map" style="height:480px; width:100%; border-radius:12px; border:1px solid var(--border); z-index:1;"></div>
-        </div>
+        <div id="admin_map" style="height:480px; width:100%; border-radius:10px; border:1px solid var(--border); z-index:1;"></div>
     </div>
 </div>
 
-<!-- Active Selfie Spots Table -->
+<!-- Active Checkpoints Table -->
 <div class="premium-table-card">
-    <div class="card-header" style="border-bottom: 1px solid var(--border); padding: 20px;">
-        <h3 style="font-size:18px; font-weight:800; display:flex; align-items:center; gap:8px;">
-            <i class="fas fa-location-dot" style="color:var(--primary);"></i> Active Selfie Points
+    <div style="padding:18px 20px; border-bottom:1px solid var(--border);">
+        <h3 style="font-size:16px; font-weight:800; display:flex; align-items:center; gap:8px;">
+            <i class="fas fa-list-check" style="color:var(--primary);"></i> Established Checkpoints
         </h3>
     </div>
-    <div style="overflow-x: auto;">
+    <div style="overflow-x:auto;">
         <table class="table-premium">
             <thead>
                 <tr>
-                    <th>Spot details</th>
-                    <th>Reference</th>
-                    <th>Coordinates</th>
-                    <th>Radius</th>
-                    <th>Points Value</th>
+                    <th>Type</th>
+                    <th>Name</th>
+                    <th>Coordinates / Zone</th>
+                    <th>Stalls Linked</th>
+                    <th>Points</th>
                     <th>Status</th>
-                    <th style="text-align: right;">Management Actions</th>
+                    <th style="text-align:right;">Actions</th>
                 </tr>
             </thead>
             <tbody>
-                {% for sp in points %}
+                {% for p in points %}
                 <tr>
                     <td>
-                        <div style="font-weight: 700; color: var(--text); font-size:15px;">{{ sp.name }}</div>
-                        {% if sp.description %}
-                            <div style="color: var(--text-sec); font-size: 13px; margin-top: 4px; max-width: 320px; line-height: 1.4;">{{ sp.description }}</div>
-                        {% endif %}
-                    </td>
-                    <td>
-                        {% if sp.sample_photo %}
-                            <div class="selfie-thumbnail-container" onclick="openPhotoModal('{{ sp.sample_photo.url }}')">
-                                <img src="{{ sp.sample_photo.url }}" class="selfie-thumbnail" alt="Sample Reference">
-                            </div>
+                        {% if p.checkpoint_type == 'selfie' %}
+                            <span style="background:rgba(236,72,153,0.12); color:#be185d; padding:4px 8px; border-radius:12px; font-weight:700; font-size:11px;">📸 Selfie</span>
                         {% else %}
-                            <span style="font-size: 12px; color:var(--text-sec); font-style: italic;">No reference photo</span>
+                            <span style="background:rgba(59,130,246,0.12); color:#1d4ed8; padding:4px 8px; border-radius:12px; font-weight:700; font-size:11px;">🏢 Sponsor Zone</span>
                         {% endif %}
                     </td>
-                    <td>
-                        <span style="font-family: monospace; font-size: 13px; color: var(--text-sec); background: var(--bg); padding: 4px 8px; border-radius: 6px; border: 1px solid var(--border);">
-                            {{ sp.latitude|slice:":9" }}, {{ sp.longitude|slice:":9" }}
-                        </span>
+                    <td style="font-weight:700;">
+                        {{ p.name }}
+                        {% if p.description %}<br><small style="color:var(--text-sec); font-weight:400;">{{ p.description|truncatechars:60 }}</small>{% endif %}
                     </td>
-                    <td>
-                        <span class="custom-pill pill-indigo">
-                            <i class="fas fa-circle-notch"></i> {{ sp.radius_meters }}m
-                        </span>
-                    </td>
-                    <td>
-                        <span class="custom-pill pill-amber">
-                            <i class="fas fa-award"></i> +{{ sp.points }} pts
-                        </span>
-                    </td>
-                    <td>
-                        {% if sp.is_active %}
-                            <span class="badge badge-success" style="padding: 5px 10px; border-radius: 20px;">Active</span>
+                    <td style="font-family:monospace; font-size:12px; color:var(--text-sec);">
+                        {% if p.checkpoint_type == 'selfie' %}
+                            {{ p.latitude|floatformat:5 }}, {{ p.longitude|floatformat:5 }} ({{ p.radius_meters }}m)
                         {% else %}
-                            <span class="badge badge-secondary" style="padding: 5px 10px; border-radius: 20px; opacity:0.6;">Disabled</span>
+                            A→B Corridor ({{ p.corridor_width_meters }}m wide)
                         {% endif %}
                     </td>
                     <td>
-                        <div style="display:flex; gap:8px; justify-content: flex-end;">
-                            <form method="post" style="display:inline;">
-                                {% csrf_token %}
-                                <input type="hidden" name="action" value="toggle">
-                                <input type="hidden" name="pk" value="{{ sp.pk }}">
-                                <button type="submit" class="btn btn-sm btn-secondary" style="border-radius: 8px; font-weight: 600;">
-                                    {% if sp.is_active %}Deactivate{% else %}Activate{% endif %}
-                                </button>
-                            </form>
-                            <form method="post" style="display:inline;" onsubmit="return confirm('Delete this selfie spot?');">
-                                {% csrf_token %}
-                                <input type="hidden" name="action" value="delete">
-                                <input type="hidden" name="pk" value="{{ sp.pk }}">
-                                <button type="submit" class="btn btn-sm btn-danger" style="border-radius: 8px; padding: 6px 12px;"><i class="fas fa-trash"></i></button>
-                            </form>
-                        </div>
+                        {% if p.checkpoint_type == 'sponsor_zone' %}
+                            <span style="font-size:12px; color:var(--text);">{{ p.sponsors.count }} stall{{ p.sponsors.count|pluralize }}</span>
+                        {% else %}
+                            <span style="color:var(--text-sec); font-size:12px;">—</span>
+                        {% endif %}
+                    </td>
+                    <td><b>+{{ p.points }} pts</b></td>
+                    <td>
+                        {% if p.is_active %}<span class="badge badge-success">Active</span>{% else %}<span class="badge badge-secondary">Disabled</span>{% endif %}
+                    </td>
+                    <td style="text-align:right;">
+                        <form method="post" style="display:inline;">
+                            {% csrf_token %}
+                            <input type="hidden" name="action" value="toggle">
+                            <input type="hidden" name="pk" value="{{ p.pk }}">
+                            <button type="submit" class="btn btn-sm btn-secondary" style="font-size:11px; padding:4px 8px;">
+                                {% if p.is_active %}Disable{% else %}Enable{% endif %}
+                            </button>
+                        </form>
+                        <form method="post" style="display:inline;" onsubmit="return confirm('Delete this checkpoint?');">
+                            {% csrf_token %}
+                            <input type="hidden" name="action" value="delete">
+                            <input type="hidden" name="pk" value="{{ p.pk }}">
+                            <button type="submit" class="btn btn-sm btn-danger" style="font-size:11px; padding:4px 8px;"><i class="fas fa-trash"></i></button>
+                        </form>
                     </td>
                 </tr>
                 {% empty %}
-                <tr>
-                    <td colspan="7" style="text-align:center; padding:48px; color:var(--text-sec);">
-                        <i class="fas fa-map-location" style="font-size: 36px; color:var(--border); margin-bottom: 12px; display:block;"></i>
-                        No selfie points established on campus yet. Add one using the panel above.
-                    </td>
-                </tr>
+                <tr><td colspan="7" style="text-align:center; padding:32px; color:var(--text-sec);">No checkpoints established yet.</td></tr>
                 {% endfor %}
             </tbody>
         </table>
     </div>
 </div>
 
-<!-- Attendee Submissions Table -->
+<!-- Attendee Check-In Submissions -->
 <div class="premium-table-card">
-    <div class="card-header" style="border-bottom: 1px solid var(--border); padding: 20px; display:flex; align-items:center; justify-content:space-between;">
-        <h3 style="font-size:18px; font-weight:800; display:flex; align-items:center; gap:8px;">
-            <i class="fas fa-images" style="color:var(--primary);"></i> Attendee Selfie Submissions
+    <div style="padding:18px 20px; border-bottom:1px solid var(--border);">
+        <h3 style="font-size:16px; font-weight:800; display:flex; align-items:center; gap:8px;">
+            <i class="fas fa-camera-retro" style="color:var(--primary);"></i> Attendee Check-In Submissions
         </h3>
-        <span class="custom-pill pill-green" style="font-size:13px;">
-            <i class="fas fa-circle-check"></i> {{ submissions|length }} Submissions
-        </span>
     </div>
-    <div style="overflow-x: auto;">
+    <div style="overflow-x:auto;">
         <table class="table-premium">
             <thead>
                 <tr>
                     <th>Attendee</th>
-                    <th>Selfie Spot</th>
-                    <th>Selfie Upload</th>
+                    <th>Checkpoint</th>
+                    <th>Selfie</th>
                     <th>Proximity</th>
-                    <th>Verification</th>
-                    <th>Date & Time</th>
-                    <th style="text-align: right;">Action</th>
+                    <th>Status</th>
+                    <th>Date</th>
+                    <th style="text-align:right;">Review</th>
                 </tr>
             </thead>
             <tbody>
                 {% for sub in submissions %}
                 <tr>
                     <td>
-                        <div style="font-weight: 700; color: var(--text); font-size:14px;">{{ sub.user.get_full_name|default:sub.user.email }}</div>
-                        <div style="font-size:12px; color:var(--text-sec); margin-top:2px;">{{ sub.user.email }}</div>
+                        <b>{{ sub.user.get_full_name|default:sub.user.email }}</b>
+                        <div style="font-size:11px; color:var(--text-sec);">{{ sub.user.email }}</div>
                     </td>
-                    <td style="font-weight: 600; color: var(--text);">
-                        {{ sub.selfie_point.name }}
-                    </td>
+                    <td>{{ sub.selfie_point.name }}</td>
                     <td>
                         {% if sub.photo %}
-                            <div class="selfie-thumbnail-container" onclick="openPhotoModal('{{ sub.photo.url }}')">
-                                <img src="{{ sub.photo.url }}" class="selfie-thumbnail" alt="Attendee Selfie">
-                            </div>
+                            <img src="{{ sub.photo.url }}" class="selfie-thumb" onclick="window.open('{{ sub.photo.url }}')">
                         {% else %}
-                            <span style="font-size: 12px; color:var(--text-sec); font-style: italic;">No file</span>
+                            <span style="font-size:11px; color:var(--text-sec); font-style:italic;">Zone Visit (No Photo)</span>
                         {% endif %}
                     </td>
+                    <td style="font-family:monospace; font-size:12px;">{{ sub.distance_meters|floatformat:1 }}m</td>
                     <td>
-                        <span style="font-family: monospace; font-size: 13px; font-weight:600; color: var(--text); background: var(--bg); padding: 4px 8px; border-radius: 6px; border: 1px solid var(--border);">
-                            {{ sub.distance_meters|floatformat:1 }}m away
-                        </span>
-                    </td>
-                    <td>
-                        {% if sub.verified_in_geofence %}
-                            <span class="custom-pill pill-green">
-                                <i class="fas fa-circle-check"></i> Verified Inside
-                            </span>
+                        {% if sub.status == 'approved' %}
+                            <span class="badge badge-success">Approved (+{{ sub.points_awarded }} pts)</span>
+                        {% elif sub.status == 'rejected' %}
+                            <span class="badge badge-danger">Rejected</span>
                         {% else %}
-                            <span class="custom-pill pill-amber" style="background:rgba(239, 68, 68, 0.1); color:#ef4444;">
-                                <i class="fas fa-circle-xmark"></i> Out of Bounds
-                            </span>
+                            <span class="badge badge-warning">Pending Review</span>
                         {% endif %}
                     </td>
-                    <td style="font-size: 13px; color: var(--text-sec); font-weight: 500;">
-                        {{ sub.created_at|date:"M d, Y @ H:i" }}
-                    </td>
-                    <td style="text-align: right;">
-                        <form method="post" style="display:inline;" onsubmit="return confirm('Delete this attendee submission?');">
+                    <td style="font-size:12px; color:var(--text-sec);">{{ sub.created_at|date:"M d, H:i" }}</td>
+                    <td style="text-align:right;">
+                        {% if sub.status == 'pending' %}
+                            <form method="post" style="display:inline;">
+                                {% csrf_token %}
+                                <input type="hidden" name="action" value="approve_submission">
+                                <input type="hidden" name="pk" value="{{ sub.pk }}">
+                                <button type="submit" class="btn btn-sm btn-success" style="font-size:11px; padding:4px 8px;">✓ Approve</button>
+                            </form>
+                            <form method="post" style="display:inline;" onsubmit="var r=prompt('Reason:','');if(!r)return false;this.querySelector('[name=reason]').value=r;return true;">
+                                {% csrf_token %}
+                                <input type="hidden" name="action" value="reject_submission">
+                                <input type="hidden" name="pk" value="{{ sub.pk }}">
+                                <input type="hidden" name="reason" value="">
+                                <button type="submit" class="btn btn-sm btn-danger" style="font-size:11px; padding:4px 8px;">✗ Reject</button>
+                            </form>
+                        {% endif %}
+                        <form method="post" style="display:inline;" onsubmit="return confirm('Delete permanently?');">
                             {% csrf_token %}
                             <input type="hidden" name="action" value="delete_submission">
                             <input type="hidden" name="pk" value="{{ sub.pk }}">
-                            <button type="submit" class="btn btn-sm btn-danger" style="border-radius: 8px; padding: 6px 12px;">
-                                <i class="fas fa-trash"></i> Delete
-                            </button>
+                            <button type="submit" class="btn btn-sm btn-secondary" style="font-size:11px; padding:4px 8px;"><i class="fas fa-trash"></i></button>
                         </form>
                     </td>
                 </tr>
                 {% empty %}
-                <tr>
-                    <td colspan="7" style="text-align:center; padding:48px; color:var(--text-sec);">
-                        <i class="fas fa-images-slash" style="font-size: 36px; color:var(--border); margin-bottom: 12px; display:block;"></i>
-                        No selfie uploads submitted by attendees yet.
-                    </td>
-                </tr>
+                <tr><td colspan="7" style="text-align:center; padding:32px; color:var(--text-sec);">No submissions yet.</td></tr>
                 {% endfor %}
             </tbody>
         </table>
     </div>
 </div>
 
-<!-- Modal -->
-<div class="premium-modal" id="photo_enlarger_modal" onclick="closePhotoModal()">
-    <div class="modal-content-wrapper" onclick="event.stopPropagation()">
-        <div class="modal-close-btn" onclick="closePhotoModal()">
-            <i class="fas fa-times"></i>
-        </div>
-        <img id="modal_large_img" src="" style="width: 100%; border-radius: 12px; object-fit: contain; max-height: 70vh;" alt="Enlarged Reference">
-    </div>
-</div>
-
 <script>
-(function() {
-    var initLat = 28.5456, initLng = 77.1923;
-    var map = L.map('selfie_map').setView([initLat, initLng], 17);
-    
-    L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        maxZoom: 19,
-        attribution: '&copy; OpenStreetMap contributors'
+document.addEventListener("DOMContentLoaded", function() {
+    var currentType = 'selfie';
+    var mapEl = document.getElementById('admin_map');
+    if (!mapEl) return;
+
+    var map = L.map('admin_map').setView([28.5456, 77.1923], 17);
+
+    // Google Maps High-Detail Tile Layer — Full IIT Delhi Campus Details, No API Key, No 403 Block
+    L.tileLayer('https://{s}.google.com/vt/lyrs=m&x={x}&y={y}&z={z}', {
+        maxZoom: 20,
+        subdomains: ['mt0', 'mt1', 'mt2', 'mt3'],
+        attribution: '&copy; Google Maps'
     }).addTo(map);
 
-    var marker = L.marker([initLat, initLng], { draggable: true }).addTo(map);
+    // Draft Marker & Circle for New Selfie Spot Creation
+    var selfieMarker = L.marker([28.5456, 77.1923], { draggable: true }).addTo(map);
+    var selfieCircle = L.circle([28.5456, 77.1923], { radius: 20, color: '#ec4899', fillColor: '#ec4899', fillOpacity: 0.25 }).addTo(map);
 
-    function setCoords(lat, lng) {
-        document.getElementById('sf_lat').value = lat.toFixed(7);
-        document.getElementById('sf_lng').value = lng.toFixed(7);
+    // Radius Input Event Listener — Dynamic Live Expand / Shrink
+    var radiusInput = document.getElementById('sf_radius');
+    if (radiusInput) {
+        radiusInput.addEventListener('input', function() {
+            var rVal = parseFloat(this.value);
+            if (!isNaN(rVal) && rVal > 0) {
+                selfieCircle.setRadius(rVal);
+            }
+        });
     }
 
-    marker.on('dragend', function(e) {
-        var pt = marker.getLatLng();
-        setCoords(pt.lat, pt.lng);
+    var markerA = null, markerB = null, corridorLine = null;
+    var nextClickIsPointB = false;
+
+    // ── Plot All Established Checkpoints onto Campus Map ──
+    var bounds = L.latLngBounds();
+    var hasEstablished = false;
+
+    {% for p in points %}
+        {% if p.checkpoint_type == 'selfie' and p.latitude and p.longitude %}
+            hasEstablished = true;
+            (function() {
+                var pos = [{{ p.latitude }}, {{ p.longitude }}];
+                bounds.extend(pos);
+
+                L.circle(pos, {
+                    radius: {{ p.radius_meters|default:20 }},
+                    color: '#be185d',
+                    fillColor: '#ec4899',
+                    fillOpacity: 0.35,
+                    weight: 2
+                }).addTo(map).bindPopup('<b>📸 {{ p.name|escapejs }}</b><br>Selfie Spot ({{ p.radius_meters|default:20 }}m radius)');
+
+                L.marker(pos).addTo(map).bindPopup('<b>📸 {{ p.name|escapejs }}</b><br>{{ p.description|default:""|escapejs }}');
+            })();
+
+        {% elif p.checkpoint_type == 'sponsor_zone' and p.point_a_lat and p.point_a_lng and p.point_b_lat and p.point_b_lng %}
+            hasEstablished = true;
+            (function() {
+                var pA = [{{ p.point_a_lat }}, {{ p.point_a_lng }}];
+                var pB = [{{ p.point_b_lat }}, {{ p.point_b_lng }}];
+                bounds.extend(pA);
+                bounds.extend(pB);
+
+                L.polyline([pA, pB], {
+                    color: '#1d4ed8',
+                    weight: 7,
+                    opacity: 0.85
+                }).addTo(map).bindPopup('<b>🏢 {{ p.name|escapejs }}</b><br>Sponsor Stall Corridor');
+
+                L.circleMarker(pA, { radius: 6, color: '#1e40af', fillColor: '#3b82f6', fillOpacity: 1 }).addTo(map).bindPopup('<b>{{ p.name|escapejs }}</b><br>Start Point A');
+                L.circleMarker(pB, { radius: 6, color: '#1e40af', fillColor: '#3b82f6', fillOpacity: 1 }).addTo(map).bindPopup('<b>{{ p.name|escapejs }}</b><br>End Point B');
+            })();
+        {% endif %}
+    {% endfor %}
+
+    if (hasEstablished) {
+        map.fitBounds(bounds, { padding: [50, 50] });
+    }
+
+    // Export globally for form type toggle buttons
+    window.switchFormType = function(type) {
+        currentType = type;
+        var cpInput = document.getElementById('cp_type_input');
+        if (cpInput) cpInput.value = type;
+
+        var btnS = document.getElementById('btn_selfie');
+        var btnSp = document.getElementById('btn_sponsor');
+        if (btnS) btnS.classList.toggle('active', type === 'selfie');
+        if (btnSp) btnSp.classList.toggle('active', type === 'sponsor_zone');
+
+        var sFields = document.getElementById('selfie_fields');
+        var spFields = document.getElementById('sponsor_fields');
+        if (sFields) sFields.style.display = type === 'selfie' ? 'block' : 'none';
+        if (spFields) spFields.style.display = type === 'sponsor_zone' ? 'block' : 'none';
+
+        if (type === 'selfie') {
+            if (markerA) map.removeLayer(markerA);
+            if (markerB) map.removeLayer(markerB);
+            if (corridorLine) map.removeLayer(corridorLine);
+            selfieMarker.addTo(map);
+            selfieCircle.addTo(map);
+        } else {
+            map.removeLayer(selfieMarker);
+            map.removeLayer(selfieCircle);
+            nextClickIsPointB = false;
+        }
+    };
+
+    selfieMarker.on('dragend', function() {
+        var pos = selfieMarker.getLatLng();
+        var latEl = document.getElementById('sf_lat');
+        var lngEl = document.getElementById('sf_lng');
+        if (latEl) latEl.value = pos.lat.toFixed(7);
+        if (lngEl) lngEl.value = pos.lng.toFixed(7);
+        selfieCircle.setLatLng(pos);
     });
 
     map.on('click', function(e) {
-        marker.setLatLng(e.latlng);
-        setCoords(e.latlng.lat, e.latlng.lng);
+        if (currentType === 'selfie') {
+            selfieMarker.setLatLng(e.latlng);
+            selfieCircle.setLatLng(e.latlng);
+            var latEl = document.getElementById('sf_lat');
+            var lngEl = document.getElementById('sf_lng');
+            if (latEl) latEl.value = e.latlng.lat.toFixed(7);
+            if (lngEl) lngEl.value = e.latlng.lng.toFixed(7);
+        } else {
+            if (!nextClickIsPointB) {
+                if (markerA) map.removeLayer(markerA);
+                if (markerB) map.removeLayer(markerB);
+                if (corridorLine) map.removeLayer(corridorLine);
+                markerA = L.marker(e.latlng, { title: 'Point A (Start)' }).addTo(map);
+                var ptALat = document.getElementById('pt_a_lat');
+                var ptALng = document.getElementById('pt_a_lng');
+                if (ptALat) ptALat.value = e.latlng.lat.toFixed(7);
+                if (ptALng) ptALng.value = e.latlng.lng.toFixed(7);
+                nextClickIsPointB = true;
+            } else {
+                if (markerB) map.removeLayer(markerB);
+                markerB = L.marker(e.latlng, { title: 'Point B (End)' }).addTo(map);
+                var ptBLat = document.getElementById('pt_b_lat');
+                var ptBLng = document.getElementById('pt_b_lng');
+                if (ptBLat) ptBLat.value = e.latlng.lat.toFixed(7);
+                if (ptBLng) ptBLng.value = e.latlng.lng.toFixed(7);
+                if (markerA) {
+                    corridorLine = L.polyline([markerA.getLatLng(), markerB.getLatLng()], { color: '#3b82f6', weight: 6 }).addTo(map);
+                }
+                nextClickIsPointB = false;
+            }
+        }
     });
 
-    window.updateSelfieMarker = function(lat, lng) {
-        marker.setLatLng([lat, lng]);
-        map.setView([lat, lng], 18);
-        setCoords(lat, lng);
+    window.useCurrentGps = function() {
+        if (!navigator.geolocation) return alert('GPS not supported');
+        navigator.geolocation.getCurrentPosition(function(pos) {
+            var lat = pos.coords.latitude, lng = pos.coords.longitude;
+            map.setView([lat, lng], 18);
+            if (currentType === 'selfie') {
+                selfieMarker.setLatLng([lat, lng]);
+                selfieCircle.setLatLng([lat, lng]);
+                var latEl = document.getElementById('sf_lat');
+                var lngEl = document.getElementById('sf_lng');
+                if (latEl) latEl.value = lat.toFixed(7);
+                if (lngEl) lngEl.value = lat.toFixed(7);
+            }
+        });
     };
-
-    window.syncSelfieInputs = function() {
-        var lat = parseFloat(document.getElementById('sf_lat').value);
-        var lng = parseFloat(document.getElementById('sf_lng').value);
-        if (!isNaN(lat) && !isNaN(lng)) {
-            marker.setLatLng([lat, lng]);
-            map.panTo([lat, lng]);
-        }
-    };
-})();
-
-function useCurrentGps(latId, lngId, cb) {
-    if (!navigator.geolocation) {
-        alert('Geolocation is not supported by your browser.');
-        return;
-    }
-    navigator.geolocation.getCurrentPosition(function(pos) {
-        var lat = pos.coords.latitude;
-        var lng = pos.coords.longitude;
-        cb(lat, lng);
-    }, function(err) {
-        alert('Error getting location: ' + err.message);
-    }, { enableHighAccuracy: true });
-}
-
-function openPhotoModal(imgUrl) {
-    var modal = document.getElementById('photo_enlarger_modal');
-    var modalImg = document.getElementById('modal_large_img');
-    modalImg.src = imgUrl;
-    modal.classList.add('show');
-}
-
-function closePhotoModal() {
-    var modal = document.getElementById('photo_enlarger_modal');
-    modal.classList.remove('show');
-}
+});
 </script>
 
 {% endblock %}

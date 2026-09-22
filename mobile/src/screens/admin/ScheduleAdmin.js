@@ -1,8 +1,18 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
-  View, Text, TouchableOpacity, ScrollView, StyleSheet, Platform,
-  ActivityIndicator, Alert, TextInput, Modal, RefreshControl,
-  KeyboardAvoidingView, Animated,
+  View,
+  Text,
+  TouchableOpacity,
+  ScrollView,
+  StyleSheet,
+  Platform,
+  ActivityIndicator,
+  Alert,
+  TextInput,
+  Modal,
+  RefreshControl,
+  KeyboardAvoidingView,
+  Animated,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -29,10 +39,23 @@ const SESSION_TYPES = [
   { value: 'special',   label: 'Special' },
 ];
 
+const MEAL_CATEGORIES = [
+  { value: 'Lunch', label: 'Lunch' },
+  { value: 'Dinner', label: 'Dinner' },
+  { value: 'High Tea', label: 'High Tea' },
+  { value: 'Breakfast', label: 'Breakfast' },
+];
+
 const TYPE_COLORS = {
-  keynote: COLORS.purple, technical: COLORS.brand, workshop: COLORS.accent,
-  break: COLORS.success, meal: COLORS.success, cultural: COLORS.rose,
-  panel: COLORS.teal, ceremony: COLORS.accent, ideathon: COLORS.purple,
+  keynote: COLORS.purple,
+  technical: COLORS.brand,
+  workshop: COLORS.accent,
+  break: COLORS.success,
+  meal: COLORS.success,
+  cultural: COLORS.rose,
+  panel: COLORS.teal,
+  ceremony: COLORS.accent,
+  ideathon: COLORS.purple,
   special: COLORS.textSec,
 };
 
@@ -44,16 +67,30 @@ const QUICK_DATES = [
 
 const HOURS_12 = [12, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11];
 const MINS = [0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55];
-function to24(h12, ampm) { if (ampm === 'AM') return h12 === 12 ? 0 : h12; return h12 === 12 ? 12 : h12 + 12; }
-function to12(h24) { const ampm = h24 >= 12 ? 'PM' : 'AM'; const h = h24 % 12 || 12; return { h, ampm }; }
 
-function pad(n) { return n.toString().padStart(2, '0'); }
+function to24(h12, ampm) {
+  if (ampm === 'AM') return h12 === 12 ? 0 : h12;
+  return h12 === 12 ? 12 : h12 + 12;
+}
+
+function to12(h24) {
+  const ampm = h24 >= 12 ? 'PM' : 'AM';
+  const h = h24 % 12 || 12;
+  return { h, ampm };
+}
+
+function pad(n) {
+  return n.toString().padStart(2, '0');
+}
+
 function fmtTime(dt) {
   if (!dt) return '';
   const d = new Date(dt);
   try {
     return d.toLocaleTimeString('en-IN', {
-      hour: '2-digit', minute: '2-digit', hour12: false,
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false,
       timeZone: 'Asia/Kolkata',
     });
   } catch {
@@ -64,6 +101,7 @@ function fmtTime(dt) {
     return `${String(adjH % 24).padStart(2, '0')}:${String(adjM).padStart(2, '0')}`;
   }
 }
+
 function authH(tokens) {
   return { ...API_HEADERS, Authorization: `Bearer ${tokens.access}` };
 }
@@ -80,10 +118,18 @@ function Skeleton({ width, height = 14, radius = 6, style }) {
     ).start();
   }, []);
   return (
-    <Animated.View style={[{
-      width, height, borderRadius: radius,
-      backgroundColor: COLORS.border, opacity: anim,
-    }, style]} />
+    <Animated.View
+      style={[
+        {
+          width,
+          height,
+          borderRadius: radius,
+          backgroundColor: COLORS.border,
+          opacity: anim,
+        },
+        style,
+      ]}
+    />
   );
 }
 
@@ -111,15 +157,21 @@ function ListSkeleton() {
 
 const sk = StyleSheet.create({
   card: {
-    backgroundColor: 'rgba(255,255,255,0.85)', borderRadius: RADIUS.lg,
-    padding: SPACE.lg, borderWidth: 1, borderColor: 'rgba(255,255,255,0.9)',
+    backgroundColor: 'rgba(255,255,255,0.85)',
+    borderRadius: RADIUS.lg,
+    padding: SPACE.lg,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.9)',
   },
 });
 
 /* ── DateTime Picker Modal ─────────────────────────────────────────────── */
 function DateTimePickerModal({ visible, value, onSelect, onClose, label }) {
   const parsed = value ? new Date(value) : null;
-  const [dateStr, setDateStr] = useState(parsed ? `${parsed.getFullYear()}-${pad(parsed.getMonth()+1)}-${pad(parsed.getDate())}` : '2026-10-23');
+  const [dateStr, setDateStr] = useState(
+    parsed ? `${parsed.getFullYear()}-${pad(parsed.getMonth() + 1)}-${pad(parsed.getDate())}` : '2026-10-23'
+  );
+  
   const init12 = parsed ? to12(parsed.getHours()) : { h: 9, ampm: 'AM' };
   const [hour12, setHour12] = useState(init12.h);
   const [minute, setMinute] = useState(parsed ? parsed.getMinutes() : 0);
@@ -127,20 +179,19 @@ function DateTimePickerModal({ visible, value, onSelect, onClose, label }) {
 
   useEffect(() => {
     if (visible && parsed) {
-      setDateStr(`${parsed.getFullYear()}-${pad(parsed.getMonth()+1)}-${pad(parsed.getDate())}`);
+      setDateStr(`${parsed.getFullYear()}-${pad(parsed.getMonth() + 1)}-${pad(parsed.getDate())}`);
       const i = to12(parsed.getHours());
-      setHour12(i.h); setAmpm(i.ampm);
+      setHour12(i.h);
+      setAmpm(i.ampm);
       setMinute(parsed.getMinutes());
     }
   }, [visible]);
 
   const confirm = () => {
     const h24 = to24(hour12, ampm);
-    // Append +05:30 so JavaScript and backend both know this is IST
     const iso = `${dateStr}T${pad(h24)}:${pad(minute)}:00+05:30`;
     onSelect(iso);
   };
-
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
@@ -165,9 +216,11 @@ function DateTimePickerModal({ visible, value, onSelect, onClose, label }) {
           />
           <View style={{ flexDirection: 'row', gap: SPACE.sm, marginBottom: SPACE.lg }}>
             {QUICK_DATES.map(d => (
-              <TouchableOpacity key={d.date}
+              <TouchableOpacity
+                key={d.date}
                 style={[dt.dateBtn, dateStr === d.date && dt.dateBtnOn]}
-                onPress={() => setDateStr(d.date)}>
+                onPress={() => setDateStr(d.date)}
+              >
                 <Text style={[dt.dateBtnText, dateStr === d.date && { color: '#fff' }]}>{d.label}</Text>
               </TouchableOpacity>
             ))}
@@ -179,8 +232,11 @@ function DateTimePickerModal({ visible, value, onSelect, onClose, label }) {
               <Text style={dt.timeLabel}>Hour</Text>
               <ScrollView style={dt.timeScroll} showsVerticalScrollIndicator={false} nestedScrollEnabled>
                 {HOURS_12.map(h => (
-                  <TouchableOpacity key={h} style={[dt.timeItem, hour12 === h && dt.timeItemOn]}
-                    onPress={() => setHour12(h)}>
+                  <TouchableOpacity
+                    key={h}
+                    style={[dt.timeItem, hour12 === h && dt.timeItemOn]}
+                    onPress={() => setHour12(h)}
+                  >
                     <Text style={[dt.timeItemText, hour12 === h && dt.timeItemTextOn]}>{h}</Text>
                   </TouchableOpacity>
                 ))}
@@ -191,8 +247,11 @@ function DateTimePickerModal({ visible, value, onSelect, onClose, label }) {
               <Text style={dt.timeLabel}>Min</Text>
               <ScrollView style={dt.timeScroll} showsVerticalScrollIndicator={false} nestedScrollEnabled>
                 {MINS.map(m => (
-                  <TouchableOpacity key={m} style={[dt.timeItem, minute === m && dt.timeItemOn]}
-                    onPress={() => setMinute(m)}>
+                  <TouchableOpacity
+                    key={m}
+                    style={[dt.timeItem, minute === m && dt.timeItemOn]}
+                    onPress={() => setMinute(m)}
+                  >
                     <Text style={[dt.timeItemText, minute === m && dt.timeItemTextOn]}>{pad(m)}</Text>
                   </TouchableOpacity>
                 ))}
@@ -200,9 +259,11 @@ function DateTimePickerModal({ visible, value, onSelect, onClose, label }) {
             </View>
             <View style={{ gap: SPACE.sm, marginTop: 24 }}>
               {['AM', 'PM'].map(p => (
-                <TouchableOpacity key={p}
+                <TouchableOpacity
+                  key={p}
                   style={[dt.ampmBtn, ampm === p && dt.ampmBtnOn]}
-                  onPress={() => setAmpm(p)}>
+                  onPress={() => setAmpm(p)}
+                >
                   <Text style={[dt.ampmText, ampm === p && dt.ampmTextOn]}>{p}</Text>
                 </TouchableOpacity>
               ))}
@@ -234,57 +295,166 @@ function DateTimePickerModal({ visible, value, onSelect, onClose, label }) {
 }
 
 const dt = StyleSheet.create({
-  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center', padding: SPACE.xl },
-  modal: {
-    backgroundColor: COLORS.surface, borderRadius: 24, padding: SPACE.xl,
-    width: '100%', maxWidth: 400, maxHeight: '90%',
+  overlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: SPACE.xl,
   },
-  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: SPACE.xl },
-  title: { fontSize: FONT.lg, fontWeight: FONT.w9, color: COLORS.text },
-  sectionLabel: { fontSize: 10, fontWeight: FONT.w8, color: COLORS.textTer, letterSpacing: 1.5, marginBottom: SPACE.sm },
+  modal: {
+    backgroundColor: COLORS.surface,
+    borderRadius: 24,
+    padding: SPACE.xl,
+    width: '100%',
+    maxWidth: 400,
+    maxHeight: '90%',
+  },
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: SPACE.xl,
+  },
+  title: {
+    fontSize: FONT.lg,
+    fontWeight: FONT.w9,
+    color: COLORS.text,
+  },
+  sectionLabel: {
+    fontSize: 10,
+    fontWeight: FONT.w8,
+    color: COLORS.textTer,
+    letterSpacing: 1.5,
+    marginBottom: SPACE.sm,
+  },
   dateInput: {
-    backgroundColor: COLORS.bg, borderRadius: RADIUS.md,
-    paddingHorizontal: SPACE.md, paddingVertical: SPACE.md,
-    fontSize: FONT.md, fontWeight: FONT.w7, color: COLORS.text,
-    borderWidth: 1, borderColor: COLORS.borderLight, marginBottom: SPACE.md,
-    textAlign: 'center', letterSpacing: 1,
+    backgroundColor: COLORS.bg,
+    borderRadius: RADIUS.md,
+    paddingHorizontal: SPACE.md,
+    paddingVertical: SPACE.md,
+    fontSize: FONT.md,
+    fontWeight: FONT.w7,
+    color: COLORS.text,
+    borderWidth: 1,
+    borderColor: COLORS.borderLight,
+    marginBottom: SPACE.md,
+    textAlign: 'center',
+    letterSpacing: 1,
   },
   dateBtn: {
-    flex: 1, alignItems: 'center', paddingVertical: SPACE.sm,
-    borderRadius: RADIUS.md, borderWidth: 1.5, borderColor: COLORS.border, backgroundColor: '#fff',
+    flex: 1,
+    alignItems: 'center',
+    paddingVertical: SPACE.sm,
+    borderRadius: RADIUS.md,
+    borderWidth: 1.5,
+    borderColor: COLORS.border,
+    backgroundColor: '#fff',
   },
-  dateBtnOn: { backgroundColor: COLORS.brand, borderColor: COLORS.brand },
-  dateBtnText: { fontSize: FONT.xs, fontWeight: FONT.w7, color: COLORS.text },
-  timeLabel: { fontSize: 10, fontWeight: FONT.w7, color: COLORS.textTer, textAlign: 'center', marginBottom: SPACE.xs },
-  timeScroll: { height: 150, borderRadius: RADIUS.md, backgroundColor: COLORS.bg },
-  timeItem: { paddingVertical: SPACE.sm, alignItems: 'center', borderRadius: RADIUS.sm, marginHorizontal: 4, marginVertical: 1 },
-  timeItemOn: { backgroundColor: COLORS.brand },
-  timeItemText: { fontSize: FONT.md, fontWeight: FONT.w6, color: COLORS.text },
-  timeItemTextOn: { color: '#fff', fontWeight: FONT.w8 },
+  dateBtnOn: {
+    backgroundColor: COLORS.brand,
+    borderColor: COLORS.brand,
+  },
+  dateBtnText: {
+    fontSize: FONT.xs,
+    fontWeight: FONT.w7,
+    color: COLORS.text,
+  },
+  timeLabel: {
+    fontSize: 10,
+    fontWeight: FONT.w7,
+    color: COLORS.textTer,
+    textAlign: 'center',
+    marginBottom: SPACE.xs,
+  },
+  timeScroll: {
+    height: 150,
+    borderRadius: RADIUS.md,
+    backgroundColor: COLORS.bg,
+  },
+  timeItem: {
+    paddingVertical: SPACE.sm,
+    alignItems: 'center',
+    borderRadius: RADIUS.sm,
+    marginHorizontal: 4,
+    marginVertical: 1,
+  },
+  timeItemOn: {
+    backgroundColor: COLORS.brand,
+  },
+  timeItemText: {
+    fontSize: FONT.md,
+    fontWeight: FONT.w6,
+    color: COLORS.text,
+  },
+  timeItemTextOn: {
+    color: '#fff',
+    fontWeight: FONT.w8,
+  },
   ampmBtn: {
-    paddingHorizontal: SPACE.lg, paddingVertical: SPACE.md,
-    borderRadius: RADIUS.md, borderWidth: 1.5, borderColor: COLORS.border, backgroundColor: '#fff',
+    paddingHorizontal: SPACE.lg,
+    paddingVertical: SPACE.md,
+    borderRadius: RADIUS.md,
+    borderWidth: 1.5,
+    borderColor: COLORS.border,
+    backgroundColor: '#fff',
     alignItems: 'center',
   },
-  ampmBtnOn: { backgroundColor: COLORS.brand, borderColor: COLORS.brand },
-  ampmText: { fontSize: FONT.sm, fontWeight: FONT.w7, color: COLORS.text },
-  ampmTextOn: { color: '#fff' },
+  ampmBtnOn: {
+    backgroundColor: COLORS.brand,
+    borderColor: COLORS.brand,
+  },
+  ampmText: {
+    fontSize: FONT.sm,
+    fontWeight: FONT.w7,
+    color: COLORS.text,
+  },
+  ampmTextOn: {
+    color: '#fff',
+  },
   preview: {
-    flexDirection: 'row', alignItems: 'center', gap: SPACE.sm,
-    backgroundColor: COLORS.brandLight, padding: SPACE.md, borderRadius: RADIUS.md,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACE.sm,
+    backgroundColor: COLORS.brandLight,
+    padding: SPACE.md,
+    borderRadius: RADIUS.md,
   },
-  previewText: { fontSize: FONT.sm, fontWeight: FONT.w7, color: COLORS.brand },
+  previewText: {
+    fontSize: FONT.sm,
+    fontWeight: FONT.w7,
+    color: COLORS.brand,
+  },
   cancelBtn: {
-    flex: 1, alignItems: 'center', paddingVertical: SPACE.md,
-    borderRadius: RADIUS.md, borderWidth: 1.5, borderColor: COLORS.border,
+    flex: 1,
+    alignItems: 'center',
+    paddingVertical: SPACE.md,
+    borderRadius: RADIUS.md,
+    borderWidth: 1.5,
+    borderColor: COLORS.border,
   },
-  cancelText: { fontSize: FONT.sm, fontWeight: FONT.w6, color: COLORS.textSec },
-  confirmBtn: { flex: 1, borderRadius: RADIUS.md, overflow: 'hidden' },
+  cancelText: {
+    fontSize: FONT.sm,
+    fontWeight: FONT.w6,
+    color: COLORS.textSec,
+  },
+  confirmBtn: {
+    flex: 1,
+    borderRadius: RADIUS.md,
+    overflow: 'hidden',
+  },
   confirmGrad: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-    gap: SPACE.sm, paddingVertical: SPACE.md,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: SPACE.sm,
+    paddingVertical: SPACE.md,
   },
-  confirmText: { fontSize: FONT.sm, fontWeight: FONT.w7, color: '#fff' },
+  confirmText: {
+    fontSize: FONT.sm,
+    fontWeight: FONT.w7,
+    color: '#fff',
+  },
 });
 
 /* ── Reusable Header ───────────────────────────────────────────────────── */
@@ -307,6 +477,7 @@ function Header({ title, sub, onBack, right }) {
 function DateTimeField({ label, value, onChange }) {
   const [open, setOpen] = useState(false);
   const display = value ? `${value.slice(5, 10)}  ${value.slice(11, 16)}` : 'Tap to set';
+  
   return (
     <View style={{ flex: 1 }}>
       <Text style={s.label}>{label}</Text>
@@ -333,33 +504,49 @@ function AnalyticsView({ session, tokens, onBack }) {
   useEffect(() => {
     (async () => {
       try {
-        const res = await fetch(`${API_URL}/schedule/admin/sessions/${session.id}/feedback-analytics/`, { headers: authH(tokens) });
+        const res = await fetch(`${API_URL}/schedule/admin/sessions/${session.id}/feedback-analytics/`, { 
+          headers: authH(tokens) 
+        });
         setData(await res.json());
-      } catch { /* */ }
+      } catch {
+        // Handle error implicitly
+      }
       setLoading(false);
     })();
-  }, [session.id]);
+  }, [session.id, tokens]);
 
   return (
     <View style={{ flex: 1, backgroundColor: COLORS.bg }}>
       <Header title="Feedback Analytics" sub={session.title} onBack={onBack} />
       <ScrollView contentContainerStyle={{ padding: SPACE.xl, paddingBottom: 100 }}>
         {loading && <ActivityIndicator color={COLORS.brand} style={{ marginTop: SPACE.xxl }} />}
+        
         {data && (
           <>
             <View style={s.detailCard}>
-              <Text style={{ fontSize: 36, fontWeight: FONT.w9, color: COLORS.brand, textAlign: 'center' }}>{data.total_responses}</Text>
-              <Text style={{ fontSize: FONT.xs, color: COLORS.textTer, textAlign: 'center', marginTop: 2 }}>Total Responses</Text>
+              <Text style={{ fontSize: 36, fontWeight: FONT.w9, color: COLORS.brand, textAlign: 'center' }}>
+                {data.total_responses}
+              </Text>
+              <Text style={{ fontSize: FONT.xs, color: COLORS.textTer, textAlign: 'center', marginTop: 2 }}>
+                Total Responses
+              </Text>
             </View>
+
             {(data.question_stats || []).map((q, i) => (
               <View key={i} style={s.detailCard}>
-                <Text style={{ fontSize: FONT.sm, fontWeight: FONT.w7, color: COLORS.text, marginBottom: SPACE.sm }}>{i + 1}. {q.text}</Text>
+                <Text style={{ fontSize: FONT.sm, fontWeight: FONT.w7, color: COLORS.text, marginBottom: SPACE.sm }}>
+                  {i + 1}. {q.text}
+                </Text>
+                
                 {q.type === 'rating' && (
                   <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: SPACE.sm }}>
-                    <Text style={{ fontSize: 28, fontWeight: FONT.w9, color: COLORS.accent }}>{q.avg_rating ?? '—'}</Text>
+                    <Text style={{ fontSize: 28, fontWeight: FONT.w9, color: COLORS.accent }}>
+                      {q.avg_rating ?? '—'}
+                    </Text>
                     <Text style={{ fontSize: FONT.xs, color: COLORS.textTer }}>/5 avg</Text>
                   </View>
                 )}
+                
                 {q.type === 'boolean' && (
                   <View style={{ flexDirection: 'row', gap: SPACE.xl }}>
                     <View>
@@ -374,11 +561,13 @@ function AnalyticsView({ session, tokens, onBack }) {
                 )}
               </View>
             ))}
+
             <Text style={s.secLabel}>INDIVIDUAL RESPONSES</Text>
             {(data.responses || []).map((r, i) => (
               <View key={r.id || i} style={s.responseCard}>
                 <Text style={{ fontSize: FONT.sm, fontWeight: FONT.w7, color: COLORS.text }}>{r.user_name}</Text>
                 <Text style={{ fontSize: 10, color: COLORS.textTer, marginBottom: SPACE.sm }}>{r.user_email}</Text>
+                
                 {r.answers.map((a, j) => (
                   <View key={j} style={{ marginBottom: SPACE.xs }}>
                     <Text style={{ fontSize: 10, color: COLORS.textTer }}>{a.question_text}</Text>
@@ -404,18 +593,24 @@ function SessionForm({ session, tokens, onBack, onSaved }) {
   const [title, setTitle] = useState(session?.title || '');
   const [day, setDay] = useState(session?.day || 1);
   const [sessionType, setSessionType] = useState(session?.session_type || 'technical');
+  
   const [startDt, setStartDt] = useState(
     session ? `${new Date(session.start_datetime).getFullYear()}-${pad(new Date(session.start_datetime).getMonth()+1)}-${pad(new Date(session.start_datetime).getDate())}T${pad(new Date(session.start_datetime).getHours())}:${pad(new Date(session.start_datetime).getMinutes())}:00` : ''
   );
   const [endDt, setEndDt] = useState(
     session ? `${new Date(session.end_datetime).getFullYear()}-${pad(new Date(session.end_datetime).getMonth()+1)}-${pad(new Date(session.end_datetime).getDate())}T${pad(new Date(session.end_datetime).getHours())}:${pad(new Date(session.end_datetime).getMinutes())}:00` : ''
   );
+  
   const [room, setRoom] = useState(session?.room || '');
   const [desc, setDesc] = useState(session?.description || '');
   const [order, setOrder] = useState(String(session?.display_order ?? 0));
+  
   const [featured, setFeatured] = useState(session?.is_featured || false);
   const [parallel, setParallel] = useState(session?.is_parallel || false);
   const [published, setPublished] = useState(session?.is_published ?? true);
+  const [isMeal, setIsMeal] = useState(session?.is_meal || false);
+  const [mealCategory, setMealCategory] = useState(session?.meal_category || 'Lunch');
+  
   const [feedbackOn, setFeedbackOn] = useState(session?.feedback_enabled || false);
   const [autoOpen, setAutoOpen] = useState(session?.feedback_auto_open ?? true);
   const [saving, setSaving] = useState(false);
@@ -427,55 +622,92 @@ function SessionForm({ session, tokens, onBack, onSaved }) {
   const [subStart, setSubStart] = useState('');
   const [subEnd, setSubEnd] = useState('');
 
-
   const save = async () => {
     if (!title.trim()) { Alert.alert('Error', 'Title is required'); return; }
     if (!startDt || !endDt) { Alert.alert('Error', 'Start and end times are required'); return; }
+    
     setSaving(true);
     try {
       const body = {
-        day, title: title.trim(), session_type: sessionType,
+        day, 
+        title: title.trim(), 
+        session_type: sessionType,
         start_datetime: new Date(startDt).toISOString(),
         end_datetime: new Date(endDt).toISOString(),
-        room: room.trim(), description: desc.trim(),
+        room: room.trim(), 
+        description: desc.trim(),
         display_order: parseInt(order) || 0,
-        is_featured: featured, is_parallel: parallel, is_published: published,
-        feedback_enabled: feedbackOn, feedback_auto_open: autoOpen,
+        is_featured: featured, 
+        is_parallel: parallel, 
+        is_published: published,
+        is_meal: isMeal, 
+        meal_category: mealCategory,
+        feedback_enabled: feedbackOn, 
+        feedback_auto_open: autoOpen,
       };
+      
       const url = isEdit
         ? `${API_URL}/schedule/admin/sessions/${session.id}/update/`
         : `${API_URL}/schedule/admin/sessions/create/`;
       const method = isEdit ? 'PATCH' : 'POST';
-      const res = await fetch(url, { method, headers: authH(tokens), body: JSON.stringify(body) });
+      
+      const res = await fetch(url, { 
+        method, 
+        headers: authH(tokens), 
+        body: JSON.stringify(body) 
+      });
       const data = await res.json();
+      
       if (data.id) {
         Alert.alert('Success', `Session ${isEdit ? 'updated' : 'created'}.`);
         onSaved(data);
       } else {
         Alert.alert('Error', data.error || JSON.stringify(data));
       }
-    } catch (e) { Alert.alert('Error', e.message); }
+    } catch (e) {
+      Alert.alert('Error', e.message);
+    }
     setSaving(false);
   };
 
   const addSub = async () => {
     if (!subTitle.trim()) { Alert.alert('Error', 'Sub-session title required'); return; }
     if (!isEdit) { Alert.alert('Info', 'Save the session first, then add sub-sessions.'); return; }
+    
     try {
       const body = {
         title: subTitle.trim(),
         start_datetime: subStart ? new Date(subStart).toISOString() : null,
         end_datetime: subEnd ? new Date(subEnd).toISOString() : null,
       };
+      
       const res = await fetch(`${API_URL}/schedule/admin/sessions/${session.id}/subsessions/`, {
-        method: 'POST', headers: authH(tokens), body: JSON.stringify(body),
+        method: 'POST', 
+        headers: authH(tokens), 
+        body: JSON.stringify(body),
       });
       const data = await res.json();
+      
       if (data.success) {
-        setSubs(prev => [...prev, { id: data.id, title: data.title, start_datetime: subStart || null, end_datetime: subEnd || null }]);
-        setSubTitle(''); setSubStart(''); setSubEnd(''); setShowSubForm(false);
-      } else { Alert.alert('Error', data.error || 'Failed'); }
-    } catch (e) { Alert.alert('Error', e.message); }
+        setSubs(prev => [
+          ...prev, 
+          { 
+            id: data.id, 
+            title: data.title, 
+            start_datetime: subStart || null, 
+            end_datetime: subEnd || null 
+          }
+        ]);
+        setSubTitle(''); 
+        setSubStart(''); 
+        setSubEnd(''); 
+        setShowSubForm(false);
+      } else {
+        Alert.alert('Error', data.error || 'Failed');
+      }
+    } catch (e) {
+      Alert.alert('Error', e.message);
+    }
   };
 
   const deleteSub = (subId) => {
@@ -483,37 +715,51 @@ function SessionForm({ session, tokens, onBack, onSaved }) {
       { text: 'Cancel', style: 'cancel' },
       { text: 'Delete', style: 'destructive', onPress: async () => {
         try {
-          await fetch(`${API_URL}/schedule/admin/subsessions/${subId}/delete/`, {
-            method: 'DELETE', headers: authH(tokens),
+          await fetch(`${API_URL}/schedule/admin/subsessions/${subId}/delete/`, { 
+            method: 'DELETE', 
+            headers: authH(tokens) 
           });
           setSubs(prev => prev.filter(x => x.id !== subId));
-        } catch { Alert.alert('Error', 'Failed'); }
+        } catch {
+          Alert.alert('Error', 'Failed');
+        }
       }},
     ]);
   };
 
   return (
-    <KeyboardAvoidingView style={{ flex: 1, backgroundColor: COLORS.bg }}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+    <KeyboardAvoidingView 
+      style={{ flex: 1, backgroundColor: COLORS.bg }} 
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+    >
       <Header title={isEdit ? 'Edit Session' : 'New Session'} sub={isEdit ? session.title : null} onBack={onBack} />
-      <ScrollView contentContainerStyle={{ padding: SPACE.xl, paddingBottom: 120 }}
-        showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
-
-        {/* Basic Info */}
+      
+      <ScrollView 
+        contentContainerStyle={{ padding: SPACE.xl, paddingBottom: 120 }} 
+        showsVerticalScrollIndicator={false} 
+        keyboardShouldPersistTaps="handled"
+      >
         <View style={s.formCard}>
           <Text style={s.formSection}>Basic Information</Text>
 
           <Text style={s.label}>Title *</Text>
-          <TextInput style={s.input} value={title} onChangeText={setTitle}
-            placeholder="e.g. Technical Session – 1" placeholderTextColor={COLORS.textTer} />
+          <TextInput 
+            style={s.input} 
+            value={title} 
+            onChangeText={setTitle} 
+            placeholder="e.g. Technical Session – 1" 
+            placeholderTextColor={COLORS.textTer} 
+          />
 
           <Text style={s.label}>Session Type</Text>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: SPACE.md }}>
             <View style={{ flexDirection: 'row', gap: SPACE.xs }}>
               {SESSION_TYPES.map(st => (
-                <TouchableOpacity key={st.value}
-                  style={[s.chip, sessionType === st.value && s.chipOn]}
-                  onPress={() => setSessionType(st.value)}>
+                <TouchableOpacity 
+                  key={st.value} 
+                  style={[s.chip, sessionType === st.value && s.chipOn]} 
+                  onPress={() => setSessionType(st.value)}
+                >
                   <Text style={[s.chipText, sessionType === st.value && s.chipTextOn]}>{st.label}</Text>
                 </TouchableOpacity>
               ))}
@@ -526,31 +772,50 @@ function SessionForm({ session, tokens, onBack, onSaved }) {
           </View>
 
           <Text style={s.label}>Room / Venue</Text>
-          <TextInput style={s.input} value={room} onChangeText={setRoom}
-            placeholder="Main Auditorium" placeholderTextColor={COLORS.textTer} />
+          <TextInput 
+            style={s.input} 
+            value={room} 
+            onChangeText={setRoom} 
+            placeholder="Main Auditorium" 
+            placeholderTextColor={COLORS.textTer} 
+          />
 
           <Text style={s.label}>Description</Text>
-          <TextInput style={[s.input, { height: 80, textAlignVertical: 'top' }]}
-            value={desc} onChangeText={setDesc}
-            placeholder="Optional" placeholderTextColor={COLORS.textTer}
-            multiline numberOfLines={3} />
+          <TextInput 
+            style={[s.input, { height: 80, textAlignVertical: 'top' }]} 
+            value={desc} 
+            onChangeText={setDesc} 
+            placeholder="Optional" 
+            placeholderTextColor={COLORS.textTer} 
+            multiline 
+            numberOfLines={3} 
+          />
 
           <Text style={s.label}>Display Order</Text>
-          <TextInput style={[s.input, { width: 80 }]} value={order} onChangeText={setOrder}
-            keyboardType="numeric" placeholder="0" placeholderTextColor={COLORS.textTer} />
+          <TextInput 
+            style={[s.input, { width: 80 }]} 
+            value={order} 
+            onChangeText={setOrder} 
+            keyboardType="numeric" 
+            placeholder="0" 
+            placeholderTextColor={COLORS.textTer} 
+          />
         </View>
 
-        {/* Flags */}
         <View style={s.formCard}>
-          <Text style={s.formSection}>Flags</Text>
+          <Text style={s.formSection}>Flags & Meal Service</Text>
           {[
             { val: published, set: setPublished, label: 'Published', hint: 'Visible in app', icon: 'eye' },
             { val: featured, set: setFeatured, label: '★ Featured', hint: '1-hr push to all', icon: 'star' },
             { val: parallel, set: setParallel, label: 'Parallel', hint: 'Runs alongside another', icon: 'git-compare' },
-            { val: feedbackOn, set: setFeedbackOn, label: 'Feedback', hint: 'Enable feedback form', icon: 'chatbox-ellipses' },
-            { val: autoOpen, set: setAutoOpen, label: 'Auto-open', hint: 'Open at session end', icon: 'timer' },
+            { val: isMeal, set: setIsMeal, label: '🍽️ Is Meal Service', hint: 'Opens Meal QR auto', icon: 'restaurant' },
           ].map(f => (
-            <TouchableOpacity key={f.label} style={s.toggleRow} onPress={() => f.set(!f.val)} activeOpacity={0.7}>
+            <TouchableOpacity 
+              key={f.label} 
+              style={s.toggleRow} 
+              onPress={() => f.set(!f.val)} 
+              activeOpacity={0.7}
+            >
               <Ionicons name={f.icon} size={18} color={f.val ? COLORS.brand : COLORS.textTer} />
               <View style={{ flex: 1 }}>
                 <Text style={s.toggleLabel}>{f.label}</Text>
@@ -561,9 +826,57 @@ function SessionForm({ session, tokens, onBack, onSaved }) {
               </View>
             </TouchableOpacity>
           ))}
+
+          {isMeal && (
+            <View style={s.mealSubRow}>
+              <Text style={s.label}>Meal Category</Text>
+              <View style={{ flexDirection: 'row', gap: SPACE.xs, flexWrap: 'wrap' }}>
+                {MEAL_CATEGORIES.map(mc => (
+                  <TouchableOpacity 
+                    key={mc.value} 
+                    style={[s.chip, mealCategory === mc.value && s.chipOn]} 
+                    onPress={() => setMealCategory(mc.value)}
+                  >
+                    <Text style={[s.chipText, mealCategory === mc.value && s.chipTextOn]}>{mc.label}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+          )}
+
+          <TouchableOpacity 
+            style={[s.toggleRow, { marginTop: SPACE.lg }]} 
+            onPress={() => setFeedbackOn(!feedbackOn)} 
+            activeOpacity={0.7}
+          >
+            <Ionicons name="chatbox-ellipses" size={18} color={feedbackOn ? COLORS.brand : COLORS.textTer} />
+            <View style={{ flex: 1 }}>
+              <Text style={s.toggleLabel}>Feedback</Text>
+              <Text style={s.toggleHint}>Enable feedback form</Text>
+            </View>
+            <View style={[s.toggle, feedbackOn && s.toggleOnStyle]}>
+              <View style={[s.toggleDot, feedbackOn && s.toggleDotOn]} />
+            </View>
+          </TouchableOpacity>
+
+          {feedbackOn && (
+            <TouchableOpacity 
+              style={s.toggleRow} 
+              onPress={() => setAutoOpen(!autoOpen)} 
+              activeOpacity={0.7}
+            >
+              <Ionicons name="timer" size={18} color={autoOpen ? COLORS.brand : COLORS.textTer} />
+              <View style={{ flex: 1 }}>
+                <Text style={s.toggleLabel}>Auto-open</Text>
+                <Text style={s.toggleHint}>Open at session end</Text>
+              </View>
+              <View style={[s.toggle, autoOpen && s.toggleOnStyle]}>
+                <View style={[s.toggleDot, autoOpen && s.toggleDotOn]} />
+              </View>
+            </TouchableOpacity>
+          )}
         </View>
 
-        {/* Sub-sessions (edit mode) */}
         {isEdit && (
           <View style={s.formCard}>
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: SPACE.md }}>
@@ -579,8 +892,13 @@ function SessionForm({ session, tokens, onBack, onSaved }) {
             {showSubForm && (
               <View style={s.subForm}>
                 <Text style={s.label}>Title *</Text>
-                <TextInput style={s.input} value={subTitle} onChangeText={setSubTitle}
-                  placeholder="e.g. Invited Talk" placeholderTextColor={COLORS.textTer} />
+                <TextInput 
+                  style={s.input} 
+                  value={subTitle} 
+                  onChangeText={setSubTitle} 
+                  placeholder="e.g. Invited Talk" 
+                  placeholderTextColor={COLORS.textTer} 
+                />
                 <View style={{ flexDirection: 'row', gap: SPACE.md }}>
                   <DateTimeField label="Start" value={subStart} onChange={setSubStart} />
                   <DateTimeField label="End" value={subEnd} onChange={setSubEnd} />
@@ -597,6 +915,7 @@ function SessionForm({ session, tokens, onBack, onSaved }) {
                 No sub-sessions. Tap Add to create one.
               </Text>
             )}
+            
             {subs.map((sub, i) => (
               <View key={sub.id || i} style={s.subItem}>
                 <View style={s.subDot} />
@@ -616,25 +935,35 @@ function SessionForm({ session, tokens, onBack, onSaved }) {
           </View>
         )}
 
-        {/* Save */}
         <TouchableOpacity style={s.saveBtn} onPress={save} disabled={saving} activeOpacity={0.8}>
           <LinearGradient colors={[COLORS.brand, COLORS.brandDark]} style={s.saveBtnGrad}>
-            {saving ? <ActivityIndicator color="#fff" />
-              : <><Ionicons name="checkmark-circle" size={18} color="#fff" /><Text style={s.saveBtnText}>{isEdit ? 'Save Changes' : 'Create Session'}</Text></>}
+            {saving ? (
+              <ActivityIndicator color="#fff" />
+            ) : (
+              <>
+                <Ionicons name="checkmark-circle" size={18} color="#fff" />
+                <Text style={s.saveBtnText}>{isEdit ? 'Save Changes' : 'Create Session'}</Text>
+              </>
+            )}
           </LinearGradient>
         </TouchableOpacity>
 
         {isEdit && (
-          <TouchableOpacity style={s.deleteBtn} activeOpacity={0.7}
+          <TouchableOpacity 
+            style={s.deleteBtn} 
+            activeOpacity={0.7} 
             onPress={() => Alert.alert('Delete', `Delete "${session.title}"?`, [
               { text: 'Cancel', style: 'cancel' },
-              { text: 'Delete', style: 'destructive', onPress: async () => {
-                try {
-                  await fetch(`${API_URL}/schedule/admin/sessions/${session.id}/delete/`, { method: 'DELETE', headers: authH(tokens) });
-                  onSaved(null);
-                } catch { Alert.alert('Error', 'Failed'); }
+              { text: 'Delete', style: 'destructive', onPress: async () => { 
+                try { 
+                  await fetch(`${API_URL}/schedule/admin/sessions/${session.id}/delete/`, { method: 'DELETE', headers: authH(tokens) }); 
+                  onSaved(null); 
+                } catch { 
+                  Alert.alert('Error', 'Failed'); 
+                }
               }},
-            ])}>
+            ])}
+          >
             <Ionicons name="trash-outline" size={16} color={COLORS.error} />
             <Text style={s.deleteBtnText}>Delete Session</Text>
           </TouchableOpacity>
@@ -650,8 +979,7 @@ function SessionDetail({ session: initial, tokens, onBack, onRefresh }) {
   const [view, setView] = useState('detail');
 
   if (view === 'analytics') return <AnalyticsView session={sess} tokens={tokens} onBack={() => setView('detail')} />;
-  if (view === 'edit') return <SessionForm session={sess} tokens={tokens} onBack={() => setView('detail')}
-    onSaved={(data) => { if (data) setSess(data); else onBack(); setView('detail'); onRefresh(); }} />;
+  if (view === 'edit') return <SessionForm session={sess} tokens={tokens} onBack={() => setView('detail')} onSaved={(data) => { if (data) setSess(data); else onBack(); setView('detail'); onRefresh(); }} />;
 
   const tc = TYPE_COLORS[sess.session_type] || COLORS.textSec;
   const status = sess.status || 'upcoming';
@@ -661,25 +989,34 @@ function SessionDetail({ session: initial, tokens, onBack, onRefresh }) {
       const res = await fetch(`${API_URL}/schedule/admin/sessions/${sess.id}/feedback-toggle/`, { method: 'POST', headers: authH(tokens) });
       const data = await res.json();
       if (data.success) setSess(prev => ({ ...prev, feedback_manual_open: data.feedback_manual_open, feedback_open: data.feedback_open }));
-    } catch { Alert.alert('Error', 'Failed'); }
+    } catch {}
   };
-
+  
   const quickToggle = async (field, val) => {
     try {
-      const res = await fetch(`${API_URL}/schedule/admin/sessions/${sess.id}/update/`, {
-        method: 'PATCH', headers: authH(tokens), body: JSON.stringify({ [field]: val }),
+      const res = await fetch(`${API_URL}/schedule/admin/sessions/${sess.id}/update/`, { 
+        method: 'PATCH', 
+        headers: authH(tokens), 
+        body: JSON.stringify({ [field]: val }) 
       });
       const data = await res.json();
-      setSess(data); onRefresh();
+      setSess(data); 
+      onRefresh();
     } catch {}
   };
 
   return (
     <View style={{ flex: 1, backgroundColor: COLORS.bg }}>
-      <Header title="Session Details" sub={`Day ${sess.day}`} onBack={onBack}
-        right={<TouchableOpacity onPress={() => setView('edit')} style={s.editHeaderBtn}>
-          <Ionicons name="create-outline" size={18} color={COLORS.brand} />
-        </TouchableOpacity>} />
+      <Header 
+        title="Session Details" 
+        sub={`Day ${sess.day}`} 
+        onBack={onBack} 
+        right={
+          <TouchableOpacity onPress={() => setView('edit')} style={s.editHeaderBtn}>
+            <Ionicons name="create-outline" size={18} color={COLORS.brand} />
+          </TouchableOpacity>
+        } 
+      />
       <ScrollView contentContainerStyle={{ padding: SPACE.xl, paddingBottom: 120 }} showsVerticalScrollIndicator={false}>
         <View style={s.detailCard}>
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: SPACE.sm, marginBottom: SPACE.md }}>
@@ -687,23 +1024,37 @@ function SessionDetail({ session: initial, tokens, onBack, onRefresh }) {
             <View style={[s.pill, { backgroundColor: tc + '1A' }]}>
               <Text style={[s.pillText, { color: tc }]}>{(sess.session_type || '').toUpperCase()}</Text>
             </View>
-            <View style={[s.pill, {
-              backgroundColor: status === 'live' ? COLORS.errorLight : status === 'past' ? COLORS.borderLight : COLORS.brandLight
-            }]}>
-              <Text style={[s.pillText, {
-                color: status === 'live' ? COLORS.error : status === 'past' ? COLORS.textTer : COLORS.brand
-              }]}>{status.toUpperCase()}</Text>
+            <View style={[s.pill, { backgroundColor: status === 'live' ? COLORS.errorLight : status === 'past' ? COLORS.borderLight : COLORS.brandLight }]}>
+              <Text style={[s.pillText, { color: status === 'live' ? COLORS.error : status === 'past' ? COLORS.textTer : COLORS.brand }]}>{status.toUpperCase()}</Text>
             </View>
-            {!sess.is_published && <View style={[s.pill, { backgroundColor: COLORS.errorLight }]}><Text style={[s.pillText, { color: COLORS.error }]}>DRAFT</Text></View>}
+            {!sess.is_published && (
+              <View style={[s.pill, { backgroundColor: COLORS.errorLight }]}>
+                <Text style={[s.pillText, { color: COLORS.error }]}>DRAFT</Text>
+              </View>
+            )}
+            {sess.is_meal && (
+              <View style={[s.pill, { backgroundColor: COLORS.successLight }]}>
+                <Text style={[s.pillText, { color: COLORS.success }]}>
+                  🍽️ {sess.meal_category?.toUpperCase() || 'MEAL'}
+                </Text>
+              </View>
+            )}
           </View>
+
           <Text style={s.detailTitle}>{sess.title}</Text>
+          
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: SPACE.sm, marginTop: SPACE.md }}>
             <Ionicons name="time-outline" size={15} color={COLORS.textTer} />
             <Text style={s.detailMeta}>{fmtTime(sess.start_datetime)} – {fmtTime(sess.end_datetime)}</Text>
           </View>
-          {!!sess.room && <View style={{ flexDirection: 'row', alignItems: 'center', gap: SPACE.sm, marginTop: SPACE.xs }}>
-            <Ionicons name="location-outline" size={15} color={COLORS.textTer} /><Text style={s.detailMeta}>{sess.room}</Text>
-          </View>}
+          
+          {!!sess.room && (
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: SPACE.sm, marginTop: SPACE.xs }}>
+              <Ionicons name="location-outline" size={15} color={COLORS.textTer} />
+              <Text style={s.detailMeta}>{sess.room}</Text>
+            </View>
+          )}
+          
           {!!sess.description && <Text style={s.detailDesc}>{sess.description}</Text>}
         </View>
 
@@ -715,7 +1066,39 @@ function SessionDetail({ session: initial, tokens, onBack, onRefresh }) {
                 <View style={s.subDot} />
                 <View style={{ flex: 1 }}>
                   <Text style={{ fontSize: FONT.sm, fontWeight: FONT.w6, color: COLORS.text }}>{sub.title}</Text>
-                  {sub.start_datetime && <Text style={{ fontSize: 10, color: COLORS.textTer }}>{fmtTime(sub.start_datetime)}{sub.end_datetime ? ` – ${fmtTime(sub.end_datetime)}` : ''}</Text>}
+                  {sub.start_datetime && (
+                    <Text style={{ fontSize: 10, color: COLORS.textTer }}>
+                      {fmtTime(sub.start_datetime)}{sub.end_datetime ? ` – ${fmtTime(sub.end_datetime)}` : ''}
+                    </Text>
+                  )}
+                </View>
+              </View>
+            ))}
+          </View>
+        )}
+
+        {sess.papers && sess.papers.length > 0 && (
+          <View style={s.detailCard}>
+            <Text style={s.cardLabel}>Presentation Slots ({sess.papers.length})</Text>
+            {sess.papers.map((p, i) => (
+              <View key={p.id || i} style={[s.subItem, { borderBottomWidth: 1, borderBottomColor: COLORS.borderLight, paddingBottom: SPACE.sm }]}>
+                <View style={[s.subDot, { backgroundColor: COLORS.brand }]} />
+                <View style={{ flex: 1 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 2 }}>
+                    {p.paper_id ? (
+                      <View style={[s.pill, { backgroundColor: COLORS.brandLight }]}>
+                        <Text style={[s.pillText, { color: COLORS.brand }]}>{p.paper_id}</Text>
+                      </View>
+                    ) : null}
+                    <Text style={{ fontSize: 10, fontWeight: FONT.w7, color: COLORS.brand }}>
+                      {p.start_datetime ? fmtTime(p.start_datetime) : ''}
+                      {p.end_datetime ? ` – ${fmtTime(p.end_datetime)}` : ''}
+                    </Text>
+                  </View>
+                  <Text style={{ fontSize: FONT.sm, fontWeight: FONT.w7, color: COLORS.text }}>{p.title}</Text>
+                  {p.authors ? (
+                    <Text style={{ fontSize: 11, color: COLORS.textSec, marginTop: 1 }}>{p.authors}</Text>
+                  ) : null}
                 </View>
               </View>
             ))}
@@ -724,13 +1107,18 @@ function SessionDetail({ session: initial, tokens, onBack, onRefresh }) {
 
         <Text style={s.secLabel}>QUICK ACTIONS</Text>
         <View style={{ flexDirection: 'row', gap: SPACE.md, marginBottom: SPACE.md }}>
-          <TouchableOpacity style={[s.actionCard, { borderColor: sess.is_published ? COLORS.success : COLORS.border }]}
-            onPress={() => quickToggle('is_published', !sess.is_published)}>
+          <TouchableOpacity 
+            style={[s.actionCard, { borderColor: sess.is_published ? COLORS.success : COLORS.border }]} 
+            onPress={() => quickToggle('is_published', !sess.is_published)}
+          >
             <Ionicons name={sess.is_published ? 'eye' : 'eye-off'} size={22} color={sess.is_published ? COLORS.success : COLORS.textTer} />
             <Text style={s.actionLabel}>{sess.is_published ? 'Published' : 'Draft'}</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={[s.actionCard, { borderColor: sess.is_featured ? COLORS.accent : COLORS.border }]}
-            onPress={() => quickToggle('is_featured', !sess.is_featured)}>
+
+          <TouchableOpacity 
+            style={[s.actionCard, { borderColor: sess.is_featured ? COLORS.accent : COLORS.border }]} 
+            onPress={() => quickToggle('is_featured', !sess.is_featured)}
+          >
             <Ionicons name={sess.is_featured ? 'star' : 'star-outline'} size={22} color={sess.is_featured ? COLORS.accent : COLORS.textTer} />
             <Text style={s.actionLabel}>{sess.is_featured ? 'Featured' : 'Regular'}</Text>
           </TouchableOpacity>
@@ -741,14 +1129,23 @@ function SessionDetail({ session: initial, tokens, onBack, onRefresh }) {
             <Text style={s.cardLabel}>Feedback</Text>
             <View style={{ flexDirection: 'row', gap: SPACE.sm, marginBottom: SPACE.md }}>
               <View style={[s.pill, { backgroundColor: sess.feedback_open ? COLORS.successLight : COLORS.warningLight }]}>
-                <Text style={[s.pillText, { color: sess.feedback_open ? COLORS.success : COLORS.warning }]}>{sess.feedback_open ? 'OPEN' : 'CLOSED'}</Text>
+                <Text style={[s.pillText, { color: sess.feedback_open ? COLORS.success : COLORS.warning }]}>
+                  {sess.feedback_open ? 'OPEN' : 'CLOSED'}
+                </Text>
               </View>
             </View>
+
             <View style={{ flexDirection: 'row', gap: SPACE.sm }}>
-              <TouchableOpacity style={[s.fbBtn, { backgroundColor: sess.feedback_manual_open ? COLORS.errorLight : COLORS.brandLight }]} onPress={toggleFeedback}>
+              <TouchableOpacity 
+                style={[s.fbBtn, { backgroundColor: sess.feedback_manual_open ? COLORS.errorLight : COLORS.brandLight }]} 
+                onPress={toggleFeedback}
+              >
                 <Ionicons name={sess.feedback_manual_open ? 'lock-closed' : 'lock-open'} size={14} color={sess.feedback_manual_open ? COLORS.error : COLORS.brand} />
-                <Text style={[s.fbBtnText, { color: sess.feedback_manual_open ? COLORS.error : COLORS.brand }]}>{sess.feedback_manual_open ? 'Close' : 'Open'}</Text>
+                <Text style={[s.fbBtnText, { color: sess.feedback_manual_open ? COLORS.error : COLORS.brand }]}>
+                  {sess.feedback_manual_open ? 'Close' : 'Open'}
+                </Text>
               </TouchableOpacity>
+
               <TouchableOpacity style={[s.fbBtn, { backgroundColor: COLORS.purpleLight }]} onPress={() => setView('analytics')}>
                 <Ionicons name="stats-chart" size={14} color={COLORS.purple} />
                 <Text style={[s.fbBtnText, { color: COLORS.purple }]}>Analytics</Text>
@@ -787,25 +1184,33 @@ export default function ScheduleAdmin({ tokens, onBack }) {
 
   return (
     <View style={{ flex: 1, backgroundColor: COLORS.bg }}>
-      <Header title="Manage Sessions" sub={`${sessions.length} sessions`} onBack={onBack}
-        right={<TouchableOpacity onPress={() => setScreen({ type: 'create' })} style={s.addHeaderBtn}>
-          <Ionicons name="add" size={22} color="#fff" />
-        </TouchableOpacity>} />
+      <Header 
+        title="Manage Sessions" 
+        sub={`${sessions.length} sessions`} 
+        onBack={onBack}
+        right={
+          <TouchableOpacity onPress={() => setScreen({ type: 'create' })} style={s.addHeaderBtn}>
+            <Ionicons name="add" size={22} color="#fff" />
+          </TouchableOpacity>
+        } 
+      />
 
-      {/* Fixed day filter bar */}
       <View style={s.filterBar}>
         {DAYS_FILTER.map(d => (
-          <TouchableOpacity key={d.key} style={[s.chip, dayFilter === d.key && s.chipOn]}
-            onPress={() => setDayFilter(d.key)}>
+          <TouchableOpacity 
+            key={d.key} 
+            style={[s.chip, dayFilter === d.key && s.chipOn]} 
+            onPress={() => setDayFilter(d.key)}
+          >
             <Text style={[s.chipText, dayFilter === d.key && s.chipTextOn]}>{d.label}</Text>
           </TouchableOpacity>
         ))}
       </View>
 
       {loading ? <ListSkeleton /> : (
-        <ScrollView
-          contentContainerStyle={{ padding: SPACE.xl, paddingBottom: 120 }}
-          showsVerticalScrollIndicator={false}
+        <ScrollView 
+          contentContainerStyle={{ padding: SPACE.xl, paddingBottom: 120 }} 
+          showsVerticalScrollIndicator={false} 
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => load(true)} colors={[COLORS.brand]} />}
         >
           {sessions.length === 0 && (
@@ -817,8 +1222,7 @@ export default function ScheduleAdmin({ tokens, onBack }) {
           {sessions.map(sess => {
             const tc = TYPE_COLORS[sess.session_type] || COLORS.textSec;
             return (
-              <TouchableOpacity key={sess.id} style={s.listCard} activeOpacity={0.75}
-                onPress={() => setScreen({ type: 'detail', data: sess })}>
+              <TouchableOpacity key={sess.id} style={s.listCard} activeOpacity={0.75} onPress={() => setScreen({ type: 'detail', data: sess })}>
                 <View style={[s.listBar, { backgroundColor: tc }]} />
                 <View style={{ flex: 1 }}>
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: SPACE.sm, marginBottom: 4 }}>
@@ -827,7 +1231,12 @@ export default function ScheduleAdmin({ tokens, onBack }) {
                     </View>
                     <Text style={s.listTime}>{fmtTime(sess.start_datetime)} – {fmtTime(sess.end_datetime)}</Text>
                     {sess.is_featured && <Text style={{ color: COLORS.accent }}>★</Text>}
-                    {!sess.is_published && <View style={[s.pill, { backgroundColor: COLORS.errorLight }]}><Text style={[s.pillText, { color: COLORS.error }]}>DRAFT</Text></View>}
+                    {sess.is_meal && <Text style={{ color: COLORS.success, fontSize: 10 }}>🍽️</Text>}
+                    {!sess.is_published && (
+                      <View style={[s.pill, { backgroundColor: COLORS.errorLight }]}>
+                        <Text style={[s.pillText, { color: COLORS.error }]}>DRAFT</Text>
+                      </View>
+                    )}
                   </View>
                   <Text style={s.listTitle} numberOfLines={2}>{sess.title}</Text>
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: SPACE.md, marginTop: SPACE.xs }}>
@@ -852,139 +1261,80 @@ export default function ScheduleAdmin({ tokens, onBack }) {
 
 /* ── Styles ────────────────────────────────────────────────────────────── */
 const s = StyleSheet.create({
-  header: {
-    flexDirection: 'row', alignItems: 'center',
-    paddingTop: TOP, paddingBottom: SPACE.md, paddingHorizontal: SPACE.xl,
-    backgroundColor: COLORS.bg, gap: SPACE.md,
+  header: { 
+    flexDirection: 'row', alignItems: 'center', paddingTop: TOP, 
+    paddingBottom: SPACE.md, paddingHorizontal: SPACE.xl, 
+    backgroundColor: COLORS.bg, gap: SPACE.md 
   },
-  backBtn: {
-    width: 40, height: 40, borderRadius: RADIUS.md,
-    backgroundColor: 'rgba(255,255,255,0.9)',
-    alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#fff',
+  backBtn: { 
+    width: 40, height: 40, borderRadius: RADIUS.md, 
+    backgroundColor: 'rgba(255,255,255,0.9)', alignItems: 'center', 
+    justifyContent: 'center', borderWidth: 1, borderColor: '#fff' 
   },
   headerTitle: { fontSize: FONT.xl, fontWeight: FONT.w9, color: COLORS.brand, letterSpacing: -0.3 },
   headerSub: { fontSize: FONT.xs, color: COLORS.textTer, marginTop: 1 },
-  editHeaderBtn: {
-    width: 40, height: 40, borderRadius: RADIUS.md,
-    backgroundColor: COLORS.brandLight, alignItems: 'center', justifyContent: 'center',
-  },
-  addHeaderBtn: {
-    width: 40, height: 40, borderRadius: RADIUS.md,
-    backgroundColor: COLORS.brand, alignItems: 'center', justifyContent: 'center',
-  },
-
+  editHeaderBtn: { width: 40, height: 40, borderRadius: RADIUS.md, backgroundColor: COLORS.brandLight, alignItems: 'center', justifyContent: 'center' },
+  addHeaderBtn: { width: 40, height: 40, borderRadius: RADIUS.md, backgroundColor: COLORS.brand, alignItems: 'center', justifyContent: 'center' },
+  
   filterBar: { flexDirection: 'row', paddingHorizontal: SPACE.xl, gap: SPACE.sm, paddingBottom: SPACE.sm },
-  chip: {
-    paddingHorizontal: SPACE.lg, paddingVertical: SPACE.sm,
-    borderRadius: RADIUS.full, borderWidth: 1.5, borderColor: COLORS.border, backgroundColor: '#fff',
-  },
+  chip: { paddingHorizontal: SPACE.lg, paddingVertical: SPACE.sm, borderRadius: RADIUS.full, borderWidth: 1.5, borderColor: COLORS.border, backgroundColor: '#fff' },
   chipOn: { borderColor: COLORS.brand, backgroundColor: COLORS.brandLight },
   chipText: { fontSize: FONT.xs, fontWeight: FONT.w6, color: COLORS.textSec },
   chipTextOn: { color: COLORS.brand, fontWeight: FONT.w7 },
-
-  listCard: {
-    flexDirection: 'row', alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.85)', borderRadius: RADIUS.lg,
-    padding: SPACE.lg, marginBottom: SPACE.md, borderWidth: 1, borderColor: 'rgba(255,255,255,0.9)',
-    overflow: 'hidden',
-  },
+  
+  listCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.85)', borderRadius: RADIUS.lg, padding: SPACE.lg, marginBottom: SPACE.md, borderWidth: 1, borderColor: 'rgba(255,255,255,0.9)', overflow: 'hidden' },
   listBar: { position: 'absolute', left: 0, top: 0, bottom: 0, width: 3 },
   listTime: { fontSize: 11, fontWeight: FONT.w6, color: COLORS.textTer },
   listTitle: { fontSize: FONT.sm, fontWeight: FONT.w7, color: COLORS.text },
-
+  
   pill: { paddingHorizontal: SPACE.sm, paddingVertical: 2, borderRadius: RADIUS.full },
   pillText: { fontSize: 9, fontWeight: FONT.w8, letterSpacing: 0.5 },
-
+  
   secLabel: { fontSize: 10, fontWeight: FONT.w8, color: COLORS.textTer, letterSpacing: 1.5, marginBottom: SPACE.sm, marginLeft: 4, marginTop: SPACE.md },
-
-  detailCard: {
-    backgroundColor: 'rgba(255,255,255,0.85)', borderRadius: RADIUS.xl, padding: SPACE.xl,
-    borderWidth: 1, borderColor: 'rgba(255,255,255,0.9)', marginBottom: SPACE.lg,
-  },
+  
+  detailCard: { backgroundColor: 'rgba(255,255,255,0.85)', borderRadius: RADIUS.xl, padding: SPACE.xl, borderWidth: 1, borderColor: 'rgba(255,255,255,0.9)', marginBottom: SPACE.lg },
   cardLabel: { fontSize: FONT.sm, fontWeight: FONT.w8, color: COLORS.text, marginBottom: SPACE.md },
   detailTitle: { fontSize: FONT.xl, fontWeight: FONT.w9, color: COLORS.text, letterSpacing: -0.3 },
   detailMeta: { fontSize: FONT.sm, color: COLORS.textSec },
   detailDesc: { fontSize: FONT.sm, color: COLORS.textSec, lineHeight: 20, marginTop: SPACE.md },
-
+  
   subItem: { flexDirection: 'row', alignItems: 'flex-start', gap: SPACE.sm, paddingVertical: SPACE.sm },
   subDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: COLORS.textTer, marginTop: 5 },
-
-  actionCard: {
-    flex: 1, alignItems: 'center', gap: SPACE.sm, padding: SPACE.lg,
-    borderRadius: RADIUS.lg, backgroundColor: 'rgba(255,255,255,0.85)', borderWidth: 1.5,
-  },
+  
+  actionCard: { flex: 1, alignItems: 'center', gap: SPACE.sm, padding: SPACE.lg, borderRadius: RADIUS.lg, backgroundColor: 'rgba(255,255,255,0.85)', borderWidth: 1.5 },
   actionLabel: { fontSize: FONT.xs, fontWeight: FONT.w7, color: COLORS.text },
-
-  fbBtn: {
-    flexDirection: 'row', alignItems: 'center', gap: SPACE.xs,
-    paddingHorizontal: SPACE.md, paddingVertical: SPACE.sm, borderRadius: RADIUS.full,
-  },
+  
+  fbBtn: { flexDirection: 'row', alignItems: 'center', gap: SPACE.xs, paddingHorizontal: SPACE.md, paddingVertical: SPACE.sm, borderRadius: RADIUS.full },
   fbBtnText: { fontSize: FONT.xs, fontWeight: FONT.w7 },
-
-  deleteBtn: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: SPACE.sm,
-    paddingVertical: SPACE.md, borderRadius: RADIUS.lg,
-    borderWidth: 1.5, borderColor: COLORS.error, backgroundColor: COLORS.errorLight, marginTop: SPACE.lg,
-  },
+  
+  deleteBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: SPACE.sm, paddingVertical: SPACE.md, borderRadius: RADIUS.lg, borderWidth: 1.5, borderColor: COLORS.error, backgroundColor: COLORS.errorLight, marginTop: SPACE.lg },
   deleteBtnText: { fontSize: FONT.sm, fontWeight: FONT.w7, color: COLORS.error },
-
-  responseCard: {
-    backgroundColor: 'rgba(255,255,255,0.85)', borderRadius: RADIUS.lg,
-    padding: SPACE.lg, marginBottom: SPACE.sm, borderWidth: 1, borderColor: 'rgba(255,255,255,0.9)',
-  },
-
-  formCard: {
-    backgroundColor: 'rgba(255,255,255,0.85)', borderRadius: RADIUS.xl, padding: SPACE.xl,
-    borderWidth: 1, borderColor: 'rgba(255,255,255,0.9)', marginBottom: SPACE.lg,
-  },
+  
+  responseCard: { backgroundColor: 'rgba(255,255,255,0.85)', borderRadius: RADIUS.lg, padding: SPACE.lg, marginBottom: SPACE.sm, borderWidth: 1, borderColor: 'rgba(255,255,255,0.9)' },
+  
+  formCard: { backgroundColor: 'rgba(255,255,255,0.85)', borderRadius: RADIUS.xl, padding: SPACE.xl, borderWidth: 1, borderColor: 'rgba(255,255,255,0.9)', marginBottom: SPACE.lg },
   formSection: { fontSize: FONT.md, fontWeight: FONT.w8, color: COLORS.text, marginBottom: SPACE.lg },
+  
   label: { fontSize: FONT.xs, fontWeight: FONT.w7, color: COLORS.textSec, marginBottom: SPACE.xs },
-  input: {
-    backgroundColor: COLORS.bg, borderRadius: RADIUS.md,
-    paddingHorizontal: SPACE.md, paddingVertical: SPACE.md,
-    fontSize: FONT.sm, color: COLORS.text,
-    borderWidth: 1, borderColor: COLORS.borderLight, marginBottom: SPACE.md,
-  },
-
-  dtField: {
-    flexDirection: 'row', alignItems: 'center', gap: SPACE.sm,
-    backgroundColor: COLORS.bg, borderRadius: RADIUS.md,
-    paddingHorizontal: SPACE.md, paddingVertical: SPACE.md + 2,
-    borderWidth: 1, borderColor: COLORS.borderLight, marginBottom: SPACE.md,
-  },
+  input: { backgroundColor: COLORS.bg, borderRadius: RADIUS.md, paddingHorizontal: SPACE.md, paddingVertical: SPACE.md, fontSize: FONT.sm, color: COLORS.text, borderWidth: 1, borderColor: COLORS.borderLight, marginBottom: SPACE.md },
+  
+  dtField: { flexDirection: 'row', alignItems: 'center', gap: SPACE.sm, backgroundColor: COLORS.bg, borderRadius: RADIUS.md, paddingHorizontal: SPACE.md, paddingVertical: SPACE.md + 2, borderWidth: 1, borderColor: COLORS.borderLight, marginBottom: SPACE.md },
   dtFieldText: { fontSize: FONT.sm, fontWeight: FONT.w6, color: COLORS.text },
-
-  toggleRow: {
-    flexDirection: 'row', alignItems: 'center', gap: SPACE.md,
-    paddingVertical: SPACE.md, borderBottomWidth: 1, borderBottomColor: COLORS.borderLight,
-  },
+  
+  toggleRow: { flexDirection: 'row', alignItems: 'center', gap: SPACE.md, paddingVertical: SPACE.md, borderBottomWidth: 1, borderBottomColor: COLORS.borderLight },
+  mealSubRow: { marginLeft: 34, marginTop: 4, paddingBottom: SPACE.lg, borderBottomWidth: 1, borderBottomColor: COLORS.borderLight },
   toggleLabel: { fontSize: FONT.sm, fontWeight: FONT.w6, color: COLORS.text },
   toggleHint: { fontSize: 10, color: COLORS.textTer, marginTop: 1 },
-  toggle: {
-    width: 44, height: 24, borderRadius: 12,
-    backgroundColor: COLORS.border, justifyContent: 'center', paddingHorizontal: 2,
-  },
+  toggle: { width: 44, height: 24, borderRadius: 12, backgroundColor: COLORS.border, justifyContent: 'center', paddingHorizontal: 2 },
   toggleOnStyle: { backgroundColor: COLORS.brand },
   toggleDot: { width: 20, height: 20, borderRadius: 10, backgroundColor: '#fff' },
   toggleDotOn: { alignSelf: 'flex-end' },
-
-  addSubBtn: {
-    flexDirection: 'row', alignItems: 'center', gap: SPACE.xs,
-    paddingHorizontal: SPACE.md, paddingVertical: SPACE.sm,
-    borderRadius: RADIUS.full, backgroundColor: COLORS.brandLight,
-  },
-  subForm: {
-    backgroundColor: COLORS.bg, borderRadius: RADIUS.md, padding: SPACE.md, marginBottom: SPACE.md,
-  },
-  saveSubBtn: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: SPACE.sm,
-    backgroundColor: COLORS.brand, borderRadius: RADIUS.md, paddingVertical: SPACE.md,
-  },
-
+  
+  addSubBtn: { flexDirection: 'row', alignItems: 'center', gap: SPACE.xs, paddingHorizontal: SPACE.md, paddingVertical: SPACE.sm, borderRadius: RADIUS.full, backgroundColor: COLORS.brandLight },
+  subForm: { backgroundColor: COLORS.bg, borderRadius: RADIUS.md, padding: SPACE.md, marginBottom: SPACE.md },
+  saveSubBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: SPACE.sm, backgroundColor: COLORS.brand, borderRadius: RADIUS.md, paddingVertical: SPACE.md },
+  
   saveBtn: { borderRadius: RADIUS.lg, overflow: 'hidden', marginTop: SPACE.sm, ...SHADOW.brand },
-  saveBtnGrad: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-    gap: SPACE.sm, paddingVertical: SPACE.lg,
-  },
+  saveBtnGrad: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: SPACE.sm, paddingVertical: SPACE.lg },
   saveBtnText: { fontSize: FONT.md, fontWeight: FONT.w7, color: '#fff' },
 });

@@ -12,8 +12,9 @@ import qrGenerator from 'qrcode-generator';
 
 // ── QR Renderer ────────────────────────────────────────────────────────────
 function QRCodeSVG({ value, size = 200, color = '#0a1628' }) {
+  const text = String(value || 'ETD-2026');
   const qr = qrGenerator(0, 'M');
-  qr.addData(value);
+  qr.addData(text);
   qr.make();
   const count = qr.getModuleCount();
   const cs = size / count;

@@ -56,7 +56,7 @@
             <tbody>
             {% for q in questions %}
             <tr id="qRow{{ q.id }}">
-                <td style="color:var(--text-tertiary);font-size:12px;">{{ q.display_order }}</td>
+                <td style="color:var(--text-tertiary);font-size:12px;">{{ q.order }}</td>
                 <td style="font-size:13px;font-weight:500;">{{ q.question_text }}</td>
                 <td>
                     <span class="badge {% if q.question_type == 'rating' %}badge-info{% elif q.question_type == 'boolean' %}badge-success{% else %}badge-warning{% endif %}">

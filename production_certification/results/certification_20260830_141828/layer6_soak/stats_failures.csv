@@ -1,0 +1,2 @@
+Method,Name,Error,Occurrences
+GET,/api/v1/chat/staff-group/ [GET],CatchResponseError('Staff chat read 0'),1

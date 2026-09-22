@@ -1,0 +1,21 @@
+{
+  "connections_attempted": 8,
+  "connections_succeeded": 8,
+  "connections_failed": 0,
+  "messages_sent": 114,
+  "messages_received": 0,
+  "errors": [],
+  "connect_times_ms": [
+    25.24566650390625,
+    37.60671615600586,
+    44.84820365905762,
+    26.598215103149414,
+    35.6593132019043,
+    29.511451721191406,
+    38.29026222229004,
+    28.000593185424805
+  ],
+  "message_latencies_ms": [],
+  "active_connections": 0,
+  "max_concurrent": 8
+}

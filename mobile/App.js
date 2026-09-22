@@ -195,7 +195,7 @@ export default function App() {
         } else if (data.type === 'feed_post') {
           setNotificationRoute({ type: 'feed' });
           if (user && tokens) setScreen('app');
-        } else if (data.type === 'checkin_success' || data.type === 'meal_verified') {
+        } else if (data.type === 'checkin_success' || data.type === 'meal_verified' || data.type === 'meal_pass') {
           setNotificationRoute({ type: 'qr' });
           if (user && tokens) setScreen('app');
         } else if (data.type === 'poll') {

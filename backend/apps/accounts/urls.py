@@ -14,4 +14,16 @@ urlpatterns = [
     path('participants/create/',     views.participant_create_view, name='participant_create'),
     path('discover/',                views.discover_view,           name='api_discover'),
     path('my-recap/',                views.my_recap_view,           name='api_my_recap'),
+    path('warning/acknowledge/',     views.acknowledge_warning_view, name='api_warning_acknowledge'),
+]
+
+# Staff & RBAC endpoints
+urlpatterns += [
+    path('staff/', views.staff_directory_view, name='staff_directory'),
+    path('staff/<uuid:pk>/', views.staff_detail_view, name='staff_detail'),
+    path('staff/admin/permissions/', views.admin_staff_permissions_view, name='admin_staff_permissions'),
+    path('staff/admin/create/', views.admin_staff_create_view, name='admin_staff_create'),
+    path('staff/admin/<uuid:pk>/edit/', views.admin_staff_edit_view, name='admin_staff_edit'),
+    path('staff/admin/<uuid:pk>/delete/', views.admin_staff_delete_view, name='admin_staff_delete'),
+
 ]

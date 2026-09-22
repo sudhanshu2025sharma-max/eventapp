@@ -329,13 +329,12 @@
             <a href="/panel/ideathon/" class="menu-item {% if 'ideathon' in request.resolver_match.url_name %}active{% endif %}">
                 <i class="fas fa-people-group"></i> Ideathon Teams
             </a>
-                <i class="fas fa-utensils"></i> Meal Scanner
-            </a>
             <a href="/panel/checkins/scanner/" class="menu-item {% if request.resolver_match.url_name == 'checkin_scanner' %}active{% endif %}">
-                <i class="fas fa-qrcode"></i> Check-In Scanner
+                <i class="fas fa-qrcode"></i> Scanner
             </a>
 
             <div class="menu-label">Content</div>
+            <a href="/panel/schedule/accepted-papers/" class="menu-item {% if '/accepted-papers/' in request.path %}active{% endif %}"><i class="fas fa-file-alt"></i> Accepted Papers</a>
             <a href="/panel/schedule/" class="menu-item {% if 'schedule' in request.resolver_match.url_name %}active{% endif %}">
                 <i class="fas fa-calendar-alt"></i> Events &amp; Schedule
             </a>
@@ -345,11 +344,6 @@
             <a href="/panel/selfie-points/" class="menu-item {% if request.resolver_match.url_name == 'photos_panel' %}active{% endif %}">
                 <i class="fas fa-location-dot"></i> Selfie Spots
             </a>
-            <!-- <a href="/panel/selfie-points/" class="nav-item {% if 'selfie' in request.resolver_match.url_name %}active{% endif %}"><i class="fas fa-location-dot"></i> Selfie Spots</a> -->
-            <!-- <a href="#" class="menu-item">
-                <i class="fas fa-images"></i> Photo Moderation
-                <span class="menu-badge">34</span>
-            </a> -->
             <a href="/panel/feed/" class="menu-item {% if 'feed' in request.resolver_match.url_name %}active{% endif %}">
                 <i class="fas fa-newspaper"></i> Posts &amp; Feed
             </a>
@@ -357,9 +351,6 @@
             <div class="menu-label">Engagement</div>
             <a href="/panel/polls/" class="menu-item {% if 'poll' in request.resolver_match.url_name %}active{% endif %}">
                 <i class="fas fa-chart-bar"></i> Polls
-            </a>
-            <a href="#" class="menu-item">
-                <i class="fas fa-comments"></i> Q&A Manager
             </a>
             <a href="/panel/leaderboard/" class="menu-item {% if request.resolver_match.url_name == 'leaderboard_panel' %}active{% endif %}">
                 <i class="fas fa-trophy"></i> Leaderboard
@@ -370,7 +361,6 @@
             <a href="/panel/chat/reports/?status=pending" class="menu-item {% if 'report' in request.resolver_match.url_name %}active{% endif %}">
                 <i class="fas fa-flag"></i> Reported Messages
             </a>
-
             <a href="/panel/chat/shakes/" class="menu-item {% if 'chat_shakes' in request.resolver_match.url_name %}active{% endif %}">
                 <i class="fa-solid fa-handshake"></i> Shake Connect Logs
             </a>
@@ -379,10 +369,18 @@
             </a>
 
             <div class="menu-label">System</div>
-            <a href="/panel/notifications/" class="menu-item {% if request.resolver_match.url_name == 'notifications_panel' %}active{% endif %}">
+            <a href="/panel/notifications/"
+
+ class="menu-item {% if request.resolver_match.url_name == 'notifications_panel' %}active{% endif %}">
                 <i class="fas fa-bell"></i> Notifications
             </a>
-            <a href="/panel/sponsors/" class="menu-item {% if 'sponsor' in request.resolver_match.url_name %}active{% endif %}">
+            
+            {% if is_super_admin or "users_manage" in user_permissions %}
+            <a href="/panel/staff/permissions/" class="menu-item {% if '/staff/' in request.path %}active{% endif %}">
+                <i class="fas fa-user-shield"></i> Staff Management
+            </a>
+            {% endif %}
+<a href="/panel/sponsors/" class="menu-item {% if 'sponsor' in request.resolver_match.url_name %}active{% endif %}">
                 <i class="fas fa-handshake"></i> Sponsors
             </a>
             <a href="/panel/speakers/" class="menu-item {% if 'speaker' in request.resolver_match.url_name %}active{% endif %}">
@@ -390,9 +388,6 @@
             </a>
             <a href="/panel/users/manage/" class="menu-item {% if request.resolver_match.url_name == 'users_manage' %}active{% endif %}">
                 <i class="fas fa-shield-halved"></i> User Management
-            </a>
-            <a href="#" class="menu-item">
-                <i class="fas fa-file-export"></i> Reports
             </a>
             <a href="/panel/settings/conference/" class="menu-item {% if request.resolver_match.url_name == 'conference_settings' %}active{% endif %}">
                 <i class="fas fa-cog"></i> Settings
@@ -429,7 +424,9 @@
                     <span>ETD 2026</span>
                     <i class="fas fa-chevron-down" style="font-size:10px;color:var(--primary);"></i>
                 </div>
-                <a href="/panel/notifications/" class="topbar-btn">
+                <a href="/panel/notifications/"
+
+ class="topbar-btn">
                     <i class="fas fa-bell"></i>
                     <div class="dot"></div>
                 </a>
@@ -445,21 +442,21 @@
     </main>
 
     {% block scripts %}{% endblock %}
-<script>
+    <script>
 function toggleSubmenu(e, id) {
     // don't prevent nav — just toggle visibility if already on schedule
     var el = document.getElementById(id);
     // always keep visible if we are on a schedule page
     var isSchedule = window.location.pathname.includes('/schedule');
-    el.style.display = el.style.display === 'none' ? 'block' : '';
+    if (el) el.style.display = if (el) el.style.display === 'none' ? 'block' : '';
 }
 // On page load: keep submenu open if on schedule page
 document.addEventListener('DOMContentLoaded', function() {
     var el = document.getElementById('scheduleSubmenu');
     if (window.location.pathname.includes('/schedule')) {
-        el.style.display = 'block';
+        if (el) el.style.display = 'block';
     } else {
-        el.style.display = 'none';
+        if (el) el.style.display = 'none';
     }
 });
 </script>

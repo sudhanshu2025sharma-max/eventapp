@@ -1,7 +1,7 @@
 {% extends "panel/base.html" %}
 {% block title %}User Management — ETD 2026{% endblock %}
 {% block page_title %}User Management{% endblock %}
-{% block page_subtitle %}Warn or suspend users{% endblock %}
+{% block page_subtitle %}Warn or suspend users & track acknowledgments{% endblock %}
 
 {% block content %}
 {% for m in messages %}
@@ -22,7 +22,7 @@
       <div class="stat-icon" style="background:var(--warning-light);color:var(--warning);"><i class="fas fa-exclamation-triangle"></i></div>
     </div>
     <div class="stat-value">{{ warned_count }}</div>
-    <div class="stat-label">Warned</div>
+    <div class="stat-label">Warned Users</div>
   </div>
   <div class="stat-card">
     <div class="stat-card-header">
@@ -66,7 +66,7 @@
             <th>Email</th>
             <th>Role</th>
             <th>Status</th>
-            <th>Warning</th>
+            <th>Warning & Acknowledgment</th>
             <th>Joined</th>
             <th style="width:220px;">Actions</th>
           </tr>
@@ -97,9 +97,30 @@
             </td>
             <td>
               {% if u.warning_note %}
-                <div style="font-size:12px;color:var(--warning);max-width:180px;" title="{{ u.warning_note }}">
-                  <i class="fas fa-exclamation-triangle"></i> {{ u.warning_note|truncatechars:40 }}
+                <div style="font-size:12px;color:var(--warning);max-width:220px;" title="{{ u.warning_note }}">
+                  <i class="fas fa-exclamation-triangle"></i> <strong>Note:</strong> {{ u.warning_note|truncatechars:45 }}
                 </div>
+                {% if u.warning_acknowledged %}
+                  <div style="margin-top:4px;">
+                    <span class="badge badge-success" style="background:#d1fae5;color:#059669;font-size:10px;font-weight:700;">
+                      <i class="fas fa-check-double"></i> Acknowledged
+                    </span>
+                    <span style="font-size:11px;color:var(--text-sec);display:block;margin-top:2px;">
+                      {{ u.warning_acknowledged_at|date:"d M, H:i" }}
+                    </span>
+                    {% if u.warning_response %}
+                      <div style="font-size:11px;color:var(--text-sec);background:#f8fafc;padding:4px 6px;border-radius:4px;margin-top:3px;border-left:2px solid #10b981;">
+                        <em>"{{ u.warning_response }}"</em>
+                      </div>
+                    {% endif %}
+                  </div>
+                {% else %}
+                  <div style="margin-top:4px;">
+                    <span class="badge badge-warning" style="background:#fef3c7;color:#d97706;font-size:10px;font-weight:700;">
+                      <i class="fas fa-hourglass-half"></i> Pending Ack
+                    </span>
+                  </div>
+                {% endif %}
               {% else %}
                 <span style="color:var(--text-tertiary);">—</span>
               {% endif %}
@@ -126,7 +147,7 @@
                 {% if u.warning_note %}
                 <form method="post" action="{% url 'user_clear_warning' u.pk %}" style="margin:0;">
                   {% csrf_token %}
-                  <button type="submit" class="btn btn-sm" style="padding:5px 10px;background:none;border:1px solid var(--text-tertiary);color:var(--text-tertiary);border-radius:8px;cursor:pointer;font-size:12px;" onclick="return confirm('Clear warning for {{ u.get_full_name|escapejs }}?')">
+                  <button type="submit" class="btn btn-sm" style="padding:5px 10px;background:none;border:1px solid var(--text-tertiary);color:var(--text-tertiary);border-radius:8px;cursor:pointer;font-size:12px;" title="Remove warning completely" onclick="return confirm('Clear warning for {{ u.get_full_name|escapejs }}?')">
                     <i class="fas fa-times"></i> Clear
                   </button>
                 </form>
@@ -192,7 +213,7 @@ function openModal(action, pk, name, existing) {
   form.querySelector('[name=csrfmiddlewaretoken]').value = csrf;
   if (action === 'warn') {
     title.textContent = 'Warn ' + name;
-    desc.textContent = 'Send a warning notification to this user.';
+    desc.textContent = 'Send a warning notification to this user. They will be required to acknowledge it in the app.';
     label.textContent = 'Warning message *';
     input.name = 'note';
     input.placeholder = 'Explain the warning…';
@@ -202,11 +223,11 @@ function openModal(action, pk, name, existing) {
     submit.style.color = '#fff';
     submit.style.border = 'none';
     form.action = '/panel/users/' + pk + '/warn/';
-    if (existing) { ew.style.display = 'block'; ewt.textContent = 'Previous: ' + existing; }
+    if (existing) { ew.style.display = 'block'; ewt.textContent = 'Previous Note: ' + existing; }
     else { ew.style.display = 'none'; }
   } else {
     title.textContent = 'Suspend ' + name;
-    desc.textContent = 'This will block login and send a suspension email.';
+    desc.textContent = 'This will block login and suspend account access.';
     label.textContent = 'Suspension reason *';
     input.name = 'reason';
     input.placeholder = 'Reason for suspension…';

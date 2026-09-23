@@ -90,8 +90,9 @@ def _send_fcm(tokens, title, body, data, img=None):
     return 0, 0, []
 
 def _send_hybrid(tokens, title, body, data, img=None):
-    expo = [t for t in tokens if t.startswith('ExponentPushToken')]
-    fcm_tokens = [t for t in tokens if not t.startswith('ExponentPushToken')]
+    # Match both ExponentPushToken[...] and ExpoPushToken[...] or any Expo token
+    expo = [t for t in tokens if 'Expo' in t or 'Exponent' in t]
+    fcm_tokens = [t for t in tokens if 'Expo' not in t and 'Exponent' not in t]
     s1, f1, b1 = _send_expo(expo, title, body, data, img)
     s2, f2, b2 = _send_fcm(fcm_tokens, title, body, data, img)
     return s1 + s2, f1 + f2, b1 + b2

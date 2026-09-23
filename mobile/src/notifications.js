@@ -1,8 +1,10 @@
 import * as Notifications from 'expo-notifications';
+import Constants from 'expo-constants';
 import { Platform } from 'react-native';
 import { apiFetch } from './api';
 
-// Configures Expo SDK 54 notification handler with modern flags
+const EAS_PROJECT_ID = 'afa28d7e-10d5-4e85-bed4-783b7371a56b';
+
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
     shouldShowAlert: true,
@@ -14,7 +16,6 @@ Notifications.setNotificationHandler({
 });
 
 export async function registerForPushNotificationsAsync() {
-  let token;
   try {
     const { status: existingStatus } = await Notifications.getPermissionsAsync();
     let finalStatus = existingStatus;
@@ -23,7 +24,7 @@ export async function registerForPushNotificationsAsync() {
       finalStatus = status;
     }
     if (finalStatus !== 'granted') {
-      console.log('Failed to get push token for push notification!');
+      console.log('Push notification permission denied by user.');
       return null;
     }
 
@@ -32,7 +33,7 @@ export async function registerForPushNotificationsAsync() {
         name: 'General Notifications',
         importance: Notifications.AndroidImportance.MAX,
         vibrationPattern: [0, 250, 250, 250],
-        lightColor: '#1856FF',
+        lightColor: '#0333b6',
       });
       await Notifications.setNotificationChannelAsync('chat', {
         name: 'Chat & Messages',
@@ -42,26 +43,29 @@ export async function registerForPushNotificationsAsync() {
       });
     }
 
-    const expoTokenObj = await Notifications.getExpoPushTokenAsync();
-    const expoToken = expoTokenObj.data;
+    // Explicitly pass projectId so it resolves immediately (< 500ms) without hanging
+    const projectId = Constants?.expoConfig?.extra?.eas?.projectId || EAS_PROJECT_ID;
+    const expoTokenObj = await Notifications.getExpoPushTokenAsync({ projectId });
+    const expoToken = expoTokenObj?.data;
 
     if (expoToken) {
-      await apiFetch('/notifications/tokens/', {
+      console.log('✓ Successfully generated Expo Push Token:', expoToken);
+      // Register token with backend (fire-and-forget)
+      apiFetch('/notifications/tokens/', {
         method: 'POST',
         body: JSON.stringify({
           token: expoToken,
           platform: Platform.OS,
         }),
-      });
+      }).catch(err => console.warn('Token sync warning:', err));
     }
     return expoToken;
   } catch (error) {
-    console.log('Error registering for push notifications:', error);
+    console.warn('registerForPushNotifications warning:', error.message || error);
     return null;
   }
 }
 
-// Alias to prevent "registerForPushNotifications is not a function" error
 export const registerForPushNotifications = registerForPushNotificationsAsync;
 
 export function setupNotificationListeners(onNotificationReceived, onNotificationResponse) {
@@ -97,6 +101,6 @@ export async function sendLocalNotification(title, body, data = {}) {
       trigger: null,
     });
   } catch (e) {
-    console.log('Error sending local notification:', e);
+    console.warn('sendLocalNotification error:', e);
   }
 }

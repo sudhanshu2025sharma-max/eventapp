@@ -5,8 +5,9 @@ urlpatterns = [
     # Root alias
     path('',                  views.my_notifications,    name='notifications_root'),
 
-    # Token management
+    # Token management (supporting both register-token and tokens endpoint)
     path('register-token/',   views.register_token,      name='register_token'),
+    path('tokens/',           views.register_token,      name='register_token_alias'),
     path('unregister-token/', views.unregister_token,    name='unregister_token'),
 
     # Admin endpoints

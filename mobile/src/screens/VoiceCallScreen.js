@@ -16,7 +16,7 @@ import * as Haptics from 'expo-haptics';
 import { Audio } from 'expo-av';
 import { COLORS, FONT, RADIUS, SPACE, fixMediaUrl } from '../theme';
 
-const WS_CALL_URL = 'ws://10.17.9.48:8000/ws/call/';
+const WS_CALL_URL = `${API_ROOT.replace('https://', 'wss://').replace('http://', 'ws://')}/ws/call/`;
 
 const ICE_CONFIG = {
   iceServers: [

@@ -297,7 +297,7 @@ export default function MainApp({
 
     function connectCallSocket() {
       try {
-        ws = new WebSocket(`ws://10.17.9.48:8000/ws/call/?token=${tokens.access}`);
+        ws = new WebSocket(`${API_ROOT.replace('https://', 'wss://').replace('http://', 'ws://')}/ws/call/?token=${tokens.access}`);
         callWsRef.current = ws;
 
         ws.onmessage = (e) => {

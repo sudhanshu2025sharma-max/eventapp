@@ -10,10 +10,25 @@ function Field({ icon, placeholder, value, onChange, secure, right, error, keybo
     <View style={{ marginBottom: SPACE.md }}>
       <View style={[st.fieldRow, error && { borderColor: COLORS.error, backgroundColor: COLORS.errorLight }]}>
         <Ionicons name={icon} size={18} color={error ? COLORS.error : COLORS.textTer} style={{ marginRight: SPACE.sm }} />
-        <TextInput style={st.fieldInput} placeholder={placeholder} placeholderTextColor={COLORS.textTer} value={value} onChangeText={onChange} secureTextEntry={secure} keyboardType={keyboardType} autoCapitalize="none" autoCorrect={false} />
+        <TextInput 
+          style={st.fieldInput} 
+          placeholder={placeholder} 
+          placeholderTextColor={COLORS.textTer} 
+          value={value} 
+          onChangeText={onChange} 
+          secureTextEntry={secure} 
+          keyboardType={keyboardType} 
+          autoCapitalize="none" 
+          autoCorrect={false} 
+        />
         {right}
       </View>
-      {!!error && <View style={st.fieldErr}><Ionicons name="alert-circle" size={12} color={COLORS.error} style={{ marginRight: 4 }} /><Text style={{ fontSize: FONT.xs, color: COLORS.error }}>{error}</Text></View>}
+      {!!error && (
+        <View style={st.fieldErr}>
+          <Ionicons name="alert-circle" size={12} color={COLORS.error} style={{ marginRight: 4 }} />
+          <Text style={{ fontSize: FONT.xs, color: COLORS.error }}>{error}</Text>
+        </View>
+      )}
     </View>
   );
 }
@@ -29,6 +44,7 @@ export default function LoginScreen({ onLogin }) {
 
   const logoScale = useRef(new Animated.Value(0.7)).current;
   const logoOp = useRef(new Animated.Value(0)).current;
+
   useEffect(() => {
     Animated.parallel([
       Animated.spring(logoScale, { toValue: 1, tension: 60, friction: 8, useNativeDriver: true }),
@@ -47,18 +63,51 @@ export default function LoginScreen({ onLogin }) {
 
   const handleLogin = async () => {
     if (!validate()) return;
-    setLoading(true); setApiErr('');
+    setLoading(true); 
+    setApiErr('');
+    
+    const targetUrl = `${API_URL}/auth/login/`;
+    let responseData = null;
+
+    // 1. Network Request Phase
     try {
-      const res = await fetch(`${API_URL}/auth/login/`, {
-        method: 'POST', headers: API_HEADERS,
+      const res = await fetch(targetUrl, {
+        method: 'POST',
+        headers: API_HEADERS,
         body: JSON.stringify({ email: email.trim().toLowerCase(), password }),
       });
+
       const text = await res.text();
-      let data;
-      try { data = JSON.parse(text); } catch { setApiErr('Invalid server response'); setLoading(false); return; }
-      if (res.ok && data.success) onLogin(data.user, data.tokens);
-      else setApiErr(data.non_field_errors?.[0] || data.detail || data.message || 'Invalid credentials');
-    } catch { setApiErr('Connection failed. Check your network.'); }
+
+      try {
+        responseData = JSON.parse(text);
+      } catch (jsonErr) {
+        setApiErr(`Server error (${res.status}): ${text.slice(0, 100)}`);
+        setLoading(false);
+        return;
+      }
+
+      if (!res.ok || !responseData.success) {
+        const msg = responseData.non_field_errors?.[0] || responseData.detail || responseData.message || `Login failed (${res.status})`;
+        setApiErr(msg);
+        setLoading(false);
+        return;
+      }
+    } catch (netErr) {
+      setApiErr(`Network error: ${netErr.message || String(netErr)}\nURL: ${targetUrl}`);
+      setLoading(false);
+      return;
+    }
+
+    // 2. State & Session Phase (isolated from network catch)
+    try {
+      if (responseData && responseData.user && responseData.tokens) {
+        await onLogin(responseData.user, responseData.tokens);
+      }
+    } catch (appErr) {
+      setApiErr(`App session error: ${appErr.message || String(appErr)}`);
+    }
+
     setLoading(false);
   };
 
@@ -88,18 +137,39 @@ export default function LoginScreen({ onLogin }) {
               <Text style={st.subtitle}>Sign in with your conference credentials</Text>
 
               {!!apiErr && (
-                <FadeIn><View style={st.errBox}><Ionicons name="warning" size={16} color={COLORS.error} style={{ marginRight: SPACE.sm }} /><Text style={st.errText} numberOfLines={2}>{apiErr}</Text></View></FadeIn>
+                <FadeIn>
+                  <View style={st.errBox}>
+                    <Ionicons name="warning" size={16} color={COLORS.error} style={{ marginRight: SPACE.sm, marginTop: 2 }} />
+                    <Text style={st.errText}>{apiErr}</Text>
+                  </View>
+                </FadeIn>
               )}
 
               <Text style={st.label}>Email Address</Text>
-              <Field icon="mail-outline" placeholder="you@example.com" value={email} onChange={t => { setEmail(t); setEmailErr(''); setApiErr(''); }} keyboardType="email-address" error={emailErr} />
-
-              <Text style={st.label}>Password</Text>
-              <Field icon="lock-closed-outline" placeholder="Enter your password" value={password} onChange={t => { setPassword(t); setPwdErr(''); setApiErr(''); }} secure={!showPwd} error={pwdErr}
-                right={<TouchableOpacity onPress={() => setShowPwd(!showPwd)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}><Ionicons name={showPwd ? 'eye-off-outline' : 'eye-outline'} size={18} color={COLORS.textTer} /></TouchableOpacity>}
+              <Field 
+                icon="mail-outline" 
+                placeholder="you@example.com" 
+                value={email} 
+                onChange={t => { setEmail(t); setEmailErr(''); setApiErr(''); }} 
+                keyboardType="email-address" 
+                error={emailErr} 
               />
 
-              <TouchableOpacity style={st.forgot}><Text style={{ fontSize: FONT.sm, fontWeight: FONT.w6, color: COLORS.brand }}>Forgot Password?</Text></TouchableOpacity>
+              <Text style={st.label}>Password</Text>
+              <Field 
+                icon="lock-closed-outline" 
+                placeholder="Enter your password" 
+                value={password} 
+                onChange={t => { setPassword(t); setPwdErr(''); setApiErr(''); }} 
+                secure={!showPwd} 
+                error={pwdErr}
+                right={
+                  <TouchableOpacity onPress={() => setShowPwd(!showPwd)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+                    <Ionicons name={showPwd ? 'eye-off-outline' : 'eye-outline'} size={18} color={COLORS.textTer} />
+                  </TouchableOpacity>
+                }
+              />
+
               <PrimaryButton label="Sign In" onPress={handleLogin} loading={loading} />
               <Divider style={{ marginVertical: SPACE.xl }} />
               <View style={st.infoRow}>
@@ -137,12 +207,11 @@ const st = StyleSheet.create({
   title: { fontSize: FONT.xxl, fontWeight: FONT.w8, color: COLORS.text, letterSpacing: -0.3 },
   subtitle: { fontSize: FONT.sm, color: COLORS.textTer, marginTop: 4, marginBottom: SPACE.xxl },
   errBox: { flexDirection: 'row', alignItems: 'flex-start', backgroundColor: COLORS.errorLight, padding: SPACE.md, borderRadius: RADIUS.md, marginBottom: SPACE.lg, borderWidth: 1, borderColor: '#fecaca' },
-  errText: { flex: 1, fontSize: FONT.sm, color: COLORS.error, fontWeight: FONT.w5 },
+  errText: { flex: 1, fontSize: FONT.xs, color: COLORS.error, fontWeight: FONT.w5, lineHeight: 18 },
   label: { fontSize: FONT.sm, fontWeight: FONT.w6, color: COLORS.textSec, marginBottom: SPACE.sm },
   fieldRow: { flexDirection: 'row', alignItems: 'center', height: 52, borderWidth: 1.5, borderColor: COLORS.border, borderRadius: RADIUS.lg, backgroundColor: COLORS.bg, paddingHorizontal: SPACE.md },
   fieldInput: { flex: 1, fontSize: FONT.base, color: COLORS.text },
   fieldErr: { flexDirection: 'row', alignItems: 'center', marginTop: SPACE.xs, marginLeft: 2 },
-  forgot: { alignSelf: 'flex-end', marginBottom: SPACE.xl, marginTop: SPACE.xs },
   infoRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center' },
   infoText: { fontSize: FONT.xs, color: COLORS.textTer, fontWeight: FONT.w5 },
   infoDot: { width: 3, height: 3, borderRadius: 2, backgroundColor: COLORS.textMuted, marginHorizontal: SPACE.sm },

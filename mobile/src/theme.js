@@ -95,26 +95,6 @@ export const SHADOW = {
 
 export const TOP = Platform.OS === 'ios' ? 54 : 44;
 
-// Phone → ngrok
-// Web   → Codespaces public port
-// const NGROK      = 'https://bauble-aftermost-buffalo.ngrok-free.dev/api/v1';
-// const NGROK = 'http://10.17.9.48:8000/api/v1'; // Use the VM IP
-// const CODESPACES = 'https://cautious-eureka-jj56xxggr9vpcq9qj-8000.app.github.dev/api/v1';
-
-// export const API_URL  = 'http://10.17.9.48:8000/api/v1'; // both web + native use ngrok
-// export const API_ROOT = API_URL.replace(/\/api\/v1$/, '');
-
-// const BASE_HEADERS = {
-//   'Content-Type': 'application/json',
-//   'Accept': 'application/json',
-//   'x-public-origin': API_ROOT,
-// };
-
-
-// mobile/src/theme.js & eventapp/mobile/src/theme.js
-
-const PRODUCTION = 'http://10.17.9.48:8000/api/v1';
-
 const DEV_API_URL  = 'http://10.17.9.48:8000/api/v1';
 const PROD_API_URL = 'https://etd2026.iitd.ac.in/api/v1';
 
@@ -127,16 +107,12 @@ const BASE_HEADERS = {
   'x-public-origin': API_ROOT,
 };
 
-
 export const API_HEADERS = { ...BASE_HEADERS, 'ngrok-skip-browser-warning': 'true' };
 
-
-// Fix media URLs — replaces localhost with the correct public base
+// Fix media URLs — replaces relative/localhost URLs with public domain
 export function fixMediaUrl(url) {
   if (!url) return null;
-  // Already a full public URL
-  if (url.startsWith('http') && !url.includes('localhost')) return url;
-  // Extract the path part
+  if (url.startsWith('http') && !url.includes('localhost') && !url.includes('10.17.9.48')) return url;
   const path = url.includes('/media/') ? '/media/' + url.split('/media/')[1] : url;
-  return API_ROOT + path;
+  return API_ROOT + (path.startsWith('/') ? path : '/' + path);
 }

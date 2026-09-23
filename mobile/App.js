@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { View, StatusBar, Animated, Text, Platform } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { LinearGradient } from 'expo-linear-gradient';
 import LoginScreen          from './src/screens/LoginScreen';
 import ChangePasswordScreen from './src/screens/ChangePasswordScreen';
@@ -8,32 +9,39 @@ import { registerForPushNotifications, setupNotificationListeners } from './src/
 import { API_URL, API_HEADERS, fixMediaUrl } from './src/theme';
 import { setTokens as setApiTokens } from './src/api';
 
-// ── Session persistence (web only) ──────────────────────────────────────
-let AsyncStorage;
-try { AsyncStorage = require('@react-native-async-storage/async-storage').default; } catch {}
-
+// ── Session persistence ──────────────────────────────────────────────────
 const Storage = {
   async get(key) {
     if (Platform.OS === 'web') {
       try { return JSON.parse(window.localStorage.getItem(key)); } catch { return null; }
     }
-    if (AsyncStorage) {
-      try { const v = await AsyncStorage.getItem(key); return v ? JSON.parse(v) : null; } catch { return null; }
+    try {
+      const v = await AsyncStorage.getItem(key);
+      return v ? JSON.parse(v) : null;
+    } catch {
+      return null;
     }
-    return null;
   },
   async set(key, value) {
     if (Platform.OS === 'web') {
       try { window.localStorage.setItem(key, JSON.stringify(value)); } catch {}
-    } else if (AsyncStorage) {
-      try { await AsyncStorage.setItem(key, JSON.stringify(value)); } catch {}
+    } else {
+      try {
+        await AsyncStorage.setItem(key, JSON.stringify(value));
+      } catch (e) {
+        console.warn('Storage set error:', e);
+      }
     }
   },
   async remove(key) {
     if (Platform.OS === 'web') {
       try { window.localStorage.removeItem(key); } catch {}
-    } else if (AsyncStorage) {
-      try { await AsyncStorage.removeItem(key); } catch {}
+    } else {
+      try {
+        await AsyncStorage.removeItem(key);
+      } catch (e) {
+        console.warn('Storage remove error:', e);
+      }
     }
   },
 };
@@ -108,62 +116,67 @@ export default function App() {
   const [notificationRoute, setNotificationRoute] = useState(null);
   const pushToken = useRef(null);
 
-  // Keep api.js module token in sync with React state — fires before children render
+  // Keep api.js module token in sync with React state
   useEffect(() => {
     if (tokens) setApiTokens(tokens);
   }, [tokens]);
 
   useEffect(() => {
     const restore = async () => {
-      // Works for both web and native now
-      const savedUser   = await Storage.get('etd_user');
-      const savedTokens = await Storage.get('etd_tokens');
+      try {
+        const savedUser   = await Storage.get('etd_user');
+        const savedTokens = await Storage.get('etd_tokens');
 
-      if (savedUser && savedTokens?.access) {
-        let activeTokens = savedTokens;
+        if (savedUser && savedTokens?.access) {
+          let activeTokens = savedTokens;
 
-        // Try to verify session
-        try {
-          let res = await fetch(API_URL + '/auth/me/', {
-            headers: { ...API_HEADERS, Authorization: 'Bearer ' + activeTokens.access },
-          });
+          try {
+            let res = await fetch(API_URL + '/auth/me/', {
+              headers: { ...API_HEADERS, Authorization: 'Bearer ' + activeTokens.access },
+            });
 
-          // If 401, try refreshing the token
-          if (res.status === 401 && savedTokens.refresh) {
-            const refreshed = await refreshAccessToken(savedTokens);
-            if (refreshed) {
-              activeTokens = refreshed;
-              res = await fetch(API_URL + '/auth/me/', {
-                headers: { ...API_HEADERS, Authorization: 'Bearer ' + activeTokens.access },
-              });
-            }
-          }
-
-          if (res.ok) {
-            const data = await res.json();
-            if (data.success && data.user) {
-              if (data.user.profile_photo_url) {
-                data.user.profile_photo_url = fixMediaUrl(data.user.profile_photo_url);
+            if (res.status === 401 && savedTokens.refresh) {
+              const refreshed = await refreshAccessToken(savedTokens);
+              if (refreshed) {
+                activeTokens = refreshed;
+                res = await fetch(API_URL + '/auth/me/', {
+                  headers: { ...API_HEADERS, Authorization: 'Bearer ' + activeTokens.access },
+                });
               }
-              setUser(data.user);
-              setTokens(activeTokens);
-              setApiTokens(activeTokens, async (nextTokens) => {
-                setTokens(nextTokens);
-                await Storage.set('etd_tokens', nextTokens);
-              });
-              await Storage.set('etd_tokens', activeTokens);
-              setScreen('app');
-              // Register push with valid token
-              const pt = await registerForPushNotifications(activeTokens.access);
-              pushToken.current = pt;
-              return;
             }
+
+            if (res.ok) {
+              const data = await res.json();
+              if (data.success && data.user) {
+                if (data.user.profile_photo_url) {
+                  data.user.profile_photo_url = fixMediaUrl(data.user.profile_photo_url);
+                }
+                setUser(data.user);
+                setTokens(activeTokens);
+                setApiTokens(activeTokens, async (nextTokens) => {
+                  setTokens(nextTokens);
+                  await Storage.set('etd_tokens', nextTokens);
+                });
+                await Storage.set('etd_tokens', activeTokens);
+                setScreen('app');
+
+                try {
+                  const pt = await registerForPushNotifications(activeTokens.access);
+                  pushToken.current = pt;
+                } catch (pushErr) {
+                  console.warn('Push registration warning:', pushErr);
+                }
+                return;
+              }
+            }
+          } catch (netErr) {
+            console.warn('Restore network warning:', netErr);
           }
-        } catch (e) {
-          console.log('Restore error:', e.message);
         }
+      } catch (e) {
+        console.warn('Restore general error:', e);
       }
-      setTimeout(() => setScreen('login'), 2200);
+      setTimeout(() => setScreen('login'), 1500);
     };
     restore();
   }, []);
@@ -178,19 +191,13 @@ export default function App() {
         console.log('Tapped notification data:', data);
 
         if (data.type === 'new_message' && data.conversation_id) {
-          setNotificationRoute({
-            type: 'chat_room',
-            conversationId: data.conversation_id,
-          });
+          setNotificationRoute({ type: 'chat_room', conversationId: data.conversation_id });
           if (user && tokens) setScreen('app');
         } else if (data.type === 'connection_request') {
           setNotificationRoute({ type: 'connection_requests' });
           if (user && tokens) setScreen('app');
         } else if (data.type === 'session_reminder' && data.session_id) {
-          setNotificationRoute({
-            type: 'schedule',
-            sessionId: data.session_id,
-          });
+          setNotificationRoute({ type: 'schedule', sessionId: data.session_id });
           if (user && tokens) setScreen('app');
         } else if (data.type === 'feed_post') {
           setNotificationRoute({ type: 'feed' });
@@ -205,7 +212,6 @@ export default function App() {
           setNotificationRoute({ type: 'ideathon' });
           if (user && tokens) setScreen('app');
         } else {
-          // Generic — open notifications list
           if (user && tokens) {
             setNotificationRoute({ type: 'notifications' });
             setScreen('app');
@@ -217,24 +223,33 @@ export default function App() {
   }, [user, tokens]);
 
   const handleLogin = async (userData, tokenData) => {
-    // Fix media URLs
-    if (userData.profile_photo_url) {
-      userData.profile_photo_url = fixMediaUrl(userData.profile_photo_url);
-    }
-    setUser(userData);
-    setTokens(tokenData);
-    setApiTokens(tokenData, async (nextTokens) => {
-      setTokens(nextTokens);
-      await Storage.set('etd_tokens', nextTokens);
-    });
-    await Storage.set('etd_user', userData);
-    await Storage.set('etd_tokens', tokenData);
-    if (userData.must_change_password) {
-      setScreen('change_password');
-    } else {
-      setScreen('app');
-      const pt = await registerForPushNotifications(tokenData.access);
-      pushToken.current = pt;
+    try {
+      if (userData.profile_photo_url) {
+        userData.profile_photo_url = fixMediaUrl(userData.profile_photo_url);
+      }
+      setUser(userData);
+      setTokens(tokenData);
+      setApiTokens(tokenData, async (nextTokens) => {
+        setTokens(nextTokens);
+        await Storage.set('etd_tokens', nextTokens);
+      });
+      await Storage.set('etd_user', userData);
+      await Storage.set('etd_tokens', tokenData);
+
+      if (userData.must_change_password) {
+        setScreen('change_password');
+      } else {
+        setScreen('app');
+        try {
+          const pt = await registerForPushNotifications(tokenData.access);
+          pushToken.current = pt;
+        } catch (pushErr) {
+          console.warn('Push registration error:', pushErr);
+        }
+      }
+    } catch (err) {
+      console.error('handleLogin error:', err);
+      throw err;
     }
   };
 
@@ -265,11 +280,12 @@ export default function App() {
     await Storage.set('etd_user', { ...u, must_change_password: false });
     await Storage.set('etd_tokens', t);
     setScreen('app');
-    const pt = await registerForPushNotifications(t.access);
-    pushToken.current = pt;
+    try {
+      const pt = await registerForPushNotifications(t.access);
+      pushToken.current = pt;
+    } catch {}
   };
 
-  // Auto-refresh access token every 20 minutes
   useEffect(() => {
     const interval = setInterval(async () => {
       const refreshed = await refreshAccessToken(tokens);
@@ -281,7 +297,7 @@ export default function App() {
         });
         await Storage.set('etd_tokens', refreshed);
       }
-    }, 20 * 60 * 1000); // 20 minutes
+    }, 20 * 60 * 1000);
     return () => clearInterval(interval);
   }, [tokens?.refresh]);
 

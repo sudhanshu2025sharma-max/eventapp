@@ -63,6 +63,8 @@
       ],
       "usesCleartextTraffic": true
     },
-    "plugins": []
+    "plugins": [
+      "./plugins/withNetworkSecurity.js"
+    ]
   }
 }

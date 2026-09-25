@@ -1,0 +1,70 @@
+{
+  "expo": {
+    "name": "ETD 2026",
+    "slug": "etd2026",
+    "version": "1.0.0",
+    "sdkVersion": "54.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "icon": "./assets/icon.png",
+    "scheme": "etd2026",
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "owner": "coder2026s-team",
+    "extra": {
+      "eas": {
+        "projectId": "afa28d7e-10d5-4e85-bed4-783b7371a56b"
+      }
+    },
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#0F172A"
+    },
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.etd2026.app",
+      "infoPlist": {
+        "NSCameraUsageDescription": "ETD 2026 uses the camera to scan QR codes and take photos.",
+        "NSPhotoLibraryUsageDescription": "ETD 2026 needs photo library access to upload photos.",
+        "NSPhotoLibraryAddUsageDescription": "ETD 2026 saves photos to your gallery.",
+        "NSMicrophoneUsageDescription": "ETD 2026 uses the microphone for staff voice calls.",
+        "NSLocationWhenInUseUsageDescription": "ETD 2026 uses your location to tag selfie point photos.",
+        "NSMotionUsageDescription": "ETD 2026 uses motion sensors for shake-to-share contact cards.",
+        "NSCalendarsUsageDescription": "ETD 2026 adds conference sessions to your calendar.",
+        "NSFaceIDUsageDescription": "ETD 2026 uses Face ID to protect admin actions.",
+        "NSDocumentsFolderUsageDescription": "ETD 2026 accesses documents to share PDFs in chat."
+      }
+    },
+    "android": {
+      "package": "com.etd2026.app",
+      "googleServicesFile": "./google-services.json",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#0F172A"
+      },
+      "permissions": [
+        "android.permission.CAMERA",
+        "android.permission.RECORD_AUDIO",
+        "android.permission.MODIFY_AUDIO_SETTINGS",
+        "android.permission.ACCESS_NETWORK_STATE",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.READ_MEDIA_IMAGES",
+        "android.permission.READ_MEDIA_VIDEO",
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.USE_BIOMETRIC",
+        "android.permission.USE_FINGERPRINT",
+        "android.permission.READ_CALENDAR",
+        "android.permission.WRITE_CALENDAR",
+        "android.permission.VIBRATE"
+      ],
+      "usesCleartextTraffic": true
+    },
+    "plugins": [
+      "./plugins/withNetworkSecurity.js"
+    ]
+  }
+}

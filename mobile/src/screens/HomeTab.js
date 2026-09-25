@@ -1134,7 +1134,7 @@ const s = StyleSheet.create({
 });
 
 const g = StyleSheet.create({
-  topbar: { position: 'absolute', top: 0, left: 0, right: 0, zIndex: 50, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingTop: Platform.OS === 'ios' ? 54 : 44, paddingBottom: SPACE.md, paddingHorizontal: PAD, backgroundColor: 'rgba(240,244,249,0.92)' },
+  topbar: { position: 'absolute', top: 0, left: 0, right: 0, zIndex: 50, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingTop: Platform.OS === 'ios' ? 42 : 32, paddingBottom: SPACE.sm, paddingHorizontal: PAD, backgroundColor: 'rgba(240,244,249,0.92)' },
   topbarBrand: { fontSize: FONT.xxl, fontWeight: FONT.w8, color: COLORS.brand, letterSpacing: -0.3 },
   notifBadge: { position: 'absolute', top: -3, right: -3, minWidth: 16, height: 16, borderRadius: 8, backgroundColor: COLORS.error, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 3, borderWidth: 2, borderColor: '#f0f4f9' },
   notifBadgeText: { fontSize: 9, fontWeight: FONT.w8, color: '#fff' },

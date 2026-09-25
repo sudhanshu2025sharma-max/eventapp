@@ -2,10 +2,11 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View, Text, StyleSheet, Platform, FlatList, TextInput,
   TouchableOpacity, Image, ActivityIndicator, KeyboardAvoidingView,
-  Modal, Dimensions, Alert, ActionSheetIOS, Clipboard,
+  Modal, Dimensions, Alert, ActionSheetIOS,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
+import * as Clipboard from 'expo-clipboard';
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, FONT, SPACE, RADIUS, TOP, API_URL, API_HEADERS, fixMediaUrl } from '../theme';
 import { GradientAvatar } from '../components';
@@ -258,7 +259,7 @@ export default function ChatRoomScreen({ tokens, conversationId, onBack, onDisco
           if (action === 'React') setReactionTarget(msg);
           else if (action === 'Reply') setReplyTo(msg);
           else if (action === 'Report') setReportTarget(msg);
-          else if (action === 'Copy') Clipboard.setString(msg.content || '');
+          else if (action === 'Copy') Clipboard.setStringAsync(msg.content || '');
           else if (action === 'Delete') handleDeleteMessage(msg);
         }
       );
@@ -268,7 +269,7 @@ export default function ChatRoomScreen({ tokens, conversationId, onBack, onDisco
         { text: 'React 😊', onPress: () => setReactionTarget(msg) },
         { text: 'Reply', onPress: () => setReplyTo(msg) },
         ...(!mine ? [{ text: 'Report', onPress: () => setReportTarget(msg) }] : []),
-        ...(!mine ? [{ text: 'Copy', onPress: () => Clipboard.setString(msg.content || '') }] : []),
+        ...(!mine ? [{ text: 'Copy', onPress: () => Clipboard.setStringAsync(msg.content || '') }] : []),
         ...(mine ? [{ text: 'Delete', style: 'destructive', onPress: () => handleDeleteMessage(msg) }] : []),
         { text: 'Cancel', style: 'cancel' },
       ]);

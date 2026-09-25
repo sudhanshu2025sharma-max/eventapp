@@ -36,7 +36,7 @@ async function setNetCache(key, data) {
 }
 
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
-  UIManager.setLayoutAnimationEnabledExperimental(true);
+  if (!global.nativeFabricUIManager) UIManager.setLayoutAnimationEnabledExperimental(true);
 }
 
 const _memCache = {

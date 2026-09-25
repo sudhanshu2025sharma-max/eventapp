@@ -11,7 +11,7 @@ import { COLORS, FONT, RADIUS, SHADOW, fixMediaUrl } from '../theme';
 import { apiFetch } from '../api';
 
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
-  UIManager.setLayoutAnimationEnabledExperimental(true);
+  if (!global.nativeFabricUIManager) UIManager.setLayoutAnimationEnabledExperimental(true);
 }
 
 const { width: W } = Dimensions.get('window');

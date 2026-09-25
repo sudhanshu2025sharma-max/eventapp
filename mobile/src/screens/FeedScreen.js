@@ -7,7 +7,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Video } from 'expo-av';
+import { useVideoPlayer, VideoView } from 'expo-video';
 import { COLORS, FONT, SPACE, RADIUS, SHADOW, W, H } from '../theme';
 import { apiFetch } from '../api';
 import { useKeyboardHeight } from '../useKeyboard';
@@ -149,7 +149,7 @@ const PostCard = React.memo(({ item, index, onReact, onOpenComments, onOpenMedia
           <TouchableOpacity activeOpacity={0.9} style={s.imgWrap} onPress={() => onOpenMedia(item.image_url, isVideo)}>
             {isVideo ? (
               <View style={s.videoPreviewWrap}>
-                <Video source={{ uri: item.image_url }} style={s.img} resizeMode="cover" isMuted shouldPlay={false} />
+                <Image source={{ uri: item.image_url.replace(/\.(mp4|mov|m4v)$/i, ".jpg") }} style={s.img} resizeMode="cover" />
                 <View style={s.playOverlay}><Ionicons name="play-circle" size={48} color="#fff" /></View>
               </View>
             ) : (
@@ -226,6 +226,7 @@ export default function FeedScreen({ onBack }) {
   const [replyTo, setReplyTo] = useState(null);
   const [sending, setSending] = useState(false);
   const [fullMedia, setFullMedia] = useState(null);
+  const fullMediaPlayer = useVideoPlayer(fullMedia?.isVideo ? fullMedia.url : null, player => { if (player) { player.loop = false; player.play(); } });
   const keyboardHeight = useKeyboardHeight();
   const sheetY = useRef(new Animated.Value(H)).current;
   const overlay = useRef(new Animated.Value(0)).current;
@@ -342,7 +343,7 @@ export default function FeedScreen({ onBack }) {
             <Ionicons name="close" size={32} color="#fff" />
           </TouchableOpacity>
           {fullMedia?.isVideo ? (
-            <Video source={{ uri: fullMedia.url }} style={{ width: '100%', height: '80%' }} useNativeControls resizeMode="contain" shouldPlay />
+            <VideoView player={fullMediaPlayer} style={{ width: '100%', height: '80%' }} contentFit="contain" nativeControls allowsFullscreen />
           ) : (
             <Image source={{ uri: fullMedia?.url }} style={{ width: '100%', height: '80%' }} resizeMode="contain" />
           )}

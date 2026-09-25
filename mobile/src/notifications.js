@@ -1,21 +1,39 @@
-import * as Notifications from 'expo-notifications';
-import Constants from 'expo-constants';
+import Constants, { ExecutionEnvironment } from 'expo-constants';
 import { Platform } from 'react-native';
 import { apiFetch } from './api';
 
 const EAS_PROJECT_ID = 'afa28d7e-10d5-4e85-bed4-783b7371a56b';
 
-Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowAlert: true,
-    shouldShowBanner: true,
-    shouldShowList: true,
-    shouldPlaySound: true,
-    shouldSetBadge: true,
-  }),
-});
+// Detect if running inside Expo Go
+const isExpoGo =
+  Constants.executionEnvironment === ExecutionEnvironment?.StoreClient ||
+  Constants.executionEnvironment === 'storeClient' ||
+  Constants.appOwnership === 'expo';
+
+let Notifications = null;
+
+// ONLY load and initialize expo-notifications when NOT running in Expo Go
+if (!isExpoGo) {
+  try {
+    Notifications = require('expo-notifications');
+    Notifications.setNotificationHandler({
+      handleNotification: async () => ({
+        shouldShowAlert: true,
+        shouldPlaySound: true,
+        shouldSetBadge: true,
+      }),
+    });
+  } catch (e) {
+    console.warn('Failed to load expo-notifications:', e);
+  }
+}
 
 export async function registerForPushNotificationsAsync() {
+  if (isExpoGo || !Notifications) {
+    console.log('ℹ️ Running in Expo Go: Push Notifications skipped.');
+    return null;
+  }
+
   try {
     const { status: existingStatus } = await Notifications.getPermissionsAsync();
     let finalStatus = existingStatus;
@@ -43,14 +61,12 @@ export async function registerForPushNotificationsAsync() {
       });
     }
 
-    // Explicitly pass projectId so it resolves immediately (< 500ms) without hanging
     const projectId = Constants?.expoConfig?.extra?.eas?.projectId || EAS_PROJECT_ID;
     const expoTokenObj = await Notifications.getExpoPushTokenAsync({ projectId });
     const expoToken = expoTokenObj?.data;
 
     if (expoToken) {
       console.log('✓ Successfully generated Expo Push Token:', expoToken);
-      // Register token with backend (fire-and-forget)
       apiFetch('/notifications/tokens/', {
         method: 'POST',
         body: JSON.stringify({
@@ -69,27 +85,37 @@ export async function registerForPushNotificationsAsync() {
 export const registerForPushNotifications = registerForPushNotificationsAsync;
 
 export function setupNotificationListeners(onNotificationReceived, onNotificationResponse) {
-  const receivedSub = Notifications.addNotificationReceivedListener(notification => {
-    if (typeof onNotificationReceived === 'function') {
-      onNotificationReceived(notification);
-    }
-  });
+  if (isExpoGo || !Notifications) {
+    return () => {};
+  }
 
-  const responseSub = Notifications.addNotificationResponseReceivedListener(response => {
-    if (typeof onNotificationResponse === 'function') {
-      onNotificationResponse(response);
-    }
-  });
+  try {
+    const receivedSub = Notifications.addNotificationReceivedListener(notification => {
+      if (typeof onNotificationReceived === 'function') {
+        onNotificationReceived(notification);
+      }
+    });
 
-  return () => {
-    try {
-      receivedSub.remove();
-      responseSub.remove();
-    } catch (e) {}
-  };
+    const responseSub = Notifications.addNotificationResponseReceivedListener(response => {
+      if (typeof onNotificationResponse === 'function') {
+        onNotificationResponse(response);
+      }
+    });
+
+    return () => {
+      try {
+        receivedSub.remove();
+        responseSub.remove();
+      } catch (e) {}
+    };
+  } catch (e) {
+    console.warn('setupNotificationListeners error:', e);
+    return () => {};
+  }
 }
 
 export async function sendLocalNotification(title, body, data = {}) {
+  if (isExpoGo || !Notifications) return;
   try {
     await Notifications.scheduleNotificationAsync({
       content: {

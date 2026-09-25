@@ -13,7 +13,7 @@ import { FadeIn, PulsingDot } from '../components';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
-  UIManager.setLayoutAnimationEnabledExperimental(true);
+  if (!global.nativeFabricUIManager) UIManager.setLayoutAnimationEnabledExperimental(true);
 }
 
 /* ── Schedule cache (1-hour TTL) ── */

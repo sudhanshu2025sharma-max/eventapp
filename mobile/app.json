@@ -13,11 +13,6 @@
         "projectId": "afa28d7e-10d5-4e85-bed4-783b7371a56b"
       }
     },
-    "splash": {
-      "image": "./assets/splash.png",
-      "resizeMode": "contain",
-      "backgroundColor": "#0F172A"
-    },
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.etd2026.app",
@@ -45,12 +40,19 @@
         "android.permission.ACCESS_FINE_LOCATION",
         "android.permission.ACCESS_COARSE_LOCATION",
         "android.permission.VIBRATE"
-      ],
-      "edgeToEdgeEnabled": true
+      ]
     },
     "plugins": [
       "./plugins/withNetworkSecurity.js",
       "expo-video",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/splash.png",
+          "resizeMode": "contain",
+          "backgroundColor": "#0F172A"
+        }
+      ],
       [
         "expo-build-properties",
         {

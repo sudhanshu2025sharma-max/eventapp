@@ -166,9 +166,7 @@ export default function ChatRoomScreen({ tokens, conversationId, onBack, onDisco
       result = await ImagePicker.launchCameraAsync({ quality: 0.7 });
     } else {
       if (Platform.OS === 'ios') {
-        const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
-        if (!perm.granted) return;
-      }
+        // Using System Photo Picker directly (Android 13+ compliant)
       result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, quality: 0.7 });
     }
     if (result.canceled) return;

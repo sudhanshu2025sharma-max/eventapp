@@ -48,6 +48,7 @@
       "versionCode": 2
     },
     "plugins": [
+      "./plugins/withNoMediaPermissions.js",
       "./plugins/withNetworkSecurity.js",
       "expo-video",
       [

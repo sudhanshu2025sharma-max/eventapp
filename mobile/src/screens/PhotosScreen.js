@@ -135,11 +135,7 @@ function UploadSheet({ onClose, onUploaded }) {
 
   const pickImage = async () => {
     if (Platform.OS === 'ios') {
-      const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (!perm.granted) {
-        Alert.alert('Permission needed', 'Allow access to your photos to upload.');
-        return;
-      }
+      // Using System Photo Picker directly (Android 13+ compliant)
     }
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ['images'],

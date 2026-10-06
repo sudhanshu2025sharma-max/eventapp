@@ -143,9 +143,7 @@ export default function CheckpointAdminScreen({ tokens, onBack }) {
   // Picker Camera/Gallery
   const handlePickImage = async () => {
     if (Platform.OS === 'ios') {
-      const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (!perm.granted) return Alert.alert('Permission required', 'Please grant library permissions.');
-    }
+      // Using System Photo Picker directly (Android 13+ compliant)
 
     const res = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,

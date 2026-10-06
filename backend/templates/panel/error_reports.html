@@ -1,7 +1,7 @@
 {% extends "panel/base.html" %}
 {% block title %}Error Reports &amp; System Logs — ETD 2026{% endblock %}
 {% block page_title %}Error Reports &amp; System Logs{% endblock %}
-{% block page_subtitle %}Live system logs, Linux health metrics, and user-submitted bug tickets{% endblock %}
+{% block page_subtitle %}Live system health metrics and user-submitted bug tickets{% endblock %}
 
 {% block content %}
 {% for m in messages %}
@@ -51,25 +51,18 @@
   </div>
 </div>
 
-<!-- Tab Navigation & Action Button -->
+<!-- Header Actions -->
 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; border-bottom: 1px solid var(--border); padding-bottom: 12px; flex-wrap: wrap; gap: 12px;">
-  <div style="display: flex; gap: 8px;">
-    <a href="?tab=user_reports" class="btn {% if tab == 'user_reports' %}btn-primary{% else %}btn-secondary{% endif %}">
-      <i class="fas fa-user-shield"></i> User Reported Errors ({{ counts.total }})
-    </a>
-    <a href="?tab=system_logs" class="btn {% if tab == 'system_logs' %}btn-primary{% else %}btn-secondary{% endif %}">
-      <i class="fas fa-triangle-exclamation"></i> Captured System Exceptions ({{ counts.sys_errors }})
-    </a>
-    <a href="?tab=server_stream" class="btn {% if tab == 'server_stream' %}btn-primary{% else %}btn-secondary{% endif %}">
-      <i class="fas fa-terminal"></i> Live server.log Stream
-    </a>
+  <div style="display: flex; gap: 8px; align-items: center;">
+    <h2 style="font-size: 18px; font-weight: 600; margin: 0; color: var(--text);">
+      <i class="fas fa-user-shield" style="color: var(--primary); margin-right: 6px;"></i> 
+      User Reported Errors ({{ counts.total }})
+    </h2>
   </div>
 
-  {% if tab == 'user_reports' %}
-    <button onclick="document.getElementById('createTicketModal').style.display='flex'" class="btn btn-primary">
-      <i class="fas fa-plus"></i> Log New Error Ticket
-    </button>
-  {% endif %}
+  <button onclick="document.getElementById('createTicketModal').style.display='flex'" class="btn btn-primary">
+    <i class="fas fa-plus"></i> Log New Error Ticket
+  </button>
 </div>
 
 <!-- Admin Create Ticket Modal -->
@@ -136,8 +129,7 @@
   </div>
 </div>
 
-{% if tab == 'user_reports' %}
-<!-- TAB 1: User Reported Errors -->
+<!-- User Reported Errors Table Section -->
 <div class="card">
   <div class="card-header" style="flex-wrap: wrap; gap: 12px;">
     <h3><i class="fas fa-list-check" style="color:var(--primary);margin-right:8px;"></i>User Bug Reports &amp; Screenshots</h3>
@@ -233,138 +225,8 @@
     {% endif %}
   </div>
 </div>
-
-{% elif tab == 'system_logs' %}
-<!-- TAB 2: Captured System Exceptions -->
-<div class="card">
-  <div class="card-header">
-    <h3><i class="fas fa-triangle-exclamation" style="color:#dc2626;margin-right:8px;"></i>Auto-Captured Backend &amp; Notification Errors</h3>
-    <form method="POST" action="{% url 'panel_clear_system_logs' %}" onsubmit="return confirm('Clear all captured system log entries?');">
-      {% csrf_token %}
-      <button type="submit" class="btn btn-danger btn-sm"><i class="fas fa-trash"></i> Clear Log Entries</button>
-    </form>
-  </div>
-  <div class="card-body" style="padding:0;">
-    {% if system_logs %}
-    <table class="data-table">
-      <thead>
-        <tr>
-          <th>Timestamp</th>
-          <th>Type &amp; Level</th>
-          <th>Path / Source</th>
-          <th>Message &amp; Traceback</th>
-          <th>User / IP</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for log in system_logs %}
-        <tr>
-          <td style="font-size:12px; white-space:nowrap; color:var(--text-tertiary);">{{ log.created_at|date:"M d, H:i:s" }}</td>
-          <td>
-            {% if log.level == 'CRITICAL' or log.level == 'ERROR' %}
-              <span class="badge badge-danger">{{ log.level }}</span>
-            {% else %}
-              <span class="badge badge-warning">{{ log.level }}</span>
-            {% endif %}
-            <div style="font-size:11px; font-weight:600; margin-top:2px;">{{ log.get_log_type_display }}</div>
-          </td>
-          <td style="font-size:12px;">
-            <code>{{ log.method }} {{ log.path|default:"Internal Service" }}</code>
-          </td>
-          <td>
-            <div style="font-weight:600; color:var(--danger); font-size:13px;">{{ log.message|truncatechars:80 }}</div>
-            {% if log.traceback %}
-              <details style="margin-top:4px;">
-                <summary style="font-size:11px; color:var(--primary); cursor:pointer;">View Traceback</summary>
-                <pre style="background:#1e293b; color:#f8fafc; padding:8px; border-radius:6px; font-size:11px; max-height:160px; overflow:auto; margin-top:4px;">{{ log.traceback }}</pre>
-              </details>
-            {% endif %}
-          </td>
-          <td style="font-size:12px;">
-            <div>{{ log.user_email|default:"Anonymous" }}</div>
-            <div style="color:var(--text-tertiary); font-size:10px;">{{ log.ip_address|default:"" }}</div>
-          </td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
-    {% else %}
-    <div class="empty-state">
-      <i class="fas fa-shield-heart" style="color:var(--success);"></i>
-      <h3>Zero System Errors Recorded</h3>
-      <p>All backend requests and push services are functioning smoothly.</p>
-    </div>
-    {% endif %}
-  </div>
-</div>
-
-{% elif tab == 'server_stream' %}
-<!-- TAB 3: Live server.log Stream Console -->
-<div class="card">
-  <div class="card-header">
-    <h3><i class="fas fa-terminal" style="color:var(--primary);margin-right:8px;"></i>Live <code>server.log</code> Viewer (App VM)</h3>
-    <div style="display:flex; gap:10px; align-items:center;">
-      <span id="last_updated_time" style="font-size:12px; color:var(--text-tertiary);">Polling...</span>
-      <button onclick="fetchLogStream()" class="btn btn-secondary btn-sm"><i class="fas fa-rotate"></i> Refresh</button>
-      <label style="font-size:12px; display:flex; align-items:center; gap:4px;">
-        <input type="checkbox" id="auto_poll_check" checked> Auto-refresh (5s)
-      </label>
-    </div>
-  </div>
-  <div class="card-body" style="background:#0f172a; padding:16px;">
-    <div id="terminal_box" style="font-family:'Courier New', monospace; font-size:12px; line-height:1.5; color:#38bdf8; max-height:550px; overflow-y:auto; white-space:pre-wrap; word-break:break-all;">
-Loading live server logs...
-    </div>
-  </div>
-</div>
-{% endif %}
-
 {% endblock %}
 
 {% block scripts %}
-<script>
-let pollInterval = null;
-
-function fetchLogStream() {
-  fetch('/panel/error-reports/live-log-stream/?lines=250')
-    .then(r => r.json())
-    .then(data => {
-      if (data.success && data.lines) {
-        const box = document.getElementById('terminal_box');
-        if (box) {
-          box.innerHTML = data.lines.map(line => {
-            if (line.includes('ERROR') || line.includes('Exception') || line.includes('CRITICAL')) {
-              return `<span style="color:#f87171;">${escapeHtml(line)}</span>`;
-            } else if (line.includes('WARNING') || line.includes('Auto-restarting')) {
-              return `<span style="color:#fbbf24;">${escapeHtml(line)}</span>`;
-            } else if (line.includes('HTTP/1.1" 200') || line.includes('Application startup complete')) {
-              return `<span style="color:#34d399;">${escapeHtml(line)}</span>`;
-            }
-            return `<span>${escapeHtml(line)}</span>`;
-          }).join('\n');
-          box.scrollTop = box.scrollHeight;
-        }
-        const timeEl = document.getElementById('last_updated_time');
-        if (timeEl) timeEl.innerText = 'Last updated: ' + data.timestamp;
-      }
-    })
-    .catch(e => console.error("Log stream error:", e));
-}
-
-function escapeHtml(text) {
-  const div = document.createElement('div');
-  div.innerText = text;
-  return div.innerHTML;
-}
-
-document.addEventListener('DOMContentLoaded', () => {
-  const autoCheck = document.getElementById('auto_poll_check');
-  if (autoCheck) {
-    fetchLogStream();
-    pollInterval = setInterval(() => {
-      if (autoCheck.checked) fetchLogStream();
-    }, 5000);
-  }
-});
-</script>
+<!-- System Log polling scripts removed -->
 {% endblock %}

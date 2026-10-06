@@ -165,8 +165,10 @@ export default function ChatRoomScreen({ tokens, conversationId, onBack, onDisco
       if (!perm.granted) return;
       result = await ImagePicker.launchCameraAsync({ quality: 0.7 });
     } else {
-      const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (!perm.granted) return;
+      if (Platform.OS === 'ios') {
+        const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+        if (!perm.granted) return;
+      }
       result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, quality: 0.7 });
     }
     if (result.canceled) return;

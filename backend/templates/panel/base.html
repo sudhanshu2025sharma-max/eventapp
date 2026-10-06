@@ -355,26 +355,12 @@
             <a href="/panel/leaderboard/" class="menu-item {% if request.resolver_match.url_name == 'leaderboard_panel' %}active{% endif %}">
                 <i class="fas fa-trophy"></i> Leaderboard
             </a>
-            <a href="/panel/chat/" class="menu-item {% if request.resolver_match.url_name == 'chat_panel' or request.resolver_match.url_name == 'chat_thread' %}active{% endif %}">
-                <i class="fas fa-comments"></i> Chat &amp; Connections
-            </a>
-            <a href="/panel/chat/reports/?status=pending" class="menu-item {% if 'report' in request.resolver_match.url_name %}active{% endif %}">
-                <i class="fas fa-flag"></i> Reported Messages
-            </a>
-            <a href="/panel/chat/shakes/" class="menu-item {% if 'chat_shakes' in request.resolver_match.url_name %}active{% endif %}">
-                <i class="fa-solid fa-handshake"></i> Shake Connect Logs
-            </a>
-            <a href="/panel/chat/analytics/" class="menu-item {% if 'analytics' in request.resolver_match.url_name %}active{% endif %}">
-                <i class="fas fa-chart-line"></i> Chat Analytics
-            </a>
 
             <div class="menu-label">System</div>
-            <a href="/panel/error-reports/" class="menu-item {% if '/error-reports/' in request.path %}active{% endif %}">
+                        <a href="/panel/error-reports/" class="menu-item {% if '/error-reports/' in request.path %}active{% endif %}">
                 <i class="fas fa-triangle-exclamation"></i> Error &amp; System Logs
             </a>
-            <a href="/panel/notifications/"
-
- class="menu-item {% if request.resolver_match.url_name == 'notifications_panel' %}active{% endif %}">
+            <a href="/panel/notifications/" class="menu-item {% if request.resolver_match.url_name == 'notifications_panel' %}active{% endif %}">
                 <i class="fas fa-bell"></i> Notifications
             </a>
             

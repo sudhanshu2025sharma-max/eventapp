@@ -285,10 +285,12 @@ export default function EditProfileScreen({ user, tokens, onBack, onProfileUpdat
   const pickImage = async () => {
     try {
       const ImagePicker = require('expo-image-picker');
-      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (status !== 'granted') {
-        Alert.alert('Permission needed', 'Grant photo library access to upload a profile picture.');
-        return;
+      if (Platform.OS === 'ios') {
+        const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+        if (status !== 'granted') {
+          Alert.alert('Permission needed', 'Grant photo library access to upload a profile picture.');
+          return;
+        }
       }
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ['images'],

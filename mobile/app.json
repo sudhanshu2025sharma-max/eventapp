@@ -2,7 +2,7 @@
   "expo": {
     "name": "ETD 2026",
     "slug": "etd2026",
-    "version": "1.0.0",
+    "version": "1.0.1",
     "orientation": "portrait",
     "userInterfaceStyle": "light",
     "icon": "./assets/icon.png",
@@ -16,6 +16,7 @@
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.etd2026.app",
+      "buildNumber": "2",
       "infoPlist": {
         "NSCameraUsageDescription": "ETD 2026 uses the camera to scan QR codes and take photos.",
         "NSPhotoLibraryUsageDescription": "ETD 2026 needs photo library access to upload photos.",
@@ -35,13 +36,16 @@
       "permissions": [
         "android.permission.CAMERA",
         "android.permission.ACCESS_NETWORK_STATE",
-        "android.permission.READ_MEDIA_IMAGES",
-        "android.permission.READ_MEDIA_VIDEO",
         "android.permission.ACCESS_FINE_LOCATION",
         "android.permission.ACCESS_COARSE_LOCATION",
         "android.permission.VIBRATE"
       ],
-      "versionCode": 1
+      "blockedPermissions": [
+        "android.permission.READ_MEDIA_IMAGES",
+        "android.permission.READ_MEDIA_VIDEO",
+        "android.permission.READ_MEDIA_AUDIO"
+      ],
+      "versionCode": 2
     },
     "plugins": [
       "./plugins/withNetworkSecurity.js",

@@ -23,10 +23,10 @@ module.exports = function withNoMediaPermissions(config) {
 
     // Filter out existing matching permissions
     androidManifest['uses-permission'] = androidManifest['uses-permission'].filter(
-      (perm) => !permissionsToRemove.includes(perm.$['android:name'])
+      (perm) => !permissionsToRemove.includes(perm.$?.['android:name'])
     );
 
-    # Add explicit tools:node="remove" entries to force Manifest Merger deletion
+    // Add explicit tools:node="remove" entries to force Manifest Merger deletion
     for (const permName of permissionsToRemove) {
       androidManifest['uses-permission'].push({
         $: {

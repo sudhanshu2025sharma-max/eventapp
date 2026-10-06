@@ -18,6 +18,7 @@ urlpatterns = [
     path('panel/', include('apps.photos.admin_urls')),
     path('panel/', include('apps.polls.admin_urls')),
     path('panel/', include('apps.posts.admin_urls')),
+    path('panel/', include('apps.error_reports.admin_urls')),
 
     # API routes
     path('api/v1/auth/',          include('apps.accounts.urls')),
@@ -33,4 +34,5 @@ urlpatterns = [
     path('api/v1/speakers/',      include('apps.speakers.urls')),
     path('api/v1/schedule/',      include('apps.schedule.urls')),
     path('api/v1/chat/',          include('apps.chat.urls')),
+    path('api/v1/error-reports/', include('apps.error_reports.urls')),
 ] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

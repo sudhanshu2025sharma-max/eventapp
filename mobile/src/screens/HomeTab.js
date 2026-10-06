@@ -23,15 +23,16 @@ import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-g
 const PAD = SPACE.xl;
 const TIMELINE_WINDOW = 3;
 
+// Swapped Ideathon to position 2 (primary quick bar) and moved Leaderboard to position 7
 const QUICK_ITEMS = [
-  { icon: 'mic-outline',         label: 'Speakers',     grad: ['#7c3aed',      '#6d28d9'],         action: 'speakers' },
-  { icon: 'trophy-outline',      label: 'Leaderboard',  grad: [COLORS.rose,    '#e11d48'],         action: 'leaderboard' },
-  { icon: 'document-text-outline',label:'Papers/Posters',grad: ['#0d9488', '#0f766e'],         action: 'papers' },
-  { icon: 'ribbon-outline',      label: 'Sponsors',     grad: [COLORS.brand,   COLORS.brandDark],  action: 'sponsors' },
-  { icon: 'flag-outline',        label: 'Checkpoint',   grad: ['#ec4899',      '#be185d'],         action: 'checkpoint' },
-  { icon: 'stats-chart-outline', label: 'Live Polls',   grad: [COLORS.accent,  COLORS.accentDark], action: 'polls' },
-  { icon: 'bulb-outline',        label: 'Ideathon',     grad: ['#0ea5e9',      '#0284c7'],         action: 'ideathon' },
-  { icon: 'people-outline',      label: 'Events Team',  grad: ['#6366f1',      '#4338ca'],         action: 'staff_team' },
+  { icon: 'mic-outline',          label: 'Speakers',     grad: ['#7c3aed',      '#6d28d9'],         action: 'speakers' },
+  { icon: 'bulb-outline',         label: 'Ideathon',     grad: ['#0ea5e9',      '#0284c7'],         action: 'ideathon' },
+  { icon: 'document-text-outline', label: 'Papers/Posters',grad: ['#0d9488',      '#0f766e'],         action: 'papers' },
+  { icon: 'ribbon-outline',       label: 'Sponsors',     grad: [COLORS.brand,   COLORS.brandDark],  action: 'sponsors' },
+  { icon: 'flag-outline',         label: 'Checkpoint',   grad: ['#ec4899',      '#be185d'],         action: 'checkpoint' },
+  { icon: 'stats-chart-outline',  label: 'Live Polls',   grad: [COLORS.accent,  COLORS.accentDark], action: 'polls' },
+  { icon: 'trophy-outline',       label: 'Leaderboard',  grad: [COLORS.rose,    '#e11d48'],         action: 'leaderboard' },
+  { icon: 'people-outline',       label: 'Events Team',  grad: ['#6366f1',      '#4338ca'],         action: 'staff_team' },
 ];
 
 const TYPE_STYLE = {
@@ -335,7 +336,7 @@ const ANN_GRADS = [
   [COLORS.success,'#059669'], [COLORS.rose,'#e11d48'],
 ];
 
-// Reanimated Swipe Deck with synchronized Thread Entry and parent scrollview lockouts
+// Reanimated Swipe Deck
 function AnnouncementDeck({ notifications, onOpenNotifications }) {
   const [index, setIndex] = useState(0);
   const [width, setWidth] = useState(0);
@@ -690,7 +691,6 @@ export default function HomeTab({
   const firstSession = allSorted[0];
   const lastSession = allSorted[allSorted.length - 1];
 
-  // Derive reliable configuration times strictly from the seeded schedule sessions
   const confStartMs = useMemo(() => {
     if (firstSession) return getEventDate(firstSession, 'start')?.getTime() || new Date(conf.start_date).getTime();
     return new Date(conf.start_date).getTime();
@@ -737,7 +737,6 @@ export default function HomeTab({
     progress = 100;
     pillText = 'Completed';
   } else {
-    // During conference window
     if (liveSession) {
       mode = 'progress';
       progress = Math.min(100, Math.max(0, Math.round(((nowMs - confStartMs) / (confEndMs - confStartMs)) * 100)));

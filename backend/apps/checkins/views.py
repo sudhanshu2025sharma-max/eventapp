@@ -81,6 +81,8 @@ def meal_status(request):
     is_open = window.is_open if window else False
     active_meal_name = (window.meal_type if window and window.meal_type else "Meal")
 
+    scanned_count = MealPass.objects.filter(date=today, meal_type=active_meal_name, used=True).count()
+
     active_pass = None
     if window and window.meal_type:
         active_pass = MealPass.objects.filter(user=user, date=today, meal_type=window.meal_type, is_active=True).first()
@@ -118,13 +120,16 @@ def meal_status(request):
         "has_pass": bool(pass_data),
         "pass": pass_data,
         "meal_pass": pass_data,
+        "scanned_count": scanned_count,
         "meal_window": {
             "is_open": is_open,
             "meal_type": active_meal_name,
             "start_time": window.start_time.strftime("%I:%M %p") if window and window.start_time else "12:00 PM",
             "end_time": window.end_time.strftime("%I:%M %p") if window and window.end_time else "02:00 PM",
+            "scanned_count": scanned_count,
         } if window else None
     })
+
 
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
@@ -242,54 +247,106 @@ def scan_meal(request):
 def scan_checkin(request):
     raw_code = request.data.get('registration_id') or request.data.get('qr_data') or request.data.get('qr_code') or ''
     raw_code = str(raw_code).strip()
-    target_user = User.objects.filter(models.Q(registration_id=raw_code) | models.Q(email=raw_code)).first()
+    target_user = User.objects.filter(models.Q(registration_id__iexact=raw_code) | models.Q(email__iexact=raw_code)).first()
     if not target_user:
-        return Response({"success": False, "error": "Participant not found."}, status=404)
+        return Response({"success": False, "error": f"Participant '{raw_code}' not found."}, status=404)
 
     checkin, created = CheckIn.objects.get_or_create(
         user=target_user,
-        defaults={'scanned_by': request.user, 'checkin_type': 'conference'}
+        checkin_type='conference',
+        defaults={'scanned_by': request.user, 'goodies_status': 'pending'}
     )
+    
+    # Award points on first check-in
+    if created:
+        try:
+            award_points(target_user, 'checkin', 'Conference check-in bonus')
+        except Exception:
+            pass
+
     return Response({
         "success": True,
         "status": "success",
-        "message": f"{target_user.get_full_name()} checked in successfully!"
+        "created": created,
+        "message": f"{target_user.get_full_name()} checked in successfully!",
+        "user": _user_detail(target_user, request),
+        "goodies_status": getattr(checkin, 'goodies_status', 'pending'),
+        "scanned_at": checkin.scanned_at.isoformat() if checkin.scanned_at else None,
     })
 
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def confirm_goodies(request):
-    raw_code = request.data.get('registration_id') or request.data.get('qr_data') or ''
-    target_user = User.objects.filter(models.Q(registration_id=raw_code) | models.Q(email=raw_code)).first()
+    raw_code = request.data.get('registration_id') or request.data.get('qr_data') or request.data.get('user_id') or ''
+    action = request.data.get('action', 'received') # 'received' or 'skipped'
+    note = request.data.get('note', '').strip()
+    
+    raw_code = str(raw_code).strip()
+    target_user = User.objects.filter(
+        models.Q(registration_id__iexact=raw_code) | 
+        models.Q(email__iexact=raw_code) |
+        models.Q(id=raw_code if len(raw_code)==36 else None)
+    ).first()
+
     if not target_user:
         return Response({"success": False, "error": "Participant not found."}, status=404)
-    checkin, _ = CheckIn.objects.get_or_create(user=target_user, defaults={'scanned_by': request.user})
-    checkin.goodies_status = 'received'
-    checkin.save()
-    return Response({"success": True, "status": "success", "message": "Kit marked received."})
+
+    checkin, _ = CheckIn.objects.get_or_create(
+        user=target_user, 
+        checkin_type='conference',
+        defaults={'scanned_by': request.user, 'goodies_status': action, 'goodies_note': note, 'goodies_confirmed_by': request.user, 'goodies_confirmed_at': timezone.now()}
+    )
+    
+    checkin.goodies_status = action
+    if note:
+        checkin.goodies_note = note
+    checkin.goodies_confirmed_by = request.user
+    checkin.goodies_confirmed_at = timezone.now()
+    checkin.save(update_fields=['goodies_status', 'goodies_note', 'goodies_confirmed_by', 'goodies_confirmed_at'])
+
+    msg = f"Conference kit issued to {target_user.get_full_name()}!" if action == 'received' else f"Kit skipped for {target_user.get_full_name()}. Note saved."
+
+    return Response({
+        "success": True, 
+        "status": "success", 
+        "message": msg,
+        "goodies_status": action,
+        "goodies_note": checkin.goodies_note,
+        "user": _user_detail(target_user, request)
+    })
 
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def checkin_status(request):
     is_staff_user = getattr(request.user, 'role', '') in ['super_admin', 'mgmt_admin', 'team_head', 'staff']
-    checked_in = is_staff_user or CheckIn.objects.filter(user=request.user).exists()
+    c = CheckIn.objects.filter(user=request.user, checkin_type='conference').first()
+    checked_in = is_staff_user or (c is not None)
+    
+    goodies_status = getattr(c, 'goodies_status', 'pending') if c else 'pending'
+    scanned_at = c.scanned_at.isoformat() if (c and c.scanned_at) else None
+
     return Response({
         "success": True,
         "checked_in": checked_in,
         "is_checked_in": checked_in,
+        "goodies_status": goodies_status,
+        "scanned_at": scanned_at,
         "user": _user_detail(request.user, request)
     })
 
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def checkin_list(request):
-    checkins = CheckIn.objects.select_related('user').order_by('-scanned_at')[:100]
+    checkins = CheckIn.objects.select_related('user', 'scanned_by').order_by('-scanned_at')[:100]
     return Response({
         "success": True,
         "checkins": [{
             "id": str(c.id),
             "user": _user_detail(c.user, request),
-            "goodies_status": getattr(c, 'goodies_status', 'pending')
+            "goodies_status": getattr(c, 'goodies_status', 'pending'),
+            "goodies_note": getattr(c, 'goodies_note', ''),
+            "scanned_at": c.scanned_at.isoformat() if c.scanned_at else None,
+            "scanned_by": c.scanned_by.get_full_name() if c.scanned_by else ''
         } for c in checkins]
     })
 
@@ -438,15 +495,20 @@ def meal_stats(request):
 @permission_classes([IsAuthenticated])
 def meal_list(request):
     today = timezone.now().astimezone(IST).date()
-    passes = MealPass.objects.filter(date=today).order_by('-created_at')[:50]
+    passes = MealPass.objects.select_related('user', 'scanned_by').filter(date=today).order_by('-used_at', '-created_at')[:100]
     return Response({
         "success": True,
         "passes": [{
             "id": str(p.id),
+            "user": _user_detail(p.user, request) if p.user else {
+                "id": None, "name": p.guest_name or "Guest Attendee", "email": p.guest_email or "",
+                "registration_id": p.guest_reg_no or "GUEST"
+            },
             "display_name": p.display_name,
-            "meal_type": p.meal_type,
+            "meal_type": p.meal_type or "Meal",
             "used": p.used,
-            "guest_name": p.guest_name,
+            "used_at": p.used_at.isoformat() if p.used_at else None,
+            "scanned_by": p.scanned_by.get_full_name() if p.scanned_by else "System",
             "date": str(p.date)
         } for p in passes]
     })

@@ -77,7 +77,7 @@ def polls_panel(request):
 @admin_required
 def poll_create(request):
     from apps.schedule.models import ScheduleSession
-    sessions = ScheduleSession.objects.filter(is_published=True).order_by('day', 'start_datetime')
+    sessions = ScheduleSession.objects.filter(is_published=True).order_by('day', 'start_time')
 
     if request.method == 'POST':
         title   = request.POST.get('title', '').strip()
@@ -122,7 +122,7 @@ def poll_create(request):
 def poll_edit(request, pk):
     poll = get_object_or_404(Poll, pk=pk)
     from apps.schedule.models import ScheduleSession
-    sessions = ScheduleSession.objects.filter(is_published=True).order_by('day', 'start_datetime')
+    sessions = ScheduleSession.objects.filter(is_published=True).order_by('day', 'start_time')
 
     if request.method == 'POST':
         poll.title       = request.POST.get('title', poll.title).strip()

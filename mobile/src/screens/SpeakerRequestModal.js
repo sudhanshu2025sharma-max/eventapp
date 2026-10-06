@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import {
-  View, Text, Modal, TouchableOpacity, StyleSheet,
+  View, Text, Modal, TouchableOpacity, StyleSheet, Image,
   Platform, TextInput, ScrollView, KeyboardAvoidingView,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -100,7 +100,7 @@ export default function SpeakerRequestModal({ visible, onClose, speaker, tokens,
                 <Text style={s.sentSub}>
                   Your discussion request has been sent to{' '}
                   <Text style={{ fontWeight: FONT.w7 }}>
-                    {speaker.first_name} {speaker.last_name}
+                    {speaker.name || `${speaker.first_name || ''} ${speaker.last_name || ''}`.trim()}
                   </Text>
                   . You'll be notified when they respond.
                 </Text>
@@ -113,13 +113,20 @@ export default function SpeakerRequestModal({ visible, onClose, speaker, tokens,
 
                 {/* Speaker mini card */}
                 <View style={s.speakerCard}>
-                  <GradientAvatar
-                    name={`${speaker.first_name} ${speaker.last_name}`}
-                    size={48} radius={16}
-                  />
+                  {(speaker.profile_photo_url || speaker.photo_url || speaker.photo) ? (
+                    <Image
+                      source={{ uri: fixMediaUrl(speaker.profile_photo_url || speaker.photo_url || speaker.photo) }}
+                      style={{ width: 48, height: 48, borderRadius: 16, backgroundColor: COLORS.borderLight }}
+                    />
+                  ) : (
+                    <GradientAvatar
+                      name={`${speaker.first_name || ''} ${speaker.last_name || ''}`.trim() || speaker.name || 'S'}
+                      size={48} radius={16}
+                    />
+                  )}
                   <View style={{ flex: 1, marginLeft: SPACE.md }}>
                     <Text style={s.speakerName}>
-                      {speaker.first_name} {speaker.last_name}
+                      {speaker.name || `${speaker.first_name || ''} ${speaker.last_name || ''}`.trim()}
                     </Text>
                     {speaker.designation ? (
                       <Text style={s.speakerDesig}>{speaker.designation}</Text>

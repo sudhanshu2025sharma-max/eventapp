@@ -23,12 +23,10 @@ def sync_meal_window():
     now_ist = timezone.now().astimezone(IST)
     today = now_ist.date()
 
-    start_of_day = datetime.datetime.combine(today, datetime.time.min).replace(tzinfo=IST)
-    end_of_day = datetime.datetime.combine(today, datetime.time.max).replace(tzinfo=IST)
-
+    # Query today's published sessions where is_meal=True or session_type='meal'
     meal_sessions = ScheduleSession.objects.filter(
-        start_datetime__gte=start_of_day,
-        start_datetime__lte=end_of_day,
+        date=today,
+        is_published=True,
     ).filter(
         models.Q(is_meal=True) |
         models.Q(session_type='meal') |
@@ -36,20 +34,20 @@ def sync_meal_window():
         models.Q(title__icontains='dinner') |
         models.Q(title__icontains='breakfast') |
         models.Q(title__icontains='tea')
-    ).order_by('start_datetime')
+    ).order_by('start_time')
 
     active_session = None
     for s in meal_sessions:
-        s0 = s.start_datetime.astimezone(IST)
-        s1 = s.end_datetime.astimezone(IST)
-        if s0 <= now_ist <= s1:
+        s0 = s.start_datetime
+        s1 = s.end_datetime
+        if s0 and s1 and s0 <= now_ist <= s1:
             active_session = s
             break
 
     display = active_session
     if display is None:
         for s in meal_sessions:
-            if s.start_datetime.astimezone(IST) > now_ist:
+            if s.start_datetime and s.start_datetime > now_ist:
                 display = s
                 break
     if display is None and meal_sessions.exists():
@@ -67,22 +65,23 @@ def sync_meal_window():
     if not window:
         window = MealWindow.objects.create(date=today, is_open=False, meal_type=meal_type_name)
 
-    if display is not None:
-        s0 = display.start_datetime.astimezone(IST)
-        s1 = display.end_datetime.astimezone(IST)
+    if display is not None and display.start_datetime and display.end_datetime:
+        s0 = display.start_datetime
+        s1 = display.end_datetime
         if window.start_time != s0.time() or window.end_time != s1.time():
             window.start_time = s0.time()
             window.end_time = s1.time()
             window.save(update_fields=['start_time', 'end_time'])
 
     if active_session is not None:
-        s1 = active_session.end_datetime.astimezone(IST)
+        s1 = active_session.end_datetime
         if getattr(active_session, 'is_meal', False) and getattr(active_session, 'meal_category', None):
             active_meal_name = active_session.meal_category
         else:
             active_meal_name = deduce_meal_name(active_session.title)
 
-        if not window.is_open:
+        # Force window open for active meal session unless manually overridden
+        if not window.is_open or window.meal_type != active_meal_name:
             if window.opened_by_id is not None and not window.is_open:
                 return
             window.is_open = True

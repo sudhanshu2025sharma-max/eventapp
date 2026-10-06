@@ -81,15 +81,15 @@ class UserSerializer(serializers.ModelSerializer):
             'id', 'email', 'first_name', 'last_name', 'full_name',
             'role', 'phone', 'affiliation', 'bio', 'designation', 'gender',
             'research_interests', 'profile_photo', 'profile_photo_url',
-            'registration_id', 'must_change_password', 'profile_complete',
+            'registration_id', 'must_change_password', 'profile_complete', 'has_seen_guide',
             'show_phone', 'show_linkedin', 'linkedin_url', 'created_at',
             'warning_note', 'warning_acknowledged', 'warning_acknowledged_at',
-            'warning_response', 'suspended_reason', 'permissions', 'staff_profile'
+            'warning_response', 'suspended_reason', 'permissions', 'staff_profile', 'has_seen_guide'
         ]
         read_only_fields = [
             'id', 'email', 'role', 'registration_id', 'created_at',
             'warning_note', 'warning_acknowledged', 'warning_acknowledged_at',
-            'warning_response', 'suspended_reason', 'permissions', 'staff_profile'
+            'warning_response', 'suspended_reason', 'permissions', 'staff_profile', 'has_seen_guide'
         ]
 
     def get_full_name(self, obj):

@@ -13,11 +13,12 @@ class SpeakerListSerializer(serializers.ModelSerializer):
     full_name = serializers.CharField(read_only=True)
     initials  = serializers.CharField(read_only=True)
     talk_count = serializers.SerializerMethodField()
+    user_id = serializers.ReadOnlyField(source='user.id')
 
     class Meta:
         model  = Speaker
         fields = [
-            'id', 'full_name', 'initials', 'title', 'first_name', 'last_name',
+            'id', 'user_id', 'full_name', 'initials', 'title', 'first_name', 'last_name',
             'designation', 'institute', 'country',
             'photo_url', 'is_keynote', 'display_order', 'talk_count',
         ]
@@ -39,11 +40,12 @@ class SpeakerDetailSerializer(serializers.ModelSerializer):
     full_name  = serializers.CharField(read_only=True)
     initials   = serializers.CharField(read_only=True)
     talks      = SpeakerTalkSerializer(many=True, read_only=True)
+    user_id    = serializers.ReadOnlyField(source='user.id')
 
     class Meta:
         model  = Speaker
         fields = [
-            'id', 'full_name', 'initials', 'title', 'first_name', 'last_name',
+            'id', 'user_id', 'full_name', 'initials', 'title', 'first_name', 'last_name',
             'designation', 'institute', 'country', 'bio',
             'photo_url',
             'email', 'website_url', 'linkedin_url', 'google_scholar_url',

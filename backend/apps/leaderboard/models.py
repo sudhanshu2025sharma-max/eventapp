@@ -46,7 +46,6 @@ class UserPoints(models.Model):
     """
     Denormalised total for fast reads. One row per user.
     Updated via award_points() helper — no signals, no magic.
-    # PONYTAIL: O(n) rank query — fine for ≤500 checked-in participants.
     """
     user         = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='points_summary')
     total_points = models.PositiveIntegerField(default=0)
@@ -54,7 +53,7 @@ class UserPoints(models.Model):
 
     class Meta:
         db_table = 'user_points'
-        ordering = ['-total_points']
+        ordering = ['-total_points', 'updated_at']
 
     def __str__(self):
         return f"{self.user.email}: {self.total_points}pts"
@@ -63,7 +62,10 @@ class UserPoints(models.Model):
     def rank(self):
         """
         1-based rank among checked-in participants only.
-        Ties share the same rank: 1 + count(users with strictly greater score).
+        Ties are broken sequentially by:
+          1. More points
+          2. Earlier point update timestamp (updated_at)
+          3. Deterministic user_id sorting fallback
         """
         if self.user.role != 'participant':
             return 0
@@ -74,12 +76,17 @@ class UserPoints(models.Model):
         if not eligible:
             return 0
 
-        checked_in_user_ids = CheckIn.objects.filter(
+        checked_in_user_ids = list(CheckIn.objects.filter(
             checkin_type='conference'
-        ).values_list('user_id', flat=True)
+        ).values_list('user_id', flat=True))
 
-        return UserPoints.objects.filter(
+        better_count = UserPoints.objects.filter(
             user__role='participant',
             user_id__in=checked_in_user_ids,
-            total_points__gt=self.total_points,
-        ).count() + 1
+        ).filter(
+            models.Q(total_points__gt=self.total_points) |
+            models.Q(total_points=self.total_points, updated_at__lt=self.updated_at) |
+            models.Q(total_points=self.total_points, updated_at=self.updated_at, user_id__lt=self.user_id)
+        ).count()
+
+        return better_count + 1

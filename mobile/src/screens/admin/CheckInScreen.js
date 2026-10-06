@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState, useCallback } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity,
   StyleSheet, Platform, ActivityIndicator, Alert,
-  ScrollView, Modal, FlatList,
+  ScrollView, Modal, FlatList, Image, KeyboardAvoidingView
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { CameraView, useCameraPermissions } from 'expo-camera';
@@ -98,194 +98,71 @@ const qr = StyleSheet.create({
   permBtnTxt: { color: '#fff', fontWeight: FONT.w8 },
 });
 
-function SelectMealTypeModal({ visible, onClose, onSelect }) {
-  const [customName, setCustomName] = useState('');
-  const options = [
-    { label: 'Lunch', icon: '🥪' },
-    { label: 'Dinner', icon: '🍛' },
-    { label: 'High Tea', icon: '☕' },
-    { label: 'Breakfast', icon: '🥐' },
-  ];
+// Manage Kit Modal (For handling Skipped + Remarks)
+function ManageKitModal({ visible, onClose, onSave, participant }) {
+  const [note, setNote] = useState('');
+  
+  useEffect(() => {
+    if (visible) setNote(participant?.goodies_note || '');
+  }, [visible, participant]);
 
-  const handleCustom = () => {
-    if (!customName.trim()) return Alert.alert('Required', 'Enter custom meal name');
-    onSelect(customName.trim());
-    setCustomName('');
-  };
+  if (!visible) return null;
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
-      <View style={sel.overlay}>
-        <View style={sel.card}>
-          <Text style={sel.title}>Select Meal Service to Open</Text>
-          <Text style={sel.sub}>Participants will be able to generate passes for this meal.</Text>
-
-          {options.map((item) => (
-            <TouchableOpacity key={item.label} style={sel.optionBtn} onPress={() => onSelect(item.label)}>
-              <Text style={{ fontSize: 20 }}>{item.icon}</Text>
-              <Text style={sel.optionTxt}>{item.label}</Text>
+      <KeyboardAvoidingView style={mk.overlay} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <View style={mk.card}>
+          <Text style={mk.title}>Manage Conference Kit</Text>
+          <Text style={mk.sub}>{participant?.name || participant?.first_name}</Text>
+          
+          <Text style={mk.label}>Remark / Reason</Text>
+          <TextInput
+            style={mk.input}
+            placeholder="e.g. T-shirt size M out of stock, pending bag..."
+            placeholderTextColor="#94a3b8"
+            value={note}
+            onChangeText={setNote}
+          />
+          
+          <View style={mk.btnRow}>
+            <TouchableOpacity style={[mk.btn, mk.btnSkip]} onPress={() => onSave('skipped', note)}>
+              <Ionicons name="alert-circle" size={18} color="#92400e" />
+              <Text style={mk.btnSkipTxt}>Mark Skipped</Text>
             </TouchableOpacity>
-          ))}
-
-          <View style={sel.customRow}>
-            <TextInput
-              style={sel.customInput}
-              value={customName}
-              onChangeText={setCustomName}
-              placeholder="Or custom meal name..."
-              placeholderTextColor="#94a3b8"
-            />
-            <TouchableOpacity style={sel.customBtn} onPress={handleCustom}>
-              <Text style={sel.customBtnTxt}>Open</Text>
+            
+            <TouchableOpacity style={[mk.btn, mk.btnIssue]} onPress={() => onSave('received', note)}>
+              <Ionicons name="checkmark-circle" size={18} color="#fff" />
+              <Text style={mk.btnIssueTxt}>Issue Kit</Text>
             </TouchableOpacity>
           </View>
-
-          <TouchableOpacity style={sel.cancelBtn} onPress={onClose}>
-            <Text style={sel.cancelTxt}>Cancel</Text>
+          
+          <TouchableOpacity onPress={onClose} style={mk.cancelBtn}>
+            <Text style={mk.cancelTxt}>Cancel</Text>
           </TouchableOpacity>
         </View>
-      </View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }
-const sel = StyleSheet.create({
-  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center', padding: 24 },
-  card: { width: '100%', backgroundColor: '#fff', borderRadius: RADIUS.xl, padding: 24 },
+const mk = StyleSheet.create({
+  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', padding: 24 },
+  card: { backgroundColor: '#fff', borderRadius: RADIUS.xl, padding: 24 },
   title: { fontSize: FONT.lg, fontWeight: FONT.w9, color: COLORS.text },
-  sub: { fontSize: FONT.xs, color: COLORS.textTer, marginTop: 4, marginBottom: 16 },
-  optionBtn: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 12, paddingHorizontal: 16, borderRadius: RADIUS.lg, backgroundColor: COLORS.brandLight, marginBottom: 8 },
-  optionTxt: { fontSize: FONT.md, fontWeight: FONT.w8, color: COLORS.brand },
-  customRow: { flexDirection: 'row', gap: 8, marginTop: 8 },
-  customInput: { flex: 1, borderWidth: 1, borderColor: COLORS.border, borderRadius: RADIUS.lg, paddingHorizontal: 14, fontSize: FONT.sm, color: COLORS.text },
-  customBtn: { backgroundColor: COLORS.brand, paddingHorizontal: 16, paddingVertical: 12, borderRadius: RADIUS.lg, justifyContent: 'center' },
-  customBtnTxt: { color: '#fff', fontWeight: FONT.w8 },
-  cancelBtn: { marginTop: 16, alignItems: 'center', paddingVertical: 8 },
-  cancelTxt: { color: COLORS.textTer, fontWeight: FONT.w7 },
+  sub: { fontSize: FONT.sm, color: COLORS.textSec, marginBottom: SPACE.lg },
+  label: { fontSize: FONT.xs, fontWeight: FONT.w7, color: COLORS.textTer, marginBottom: 8 },
+  input: { borderWidth: 1, borderColor: COLORS.border, borderRadius: RADIUS.md, padding: SPACE.md, color: COLORS.text, backgroundColor: COLORS.surface, marginBottom: SPACE.lg },
+  btnRow: { flexDirection: 'row', gap: 12 },
+  btn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 14, borderRadius: RADIUS.lg },
+  btnSkip: { backgroundColor: '#fef3c7', borderWidth: 1, borderColor: '#f59e0b' },
+  btnSkipTxt: { color: '#92400e', fontWeight: FONT.w8, fontSize: FONT.sm },
+  btnIssue: { backgroundColor: COLORS.success },
+  btnIssueTxt: { color: '#fff', fontWeight: FONT.w8, fontSize: FONT.sm },
+  cancelBtn: { marginTop: SPACE.lg, alignItems: 'center' },
+  cancelTxt: { color: COLORS.textTer, fontWeight: FONT.w7, fontSize: FONT.sm },
 });
 
-function CreateMealPassModal({ visible, onClose, tokens, onDone }) {
-  const [guestName, setGuestName] = useState('');
-  const [guestEmail, setGuestEmail] = useState('');
-  const [guestPhone, setGuestPhone] = useState('');
-  const [guestReg, setGuestReg] = useState('');
-  const [mealType, setMealType] = useState('Lunch');
-  const [loading, setLoading] = useState(false);
-
-  const submit = async () => {
-    if (!guestName.trim()) {
-      Alert.alert('Required', 'Guest name is required');
-      return;
-    }
-    setLoading(true);
-    try {
-      const today = new Date().toISOString().split('T')[0];
-      const res = await fetch(`${API_URL}/checkins/meal-pass/create/`, {
-        method: 'POST',
-        headers: authHeaders(tokens),
-        body: JSON.stringify({
-          guest_name: guestName.trim(),
-          guest_email: guestEmail.trim(),
-          guest_phone: guestPhone.trim(),
-          guest_reg_no: guestReg.trim(),
-          meal_type: mealType,
-          date: today,
-        }),
-      });
-      const data = await res.json();
-      if (data.success) {
-        Alert.alert('✅ Issued', data.email_sent ? 'QR emailed successfully.' : 'Pass created.');
-        try { Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); } catch {}
-        setGuestName(''); setGuestEmail(''); setGuestPhone(''); setGuestReg('');
-        if (onDone) onDone();
-        onClose();
-      } else {
-        Alert.alert('Error', data.error || data.message || 'Failed');
-      }
-    } catch (e) {
-      Alert.alert('Network Error', e.message || 'Failed');
-    }
-    setLoading(false);
-  };
-
-  return (
-    <Modal visible={visible} animationType="slide" onRequestClose={onClose}>
-      <View style={{ flex: 1, backgroundColor: COLORS.bg, paddingTop: Platform.OS === 'ios' ? 54 : 44 }}>
-        <View style={m.header}>
-          <TouchableOpacity onPress={onClose} style={m.backBtn}>
-            <Ionicons name="arrow-back" size={20} color={COLORS.text} />
-          </TouchableOpacity>
-          <Text style={m.title}>Issue Guest Pass</Text>
-          <View style={{ width: 40 }} />
-        </View>
-
-        <ScrollView contentContainerStyle={{ padding: SPACE.xl, paddingBottom: 140 }}>
-          <Text style={m.label}>Meal Type *</Text>
-          <View style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap' }}>
-            {['Lunch', 'Dinner', 'High Tea', 'Breakfast'].map((mt) => (
-              <TouchableOpacity
-                key={mt}
-                onPress={() => setMealType(mt)}
-                style={[m.typeChip, mealType === mt && m.typeChipOn]}
-              >
-                <Text style={[m.typeTxt, mealType === mt && m.typeTxtOn]}>{mt}</Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-
-          <Text style={m.label}>Guest Name *</Text>
-          <TextInput
-            style={m.input}
-            value={guestName}
-            onChangeText={setGuestName}
-            placeholder="Guest Full Name"
-            placeholderTextColor="#94a3b8"
-          />
-
-          <Text style={m.label}>Email (QR will be sent)</Text>
-          <TextInput
-            style={m.input}
-            value={guestEmail}
-            onChangeText={setGuestEmail}
-            placeholder="guest@example.com"
-            placeholderTextColor="#94a3b8"
-            autoCapitalize="none"
-            keyboardType="email-address"
-          />
-
-          <Text style={m.label}>Phone</Text>
-          <TextInput
-            style={m.input}
-            value={guestPhone}
-            onChangeText={setGuestPhone}
-            placeholder="Phone Number"
-            placeholderTextColor="#94a3b8"
-            keyboardType="phone-pad"
-          />
-
-          <TouchableOpacity style={m.btn} onPress={submit} disabled={loading} activeOpacity={0.85}>
-            {loading ? <ActivityIndicator color="#fff" /> : <Text style={m.btnTxt}>Create + Send QR</Text>}
-          </TouchableOpacity>
-        </ScrollView>
-      </View>
-    </Modal>
-  );
-}
-const m = StyleSheet.create({
-  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: SPACE.xl, paddingBottom: SPACE.md },
-  backBtn: { width: 40, height: 40, borderRadius: RADIUS.md, backgroundColor: COLORS.surface, borderWidth: 1, borderColor: COLORS.border, alignItems: 'center', justifyContent: 'center' },
-  title: { fontSize: FONT.lg, fontWeight: FONT.w9, color: COLORS.text },
-  label: { fontSize: 11, fontWeight: FONT.w8, color: COLORS.textTer, letterSpacing: 1, marginBottom: 6, marginTop: SPACE.md },
-  input: { backgroundColor: COLORS.surface, borderWidth: 1, borderColor: COLORS.border, borderRadius: RADIUS.lg, paddingHorizontal: SPACE.lg, paddingVertical: SPACE.md, color: COLORS.text, fontSize: FONT.sm },
-  btn: { marginTop: SPACE.xl, backgroundColor: COLORS.brand, borderRadius: RADIUS.lg, paddingVertical: SPACE.md + 2, alignItems: 'center' },
-  btnTxt: { color: '#fff', fontWeight: FONT.w8, fontSize: FONT.md },
-  typeChip: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: RADIUS.full, borderWidth: 1, borderColor: COLORS.border, backgroundColor: COLORS.surface },
-  typeChipOn: { backgroundColor: COLORS.brand, borderColor: COLORS.brand },
-  typeTxt: { fontSize: FONT.xs, fontWeight: FONT.w7, color: COLORS.textSec },
-  typeTxtOn: { color: '#fff' },
-});
-
-function HistoryTab({ tokens }) {
-  const [subTab, setSubTab] = useState('meal');
+function HistoryTab({ tokens, onSelectParticipant }) {
+  const [subTab, setSubTab] = useState('checkin');
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(false);
 
@@ -305,7 +182,7 @@ function HistoryTab({ tokens }) {
   return (
     <View style={{ flex: 1 }}>
       <View style={tt.wrap}>
-        {[{ k: 'meal', l: 'Meal Passes' }, { k: 'checkin', l: 'Check-Ins' }].map(t => (
+        {[{ k: 'checkin', l: 'Check-Ins' }, { k: 'meal', l: 'Meal Passes' }].map(t => (
           <TouchableOpacity key={t.k} style={[tt.tab, subTab === t.k && tt.tabOn]} onPress={() => setSubTab(t.k)} activeOpacity={0.85}>
             <Text style={[tt.txt, subTab === t.k && tt.txtOn]}>{t.l}</Text>
           </TouchableOpacity>
@@ -319,23 +196,66 @@ function HistoryTab({ tokens }) {
           data={items}
           keyExtractor={(item) => String(item.id)}
           contentContainerStyle={{ paddingBottom: 120 }}
-          renderItem={({ item }) => (
-            <View style={h.row}>
-              <View style={h.icon}><Text style={{ fontSize: 18 }}>{subTab === 'meal' ? '🍽️' : '✅'}</Text></View>
-              <View style={{ flex: 1 }}>
-                <Text style={h.name}>{item.user?.name || item.guest_name || '—'}</Text>
-                <Text style={h.sub}>
-                  {subTab === 'meal' ? `${item.date || ''} · ${item.meal_type || 'meal'}` : (item.user?.registration_id || '')}
-                </Text>
-              </View>
-              <View style={[h.badge, { backgroundColor: item.used ? COLORS.successLight : COLORS.borderLight }]}>
-                <Text style={{ color: item.used ? COLORS.success : COLORS.textTer, fontWeight: FONT.w8, fontSize: FONT.xs }}>
-                  {item.used ? 'Used' : 'Active'}
-                </Text>
-              </View>
-            </View>
-          )}
-          ListEmptyComponent={<Text style={{ color: COLORS.textTer, textAlign: 'center', marginTop: SPACE.xxl }}>No records</Text>}
+          renderItem={({ item }) => {
+            const isKitReceived = item.goodies_status === 'received';
+            const isKitSkipped = item.goodies_status === 'skipped';
+            const participantName = item.display_name || item.user?.name || item.guest_name || 'Participant';
+            const mealType = item.meal_type || 'Meal';
+
+            return (
+              <TouchableOpacity 
+                style={h.row} 
+                activeOpacity={subTab === 'checkin' ? 0.75 : 1}
+                onPress={() => subTab === 'checkin' && onSelectParticipant?.(item)}
+              >
+                <View style={{ flex: 1 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <Text style={h.name}>{participantName}</Text>
+                    {subTab === 'checkin' ? (
+                      <View style={[h.badge, { backgroundColor: isKitReceived ? '#d1fae5' : isKitSkipped ? '#fef3c7' : COLORS.borderLight }]}>
+                        <Text style={{ color: isKitReceived ? '#059669' : isKitSkipped ? '#d97706' : COLORS.textTer, fontWeight: FONT.w8, fontSize: FONT.xs }}>
+                          {isKitReceived ? 'Kit Issued 🎁' : isKitSkipped ? 'Kit Skipped ⚠️' : 'Kit Pending'}
+                        </Text>
+                      </View>
+                    ) : (
+                      <View style={[h.badge, { backgroundColor: item.used ? '#d1fae5' : COLORS.borderLight }]}>
+                        <Text style={{ color: item.used ? '#059669' : COLORS.textTer, fontWeight: FONT.w8, fontSize: FONT.xs }}>
+                          {item.used ? `${mealType} Redeemed 🍽️` : `${mealType} Active`}
+                        </Text>
+                      </View>
+                    )}
+                  </View>
+
+                  <Text style={h.sub}>
+                    {subTab === 'meal' ? (
+                      `${mealType} Pass · ${item.user?.registration_id || item.user?.email || 'Guest Pass'}`
+                    ) : (
+                      `${item.user?.registration_id || item.user?.email || 'Registration ID N/A'}`
+                    )}
+                  </Text>
+
+                  {/* Scanned By Info for Meal Passes */}
+                  {subTab === 'meal' && item.used && (
+                    <Text style={[h.sub, { color: COLORS.brand, marginTop: 2, fontWeight: '600' }]}>
+                      Scanned by: {item.scanned_by || 'Admin'}
+                    </Text>
+                  )}
+
+                  {/* Show Remarks/Notes if present */}
+                  {Boolean(subTab === 'checkin' && item.goodies_note) && (
+                    <View style={h.noteBox}>
+                      <Ionicons name="chatbox-ellipses-outline" size={12} color="#92400e" />
+                      <Text style={h.noteText}>Note: {item.goodies_note}</Text>
+                    </View>
+                  )}
+                </View>
+                {subTab === 'checkin' && (
+                  <Ionicons name="create-outline" size={16} color={COLORS.brand} style={{ marginLeft: 8 }} />
+                )}
+              </TouchableOpacity>
+            );
+          }}
+          ListEmptyComponent={<Text style={{ color: COLORS.textTer, textAlign: 'center', marginTop: SPACE.xxl }}>No records found</Text>}
           refreshing={loading}
           onRefresh={load}
         />
@@ -344,11 +264,12 @@ function HistoryTab({ tokens }) {
   );
 }
 const h = StyleSheet.create({
-  row: { flexDirection: 'row', alignItems: 'center', gap: SPACE.md, padding: SPACE.md, backgroundColor: COLORS.surface, borderWidth: 1, borderColor: COLORS.border, borderRadius: RADIUS.lg, marginBottom: SPACE.xs },
-  icon: { width: 36, height: 36, borderRadius: 10, backgroundColor: COLORS.brandLight, alignItems: 'center', justifyContent: 'center' },
+  row: { flexDirection: 'row', alignItems: 'center', padding: SPACE.md, backgroundColor: COLORS.surface, borderWidth: 1, borderColor: COLORS.border, borderRadius: RADIUS.lg, marginBottom: SPACE.xs },
   name: { fontSize: FONT.sm, fontWeight: FONT.w8, color: COLORS.text },
   sub: { fontSize: FONT.xs, color: COLORS.textTer, marginTop: 2 },
   badge: { paddingHorizontal: SPACE.sm, paddingVertical: 4, borderRadius: RADIUS.full },
+  noteBox: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#fef3c7', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6, marginTop: 6, borderWidth: 0.5, borderColor: '#fcd34d' },
+  noteText: { fontSize: 11, fontWeight: '600', color: '#92400e', flex: 1 },
 });
 
 export default function CheckInScreen({ tokens, onBack }) {
@@ -357,9 +278,10 @@ export default function CheckInScreen({ tokens, onBack }) {
   const [loading, setLoading] = useState(false);
   const [camVisible, setCamVisible] = useState(false);
 
+  const [activeParticipant, setActiveParticipant] = useState(null);
+  const [manageKitVisible, setManageKitVisible] = useState(false);
+
   const [mealWin, setMealWin] = useState(null);
-  const [issueVisible, setIssueVisible] = useState(false);
-  const [selectMealVisible, setSelectMealVisible] = useState(false);
 
   const loadMealStatus = useCallback(async () => {
     try {
@@ -372,23 +294,64 @@ export default function CheckInScreen({ tokens, onBack }) {
   useEffect(() => {
     if (tab === 'meal') {
       loadMealStatus();
-      const t = setInterval(loadMealStatus, 10000);
+      const t = setInterval(loadMealStatus, 5000);
       return () => clearInterval(t);
     }
   }, [tab, loadMealStatus]);
 
   const doCheckin = async (rid) => {
-    const reg = (rid || regId).trim().toUpperCase();
+    const reg = (rid || regId).trim();
     if (!reg) return;
     setLoading(true);
+    setActiveParticipant(null);
     try {
       const res = await fetch(`${API_URL}/checkins/scan/`, { method: 'POST', headers: authHeaders(tokens), body: JSON.stringify({ registration_id: reg }) });
       const data = await res.json();
-      Alert.alert(data.success ? '✅ Success' : '❌ Failed', data.message || '');
+      if (data.success && data.user) {
+        try { Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); } catch {}
+        setActiveParticipant({
+          user: data.user,
+          goodies_status: data.goodies_status || 'pending',
+          scanned_at: data.scanned_at,
+        });
+      } else {
+        Alert.alert('❌ Not Found', data.error || data.message || 'Participant not found');
+      }
     } catch (e) {
       Alert.alert('Network Error', e.message || 'Failed');
     }
     setLoading(false);
+  };
+
+  const handleSaveKit = async (action, note) => {
+    setManageKitVisible(false);
+    if (!activeParticipant?.user?.id && !activeParticipant?.user?.registration_id) return;
+    
+    try {
+      const reg = activeParticipant.user.registration_id || activeParticipant.user.id;
+      const res = await fetch(`${API_URL}/checkins/confirm-goodies/`, {
+        method: 'POST',
+        headers: authHeaders(tokens),
+        body: JSON.stringify({ registration_id: reg, user_id: activeParticipant.user.id, action, note })
+      });
+      const data = await res.json();
+      if (data.success) {
+        try { Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); } catch {}
+        setActiveParticipant(p => ({
+          ...p,
+          goodies_status: action,
+          user: {
+            ...p.user,
+            goodies_note: note
+          }
+        }));
+        Alert.alert('✅ Saved', data.message);
+      } else {
+        Alert.alert('Error', data.error || 'Could not update kit status');
+      }
+    } catch (e) {
+      Alert.alert('Error', 'Failed to update kit status');
+    }
   };
 
   const doMealScan = async (raw) => {
@@ -399,58 +362,9 @@ export default function CheckInScreen({ tokens, onBack }) {
       const res = await fetch(`${API_URL}/checkins/meal/scan/`, { method: 'POST', headers: authHeaders(tokens), body: JSON.stringify({ qr_data: v }) });
       const data = await res.json();
       Alert.alert(data.success ? '✅ Verified' : '❌ Not Found', data.message || '');
+      if (data.success) loadMealStatus();
     } catch (e) {
       Alert.alert('Network Error', e.message || 'Failed');
-    }
-    setLoading(false);
-  };
-
-  const openMealWithSelectedType = async (selectedType) => {
-    setSelectMealVisible(false);
-    setLoading(true);
-    try {
-      const res = await fetch(`${API_URL}/checkins/meal/window/`, {
-        method: 'POST',
-        headers: authHeaders(tokens),
-        body: JSON.stringify({ action: 'open', meal_type: selectedType }),
-      });
-      const data = await res.json();
-      Alert.alert(data.success ? '✅ Service Opened' : '❌ Failed', `Opened dining service for ${selectedType}`);
-      await loadMealStatus();
-    } catch (e) {
-      Alert.alert('Network Error', e.message || 'Failed');
-    }
-    setLoading(false);
-  };
-
-  const closeMealWindow = async () => {
-    setLoading(true);
-    try {
-      const res = await fetch(`${API_URL}/checkins/meal/window/`, {
-        method: 'POST',
-        headers: authHeaders(tokens),
-        body: JSON.stringify({ action: 'close' }),
-      });
-      const data = await res.json();
-      Alert.alert(data.success ? '✅ Service Closed' : '❌ Failed', 'Dining service closed');
-      await loadMealStatus();
-    } catch (e) {
-      Alert.alert('Network Error', e.message || 'Failed');
-    }
-    setLoading(false);
-  };
-
-  const sendMealPush = async () => {
-    setLoading(true);
-    try {
-      const res = await fetch(`${API_URL}/checkins/meal/push/`, {
-        method: 'POST',
-        headers: authHeaders(tokens),
-      });
-      const data = await res.json();
-      Alert.alert(data.success ? '📢 Sent' : '❌ Failed', data.message || 'Push sent!');
-    } catch (e) {
-      Alert.alert('Error', 'Failed to broadcast push notification');
     }
     setLoading(false);
   };
@@ -461,21 +375,6 @@ export default function CheckInScreen({ tokens, onBack }) {
     if (tab === 'meal') return doMealScan(raw);
   };
 
-  if (tab === 'history') {
-    return (
-      <View style={{ flex: 1, backgroundColor: COLORS.bg }}>
-        <View style={s.header}>
-          <TouchableOpacity onPress={onBack} style={s.backBtn}><Ionicons name="arrow-back" size={22} color={COLORS.text} /></TouchableOpacity>
-          <View style={{ flex: 1 }}><Text style={s.title}>Scanner</Text><Text style={s.sub}>Check-in & Meal</Text></View>
-        </View>
-        <View style={{ padding: SPACE.xl, flex: 1 }}>
-          <TopTabs tab={tab} setTab={setTab} />
-          <HistoryTab tokens={tokens} />
-        </View>
-      </View>
-    );
-  }
-
   return (
     <View style={{ flex: 1, backgroundColor: COLORS.bg }}>
       <View style={s.header}>
@@ -483,109 +382,156 @@ export default function CheckInScreen({ tokens, onBack }) {
         <View style={{ flex: 1 }}><Text style={s.title}>Scanner</Text><Text style={s.sub}>Check-in & Meal</Text></View>
       </View>
 
-      <CreateMealPassModal
-        visible={issueVisible}
-        onClose={() => setIssueVisible(false)}
-        tokens={tokens}
-        onDone={loadMealStatus}
+      <ManageKitModal 
+        visible={manageKitVisible} 
+        onClose={() => setManageKitVisible(false)} 
+        onSave={handleSaveKit}
+        participant={activeParticipant?.user}
       />
 
-      <SelectMealTypeModal
-        visible={selectMealVisible}
-        onClose={() => setSelectMealVisible(false)}
-        onSelect={openMealWithSelectedType}
-      />
-
-      <ScrollView contentContainerStyle={{ padding: SPACE.xl, paddingBottom: 140 }} keyboardShouldPersistTaps="handled">
+      <View style={{ paddingHorizontal: SPACE.xl, paddingTop: SPACE.md, flex: 1 }}>
         <TopTabs tab={tab} setTab={setTab} />
 
-        {tab === 'meal' && (
-          <View style={s.mealCard}>
-            <View style={s.mealTopRow}>
-              <View style={{ flex: 1 }}>
-                <Text style={s.mealTitle}>Meal Pass Window</Text>
-                <Text style={{ fontSize: FONT.xs, color: COLORS.brand, fontWeight: '700', marginTop: 2 }}>
-                  Active Service: {mealWin?.meal_type || 'Lunch'}
-                </Text>
+        {tab === 'history' ? (
+          <HistoryTab 
+            tokens={tokens} 
+            onSelectParticipant={(item) => {
+              setActiveParticipant({
+                user: {
+                  ...item.user,
+                  goodies_note: item.goodies_note
+                },
+                goodies_status: item.goodies_status
+              });
+              setManageKitVisible(true);
+            }}
+          />
+        ) : (
+          <ScrollView contentContainerStyle={{ paddingBottom: 140 }} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+            {tab === 'meal' && (
+              <View style={s.mealCard}>
+                <View style={s.mealTopRow}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={s.mealTitle}>{mealWin?.meal_type || 'No Active Meal'}</Text>
+                    <Text style={{ fontSize: FONT.xs, color: COLORS.textTer, marginTop: 4 }}>
+                      {mealWin?.start_time && mealWin?.end_time ? `${mealWin.start_time} - ${mealWin.end_time}` : 'Waiting for schedule sync...'}
+                    </Text>
+                  </View>
+                  <View style={[s.pill, { backgroundColor: mealWin?.is_open ? COLORS.successLight : COLORS.borderLight }]}>
+                    <Text style={{ fontWeight: FONT.w8, color: mealWin?.is_open ? COLORS.success : COLORS.textTer }}>
+                      {mealWin?.is_open ? 'OPEN' : 'CLOSED'}
+                    </Text>
+                  </View>
+                </View>
+
+                {/* LIVE SCANNED COUNTER */}
+                <View style={s.counterBox}>
+                  <Ionicons name="barcode-outline" size={24} color={COLORS.brand} />
+                  <View style={{ flex: 1, marginLeft: 12 }}>
+                    <Text style={s.counterLabel}>PASSES SCANNED</Text>
+                    <Text style={s.counterValue}>{mealWin?.scanned_count || 0}</Text>
+                  </View>
+                </View>
               </View>
-              <View style={[s.pill, { backgroundColor: mealWin?.is_open ? COLORS.successLight : COLORS.borderLight }]}>
-                <Text style={{ fontWeight: FONT.w8, color: mealWin?.is_open ? COLORS.success : COLORS.textTer }}>
-                  {mealWin?.is_open ? 'OPEN' : 'CLOSED'}
-                </Text>
-              </View>
-            </View>
-
-            <Text style={s.mealSub}>
-              {mealWin?.start_time && mealWin?.end_time ? `Scheduled: ${mealWin.start_time}–${mealWin.end_time}` : 'Auto-syncs with conference schedule'}
-            </Text>
-
-            <View style={{ flexDirection: 'row', gap: SPACE.sm, marginTop: SPACE.md, flexWrap: 'wrap' }}>
-              <TouchableOpacity style={[s.smallBtn, { backgroundColor: COLORS.brand }]} onPress={() => setSelectMealVisible(true)} activeOpacity={0.85}>
-                <Text style={s.smallBtnTxt}>Open Service...</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={[s.smallBtn, { backgroundColor: COLORS.textSec }]} onPress={closeMealWindow} activeOpacity={0.85}>
-                <Text style={s.smallBtnTxt}>Close Service</Text>
-              </TouchableOpacity>
-              {mealWin?.is_open && (
-                <TouchableOpacity style={[s.smallBtn, { backgroundColor: COLORS.accent, flex: 2 }]} onPress={sendMealPush} activeOpacity={0.85}>
-                  <Text style={s.smallBtnTxt}>📢 Send Push Notification</Text>
-                </TouchableOpacity>
-              )}
-            </View>
-
-            <TouchableOpacity
-              style={[s.bigBtn, { marginTop: SPACE.md, backgroundColor: COLORS.brandLight, borderWidth: 1, borderColor: COLORS.brand }]}
-              onPress={() => setIssueVisible(true)}
-              activeOpacity={0.85}
-            >
-              <Text style={[s.bigBtnTxt, { color: COLORS.brand }]}>Issue Guest Meal Pass</Text>
-            </TouchableOpacity>
-          </View>
-        )}
-
-        <Text style={s.sectionLabel}>{tab === 'checkin' ? 'REGISTRATION ID' : 'QR PAYLOAD / UUID / REG ID'}</Text>
-
-        <View style={s.inputCard}>
-          <View style={s.inputRow}>
-            <Ionicons name="id-card-outline" size={18} color={COLORS.textTer} />
-            <TextInput
-              style={s.mainInput}
-              value={regId}
-              onChangeText={setRegId}
-              placeholder={tab === 'checkin' ? 'ETD-2026-R-001' : 'Paste QR text / UUID'}
-              placeholderTextColor={COLORS.textTer}
-              autoCapitalize="characters"
-              autoCorrect={false}
-            />
-            {!!regId && (
-              <TouchableOpacity onPress={() => setRegId('')}>
-                <Ionicons name="close-circle" size={18} color={COLORS.textTer} />
-              </TouchableOpacity>
             )}
-          </View>
 
-          <View style={{ flexDirection: 'row', gap: SPACE.sm }}>
-            <TouchableOpacity style={s.camBtn} onPress={() => setCamVisible(true)} activeOpacity={0.85}>
-              <Ionicons name="qr-code-outline" size={18} color={COLORS.brand} />
-              <Text style={s.camBtnTxt}>Scan</Text>
-            </TouchableOpacity>
+            <Text style={s.sectionLabel}>{tab === 'checkin' ? 'REGISTRATION ID / EMAIL' : 'QR PAYLOAD / UUID / REG ID'}</Text>
 
-            <TouchableOpacity
-              style={[s.scanBtn, loading && { opacity: 0.7 }]}
-              onPress={() => (tab === 'checkin' ? doCheckin() : doMealScan())}
-              activeOpacity={0.85}
-              disabled={loading}
-            >
-              {loading ? <ActivityIndicator color="#fff" /> : <Text style={s.scanBtnTxt}>{tab === 'checkin' ? 'Check In' : 'Verify'}</Text>}
-            </TouchableOpacity>
-          </View>
-        </View>
-      </ScrollView>
+            <View style={s.inputCard}>
+              <View style={s.inputRow}>
+                <Ionicons name="id-card-outline" size={18} color={COLORS.textTer} />
+                <TextInput
+                  style={s.mainInput}
+                  value={regId}
+                  onChangeText={setRegId}
+                  placeholder={tab === 'checkin' ? 'ETD-2026-R-001 or email' : 'Paste QR text'}
+                  placeholderTextColor={COLORS.textTer}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                />
+                {!!regId && (
+                  <TouchableOpacity onPress={() => { setRegId(''); setActiveParticipant(null); }}>
+                    <Ionicons name="close-circle" size={18} color={COLORS.textTer} />
+                  </TouchableOpacity>
+                )}
+              </View>
+
+              <View style={{ flexDirection: 'row', gap: SPACE.sm }}>
+                <TouchableOpacity style={s.camBtn} onPress={() => setCamVisible(true)} activeOpacity={0.85}>
+                  <Ionicons name="qr-code-outline" size={18} color={COLORS.brand} />
+                  <Text style={s.camBtnTxt}>Scan QR</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[s.scanBtn, loading && { opacity: 0.7 }]}
+                  onPress={() => (tab === 'checkin' ? doCheckin() : doMealScan())}
+                  activeOpacity={0.85}
+                  disabled={loading}
+                >
+                  {loading ? <ActivityIndicator color="#fff" /> : <Text style={s.scanBtnTxt}>{tab === 'checkin' ? 'Check In' : 'Verify Meal'}</Text>}
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            {/* PARTICIPANT CHECK-IN & GOODIES CARD */}
+            {tab === 'checkin' && activeParticipant && (
+              <View style={pk.card}>
+                <View style={pk.headerRow}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={pk.name}>{activeParticipant.user.name}</Text>
+                    <Text style={pk.sub}>Reg ID: <Text style={{ fontWeight: '800', color: COLORS.brand }}>{activeParticipant.user.registration_id || 'N/A'}</Text></Text>
+                  </View>
+                  <View style={[pk.statusPill, { backgroundColor: '#d1fae5' }]}>
+                    <Ionicons name="checkmark-circle" size={14} color="#059669" />
+                    <Text style={pk.statusText}>CHECKED IN</Text>
+                  </View>
+                </View>
+
+                <View style={pk.divider} />
+
+                <View style={pk.goodiesRow}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={pk.goodiesLabel}>CONFERENCE KIT STATUS</Text>
+                    <Text style={[pk.goodiesValue, activeParticipant.goodies_status === 'skipped' && { color: '#d97706' }]}>
+                      {activeParticipant.goodies_status === 'received' ? '✅ Kit Issued & Verified' : 
+                       activeParticipant.goodies_status === 'skipped' ? '⚠️ Kit Skipped / Pending' : '🟡 Not Issued'}
+                    </Text>
+                  </View>
+
+                  <TouchableOpacity
+                    style={pk.manageBtn}
+                    onPress={() => setManageKitVisible(true)}
+                    activeOpacity={0.85}
+                  >
+                    <Ionicons name="cog-outline" size={16} color={COLORS.brand} />
+                    <Text style={pk.manageBtnText}>Manage</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            )}
+          </ScrollView>
+        )}
+      </View>
 
       <QRScannerModal visible={camVisible} onScan={onScan} onClose={() => setCamVisible(false)} />
     </View>
   );
 }
+
+const pk = StyleSheet.create({
+  card: { backgroundColor: '#fff', borderRadius: RADIUS.xl, padding: SPACE.lg, borderWidth: 1.5, borderColor: '#3b82f6', marginTop: SPACE.xs },
+  headerRow: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between' },
+  name: { fontSize: FONT.md + 1, fontWeight: FONT.w9, color: COLORS.text },
+  sub: { fontSize: FONT.xs, color: COLORS.textSec, marginTop: 2 },
+  statusPill: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 10, paddingVertical: 4, borderRadius: RADIUS.full },
+  statusText: { fontSize: 10, fontWeight: FONT.w9, color: '#059669' },
+  divider: { height: 1, backgroundColor: COLORS.borderLight, marginVertical: SPACE.md },
+  goodiesRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  goodiesLabel: { fontSize: 10, fontWeight: FONT.w8, color: COLORS.textTer, letterSpacing: 1 },
+  goodiesValue: { fontSize: FONT.xs, fontWeight: FONT.w8, color: COLORS.text, marginTop: 2 },
+  manageBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: COLORS.brandLight, borderWidth: 1, borderColor: COLORS.brand, paddingHorizontal: 14, paddingVertical: 8, borderRadius: RADIUS.lg },
+  manageBtnText: { color: COLORS.brand, fontSize: FONT.xs, fontWeight: FONT.w9 },
+});
 
 const s = StyleSheet.create({
   header: { flexDirection: 'row', alignItems: 'center', paddingTop: Platform.OS === 'ios' ? 54 : 44, paddingBottom: SPACE.md, paddingHorizontal: SPACE.xl, backgroundColor: COLORS.bg, gap: SPACE.md },
@@ -600,13 +546,12 @@ const s = StyleSheet.create({
   camBtnTxt: { fontSize: FONT.sm, fontWeight: FONT.w8, color: COLORS.brand },
   scanBtn: { flex: 1, backgroundColor: COLORS.brand, borderRadius: RADIUS.lg, paddingVertical: SPACE.md, alignItems: 'center', justifyContent: 'center' },
   scanBtnTxt: { color: '#fff', fontSize: FONT.sm, fontWeight: FONT.w9 },
-  mealCard: { backgroundColor: COLORS.surface, borderRadius: RADIUS.xl, padding: SPACE.lg, borderWidth: 1, borderColor: COLORS.border, marginBottom: SPACE.lg },
-  mealTopRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  mealTitle: { fontSize: FONT.md, fontWeight: FONT.w9, color: COLORS.text },
-  mealSub: { marginTop: SPACE.xs, color: COLORS.textTer, fontSize: FONT.xs, lineHeight: 18 },
+  
+  mealCard: { backgroundColor: COLORS.surface, borderRadius: RADIUS.xl, padding: SPACE.lg, borderWidth: 1, borderColor: COLORS.border, marginBottom: SPACE.lg},
+  mealTopRow: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between' },
+  mealTitle: { fontSize: FONT.xl, fontWeight: FONT.w9, color: COLORS.text },
   pill: { paddingHorizontal: SPACE.md, paddingVertical: 6, borderRadius: RADIUS.full },
-  smallBtn: { flex: 1, paddingVertical: SPACE.md, paddingHorizontal: SPACE.sm, borderRadius: RADIUS.lg, alignItems: 'center', justifyContent: 'center', minWidth: 100 },
-  smallBtnTxt: { color: '#fff', fontWeight: FONT.w9, fontSize: FONT.xs },
-  bigBtn: { borderRadius: RADIUS.lg, paddingVertical: SPACE.md + 2, alignItems: 'center', justifyContent: 'center' },
-  bigBtnTxt: { fontWeight: FONT.w9 },
+  counterBox: { flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.brandLight, padding: SPACE.lg, borderRadius: RADIUS.lg, marginTop: SPACE.lg, borderWidth: 1, borderColor: 'rgba(3,51,182,0.1)' },
+  counterLabel: { fontSize: 10, fontWeight: FONT.w8, color: COLORS.brand, letterSpacing: 1 },
+  counterValue: { fontSize: 32, fontWeight: FONT.w9, color: COLORS.brand, marginTop: -4 },
 });

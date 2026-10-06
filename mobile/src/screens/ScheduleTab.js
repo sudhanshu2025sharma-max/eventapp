@@ -46,15 +46,15 @@ function Skeleton({ width, height = 14, radius = 6, style }) {
 
 function ScheduleSkeleton() {
   return (
-    <View style={{ padding: 20, gap: 20 }}>
+    <View style={{ padding: 16, gap: 14 }}>
       {[1, 2, 3, 4].map(i => (
         <View key={i} style={{
-          backgroundColor: '#fff', borderRadius: 20, padding: 22,
-          borderWidth: 1, borderColor: COLORS.border, gap: 14,
+          backgroundColor: '#fff', borderRadius: 18, padding: 18,
+          borderWidth: 1, borderColor: COLORS.border, gap: 10,
         }}>
-          <Skeleton width={90} height={22} radius={11} />
-          <Skeleton width="88%" height={20} />
-          <Skeleton width="60%" height={14} radius={7} />
+          <Skeleton width={90} height={18} radius={9} />
+          <Skeleton width="88%" height={18} />
+          <Skeleton width="60%" height={12} radius={6} />
         </View>
       ))}
     </View>
@@ -63,10 +63,10 @@ function ScheduleSkeleton() {
 
 /* ── constants ── */
 const TABS = [
-  { key: 1, label: 'Day 1', date: 'Oct 23', exactDate: '2026-10-23' },
-  { key: 2, label: 'Day 2', date: 'Oct 24', exactDate: '2026-10-24' },
-  { key: 3, label: 'Day 3', date: 'Oct 25', exactDate: '2026-10-25' },
-  { key: 'bookmarks', label: 'Saved', date: 'My Schedule', icon: 'bookmark' },
+  { key: 1, label: 'DAY 1', date: 'Oct 23', exactDate: '2026-10-23' },
+  { key: 2, label: 'DAY 2', date: 'Oct 24', exactDate: '2026-10-24' },
+  { key: 3, label: 'DAY 3', date: 'Oct 25', exactDate: '2026-10-25' },
+  { key: 'bookmarks', label: 'SAVED', date: 'My Schedule', icon: 'bookmark' },
 ];
 
 const TYPE_META = {
@@ -146,7 +146,7 @@ function SubRow({ sub }) {
   );
 }
 
-/* ── Paper Row (with bookmark) ── */
+/* ── Paper Row ── */
 function PaperRow({ paper, onOpenPaper, onBookmarkClick }) {
   const [showAbstract, setShowAbstract] = useState(false);
   const timeStr = paper.start_datetime
@@ -172,7 +172,7 @@ function PaperRow({ paper, onOpenPaper, onBookmarkClick }) {
 
       <View style={{ flex: 1 }}>
         <View style={t.paperTop}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1, flexWrap: 'wrap' }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1, flexWrap: 'wrap' }}>
             {!!timeStr && (
               <Text style={[t.paperTime, isLive && { color: COLORS.error }]}>{timeStr}</Text>
             )}
@@ -188,7 +188,7 @@ function PaperRow({ paper, onOpenPaper, onBookmarkClick }) {
           >
             <Ionicons
               name={paper.is_bookmarked ? 'heart' : 'heart-outline'}
-              size={22}
+              size={20}
               color={paper.is_bookmarked ? COLORS.error : COLORS.textTer}
             />
           </TouchableOpacity>
@@ -198,7 +198,7 @@ function PaperRow({ paper, onOpenPaper, onBookmarkClick }) {
 
         {!!firstAuthor && (
           <View style={t.paperAuthorRow}>
-            <Ionicons name="person-circle-outline" size={15} color={COLORS.textSec} />
+            <Ionicons name="person-circle-outline" size={14} color={COLORS.textSec} />
             <Text style={t.paperAuthor} numberOfLines={1}>
               {firstAuthor}{paper.authors && paper.authors.includes(',') ? ' et al.' : ''}
             </Text>
@@ -206,7 +206,7 @@ function PaperRow({ paper, onOpenPaper, onBookmarkClick }) {
         )}
 
         {!!paper.abstract && (
-          <View style={{ marginTop: 12 }}>
+          <View style={{ marginTop: 8 }}>
             <Text style={t.paperAbstract} numberOfLines={showAbstract ? undefined : 3}>
               {showAbstract ? paper.abstract : abstractPreview + (hasMoreAbstract ? '...' : '')}
             </Text>
@@ -235,7 +235,7 @@ function PaperRow({ paper, onOpenPaper, onBookmarkClick }) {
 }
 
 /* ── Session Card ── */
-function SessionCard({ session, onBookmark, onFeedback, onOpenPaper, onLayoutLive }) {
+function SessionCard({ session, onBookmark, onFeedback, onOpenPaper }) {
   const [expanded, setExpanded] = useState(false);
   const chevron = useRef(new Animated.Value(0)).current;
   const pulseAnim = useRef(new Animated.Value(1)).current;
@@ -273,13 +273,9 @@ function SessionCard({ session, onBookmark, onFeedback, onOpenPaper, onLayoutLiv
   // Featured card
   if (session.is_featured) {
     return (
-      <Animated.View style={{ marginBottom: 20, transform: [{ scale: isLive ? pulseAnim : 1 }] }}>
+      <Animated.View style={{ marginBottom: 16, transform: [{ scale: isLive ? pulseAnim : 1 }] }}>
         {isLive && <NowLine />}
-        <TouchableOpacity
-          activeOpacity={0.9}
-          onPress={toggleExpand}
-          onLayout={(e) => { if (isLive && onLayoutLive) onLayoutLive(e.nativeEvent.layout.y); }}
-        >
+        <TouchableOpacity activeOpacity={0.9} onPress={toggleExpand}>
           {isLive ? (
             <LinearGradient colors={['#f43f5e', '#ec4899', '#8b5cf6']} start={{x:0,y:0}} end={{x:1,y:1}} style={t.liveWrapper}>
               <FeaturedInner session={session} isLive isPast={false} onBookmark={onBookmark} onFeedback={onFeedback} canExpand={canExpand} rotate={rotate} />
@@ -308,34 +304,29 @@ function SessionCard({ session, onBookmark, onFeedback, onOpenPaper, onLayoutLiv
 
   // Regular card
   const CardInner = (
-    <View
-      style={[t.card, isPast && t.cardPast, isLive && t.cardLive]}
-      onLayout={(e) => { if (isLive && onLayoutLive) onLayoutLive(e.nativeEvent.layout.y); }}
-    >
-      {/* Live progress bar */}
+    <View style={[t.card, isPast && t.cardPast, isLive && t.cardLive]}>
       {isLive && (
         <View style={t.progressWrap}>
           <View style={[t.progressBar, { width: `${getProgress(session.start_datetime, session.end_datetime)}%` }]} />
         </View>
       )}
 
-      {/* Row 1: Type pill + Status + Bookmark */}
       <View style={t.cardHeader}>
         <View style={[t.typePill, { backgroundColor: meta.bg }]}>
-          <Ionicons name={meta.icon} size={13} color={meta.color} />
-          <Text style={[t.typeText, { color: meta.color }]}>{session.session_type.toUpperCase()}</Text>
+          <Ionicons name={meta.icon} size={12} color={meta.color} />
+          <Text style={[t.typeText, { color: meta.color }]}>{(session.session_type || 'session').toUpperCase()}</Text>
         </View>
 
         <View style={t.headerRight}>
           {isLive && (
             <View style={t.liveBadge}>
-              <PulsingDot color="#fff" size={5} />
+              <PulsingDot color="#fff" size={4} />
               <Text style={t.liveBadgeText}>LIVE</Text>
             </View>
           )}
           {isPast && (
             <View style={t.pastBadge}>
-              <Ionicons name="checkmark" size={11} color={COLORS.textSec} />
+              <Ionicons name="checkmark" size={10} color={COLORS.textSec} />
               <Text style={t.pastBadgeText}>DONE</Text>
             </View>
           )}
@@ -345,33 +336,30 @@ function SessionCard({ session, onBookmark, onFeedback, onOpenPaper, onLayoutLiv
           >
             <Ionicons
               name={session.is_bookmarked ? 'heart' : 'heart-outline'}
-              size={23}
+              size={21}
               color={session.is_bookmarked ? COLORS.error : COLORS.textTer}
             />
           </TouchableOpacity>
         </View>
       </View>
 
-      {/* Row 2: Title */}
       <Text style={[t.sessionTitle, isPast && { color: COLORS.textSec }]}>{session.title}</Text>
 
-      {/* Row 3: Meta info */}
       <View style={t.metaRow}>
         <View style={t.metaItem}>
-          <Ionicons name="time-outline" size={15} color={isLive ? COLORS.error : COLORS.textSec} />
+          <Ionicons name="time-outline" size={14} color={isLive ? COLORS.error : COLORS.textSec} />
           <Text style={[t.metaText, isLive && { color: COLORS.error, fontWeight: FONT.w8 }]}>
             {fmtTime(session.start_datetime)} – {fmtTime(session.end_datetime)}
           </Text>
         </View>
         {!!session.room && (
           <View style={t.metaItem}>
-            <Ionicons name="location-outline" size={15} color={COLORS.textSec} />
+            <Ionicons name="location-outline" size={14} color={COLORS.textSec} />
             <Text style={t.metaText}>{session.room}</Text>
           </View>
         )}
       </View>
 
-      {/* Parallel tag - separate row for breathing space */}
       {session.is_parallel && !isLive && !isPast && (
         <View style={t.parallelBadgeWrap}>
           <View style={t.parallelBadge}>
@@ -380,28 +368,26 @@ function SessionCard({ session, onBookmark, onFeedback, onOpenPaper, onLayoutLiv
         </View>
       )}
 
-      {/* Feedback button */}
       {isPast && session.feedback_open && session.feedback_enabled && (
         <TouchableOpacity style={t.feedbackBtn} onPress={() => onFeedback(session)} activeOpacity={0.8}>
-          <Ionicons name="chatbox-ellipses-outline" size={14} color={COLORS.brand} />
+          <Ionicons name="chatbox-ellipses-outline" size={13} color={COLORS.brand} />
           <Text style={t.feedbackBtnText}>Give Feedback</Text>
         </TouchableOpacity>
       )}
 
-      {/* Expand trigger */}
       {canExpand && (
         <TouchableOpacity
           style={[t.expandTrigger, expanded && { backgroundColor: meta.color, borderColor: meta.color }]}
           onPress={toggleExpand}
           activeOpacity={0.7}
         >
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-            <Ionicons name={hasPapers ? 'documents-outline' : 'git-merge-outline'} size={15} color={expanded ? '#fff' : meta.color} />
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+            <Ionicons name={hasPapers ? 'documents-outline' : 'git-merge-outline'} size={14} color={expanded ? '#fff' : meta.color} />
             <Text style={[t.expandText, { color: expanded ? '#fff' : meta.color }]}>
               {hasPapers ? `${session.papers.length} Presentations` : `${session.sub_sessions.length} Sub-sessions`}
             </Text>
           </View>
-          <Ionicons name={expanded ? 'chevron-up' : 'chevron-down'} size={16} color={expanded ? '#fff' : meta.color} />
+          <Ionicons name={expanded ? 'chevron-up' : 'chevron-down'} size={15} color={expanded ? '#fff' : meta.color} />
         </TouchableOpacity>
       )}
 
@@ -422,7 +408,7 @@ function SessionCard({ session, onBookmark, onFeedback, onOpenPaper, onLayoutLiv
   );
 
   return (
-    <Animated.View style={{ marginBottom: 20, transform: [{ scale: isLive ? pulseAnim : 1 }] }}>
+    <Animated.View style={{ marginBottom: 16, transform: [{ scale: isLive ? pulseAnim : 1 }] }}>
       {isLive && <NowLine />}
       <TouchableOpacity activeOpacity={0.9} onPress={toggleExpand}>
         {isLive ? (
@@ -445,17 +431,16 @@ function FeaturedInner({ session, isLive, isPast, onBookmark, onFeedback, canExp
     >
       <View style={t.featBlob} />
 
-      {/* Top row: type + status + bookmark */}
       <View style={t.featTopRow}>
         <View style={t.featTypeRow}>
-          <Ionicons name="star" size={15} color={COLORS.accent} />
-          <Text style={t.featType}>{session.session_type.toUpperCase()}</Text>
+          <Ionicons name="star" size={14} color={COLORS.accent} />
+          <Text style={t.featType}>{(session.session_type || 'session').toUpperCase()}</Text>
         </View>
 
         <View style={t.headerRight}>
           {isLive && (
             <View style={t.liveBadge}>
-              <PulsingDot color="#fff" size={6} />
+              <PulsingDot color="#fff" size={5} />
               <Text style={t.liveBadgeText}>LIVE</Text>
             </View>
           )}
@@ -470,7 +455,7 @@ function FeaturedInner({ session, isLive, isPast, onBookmark, onFeedback, canExp
           >
             <Ionicons
               name={session.is_bookmarked ? 'heart' : 'heart-outline'}
-              size={24}
+              size={22}
               color={session.is_bookmarked ? COLORS.error : 'rgba(255,255,255,0.8)'}
             />
           </TouchableOpacity>
@@ -481,12 +466,12 @@ function FeaturedInner({ session, isLive, isPast, onBookmark, onFeedback, canExp
 
       <View style={t.featMetaRow}>
         <View style={t.metaItem}>
-          <Ionicons name="time-outline" size={15} color="#fff" />
+          <Ionicons name="time-outline" size={14} color="#fff" />
           <Text style={t.featTime}>{fmtTime(session.start_datetime)} – {fmtTime(session.end_datetime)}</Text>
         </View>
         {!!session.room && (
           <View style={t.metaItem}>
-            <Ionicons name="location-outline" size={15} color="#fff" />
+            <Ionicons name="location-outline" size={14} color="#fff" />
             <Text style={t.featTime}>{session.room}</Text>
           </View>
         )}
@@ -502,7 +487,7 @@ function FeaturedInner({ session, isLive, isPast, onBookmark, onFeedback, canExp
 
       {isPast && session.feedback_open && session.feedback_enabled && (
         <TouchableOpacity style={t.feedbackBtnFeat} onPress={() => onFeedback(session)} activeOpacity={0.8}>
-          <Ionicons name="chatbox-ellipses-outline" size={14} color="#fff" />
+          <Ionicons name="chatbox-ellipses-outline" size={13} color="#fff" />
           <Text style={t.feedbackBtnFeatText}>Give Feedback</Text>
         </TouchableOpacity>
       )}
@@ -511,7 +496,7 @@ function FeaturedInner({ session, isLive, isPast, onBookmark, onFeedback, canExp
         <View style={t.featExpandHint}>
           <Text style={t.featExpandText}>Tap to expand</Text>
           <Animated.View style={{ transform: [{ rotate }] }}>
-            <Ionicons name="chevron-down" size={18} color="rgba(255,255,255,0.7)" />
+            <Ionicons name="chevron-down" size={16} color="rgba(255,255,255,0.7)" />
           </Animated.View>
         </View>
       )}
@@ -590,26 +575,26 @@ function FeedbackModal({ visible, session, tokens, onClose }) {
               {session && <Text style={f.headerSub} numberOfLines={1}>{session.title}</Text>}
             </View>
             <TouchableOpacity onPress={() => onClose(false)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-              <Ionicons name="close" size={24} color={COLORS.textTer} />
+              <Ionicons name="close" size={22} color={COLORS.textTer} />
             </TouchableOpacity>
           </View>
           <ScrollView
             ref={scrollRef}
             style={{ flex: 1 }}
-            contentContainerStyle={{ padding: 24, paddingBottom: kbHeight > 0 ? kbHeight + 20 : 30 }}
+            contentContainerStyle={{ padding: 20, paddingBottom: kbHeight > 0 ? kbHeight + 20 : 30 }}
             showsVerticalScrollIndicator={false}
             keyboardShouldPersistTaps="handled"
           >
-            {loading && <ActivityIndicator color={COLORS.brand} style={{ marginTop: 40 }} />}
+            {loading && <ActivityIndicator color={COLORS.brand} style={{ marginTop: 30 }} />}
             {!!error && (
               <View style={f.errBox}>
-                <Ionicons name="alert-circle" size={20} color={COLORS.error} />
+                <Ionicons name="alert-circle" size={18} color={COLORS.error} />
                 <Text style={f.errText}>{error}</Text>
               </View>
             )}
             {alreadyDone && (
               <View style={f.doneBox}>
-                <Ionicons name="checkmark-circle" size={40} color={COLORS.success} />
+                <Ionicons name="checkmark-circle" size={36} color={COLORS.success} />
                 <Text style={f.doneTitle}>Already Submitted</Text>
                 <Text style={f.doneSub}>You've already provided feedback for this session.</Text>
               </View>
@@ -623,7 +608,7 @@ function FeedbackModal({ visible, session, tokens, onClose }) {
                       <TouchableOpacity key={v} onPress={() => setAnswer(q.id, 'rating_value', v)} activeOpacity={0.7}>
                         <Ionicons
                           name={(answers[q.id]?.rating_value || 0) >= v ? 'star' : 'star-outline'}
-                          size={36} color={COLORS.accent}
+                          size={32} color={COLORS.accent}
                         />
                       </TouchableOpacity>
                     ))}
@@ -638,7 +623,7 @@ function FeedbackModal({ visible, session, tokens, onClose }) {
                         onPress={() => setAnswer(q.id, 'boolean_value', v)}
                         activeOpacity={0.7}
                       >
-                        <Ionicons name={v ? 'thumbs-up' : 'thumbs-down'} size={18}
+                        <Ionicons name={v ? 'thumbs-up' : 'thumbs-down'} size={16}
                           color={answers[q.id]?.boolean_value === v ? '#fff' : COLORS.textSec} />
                         <Text style={[f.boolLabel, answers[q.id]?.boolean_value === v && { color: '#fff' }]}>
                           {v ? 'Yes' : 'No'}
@@ -668,7 +653,7 @@ function FeedbackModal({ visible, session, tokens, onClose }) {
                   {submitting
                     ? <ActivityIndicator color="#fff" />
                     : <>
-                        <Ionicons name="send" size={16} color="#fff" />
+                        <Ionicons name="send" size={15} color="#fff" />
                         <Text style={f.submitText}>Submit Feedback</Text>
                       </>}
                 </LinearGradient>
@@ -707,17 +692,17 @@ function ReminderModal({ visible, item, itemType, tokens, onClose }) {
     <Modal visible={visible} transparent animationType="fade" onRequestClose={() => onClose(false)}>
       <View style={f.overlay}>
         <TouchableOpacity style={{ flex: 1 }} onPress={() => onClose(false)} activeOpacity={1} />
-        <View style={[f.modal, { maxHeight: 440 }]}>
+        <View style={[f.modal, { maxHeight: 420 }]}>
           <View style={f.header}>
             <View style={{ flex: 1 }}>
               <Text style={f.headerTitle}>Set Reminder</Text>
               {item && <Text style={f.headerSub} numberOfLines={1}>{item.title}</Text>}
             </View>
             <TouchableOpacity onPress={() => onClose(false)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-              <Ionicons name="close" size={24} color={COLORS.textTer} />
+              <Ionicons name="close" size={22} color={COLORS.textTer} />
             </TouchableOpacity>
           </View>
-          <View style={{ padding: 24, gap: 10 }}>
+          <View style={{ padding: 20, gap: 8 }}>
             {REMINDER_OPTIONS.map(opt => (
               <TouchableOpacity
                 key={opt.value}
@@ -726,7 +711,7 @@ function ReminderModal({ visible, item, itemType, tokens, onClose }) {
                 activeOpacity={0.7}
               >
                 <Ionicons name={selected === opt.value ? 'radio-button-on' : 'radio-button-off'}
-                  size={20} color={selected === opt.value ? COLORS.brand : COLORS.textTer} />
+                  size={18} color={selected === opt.value ? COLORS.brand : COLORS.textTer} />
                 <Text style={[f.reminderLabel, selected === opt.value && { color: COLORS.brand, fontWeight: FONT.w7 }]}>
                   {opt.label}
                 </Text>
@@ -737,7 +722,7 @@ function ReminderModal({ visible, item, itemType, tokens, onClose }) {
                 {saving
                   ? <ActivityIndicator color="#fff" />
                   : <>
-                      <Ionicons name="bookmark" size={16} color="#fff" />
+                      <Ionicons name="bookmark" size={15} color="#fff" />
                       <Text style={f.submitText}>Bookmark & Remind</Text>
                     </>}
               </LinearGradient>
@@ -762,7 +747,6 @@ export default function ScheduleTab({ tokens, onOpenPaper }) {
   const [bookmarkOffline, setBookmarkOffline] = useState(false);
   const scrollRef = useRef(null);
   const liveYPos = useRef(0);
-  const hasScrolledToLive = useRef(false);
 
   const auth = tokens?.access
     ? { ...API_HEADERS, Authorization: `Bearer ${tokens.access}` }
@@ -827,13 +811,12 @@ export default function ScheduleTab({ tokens, onOpenPaper }) {
 
   useEffect(() => {
     liveYPos.current = 0;
-    hasScrolledToLive.current = false;
   }, [activeTab]);
 
   const scrollToLive = () => {
-    if (liveYPos.current > 0) {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-      scrollRef.current?.scrollTo({ y: Math.max(0, liveYPos.current - 30), animated: true });
+    if (liveYPos.current > 0 && scrollRef.current) {
+      try { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); } catch {}
+      scrollRef.current.scrollTo({ y: Math.max(0, liveYPos.current - 16), animated: true });
     }
   };
 
@@ -857,43 +840,90 @@ export default function ScheduleTab({ tokens, onOpenPaper }) {
 
   return (
     <View style={{ flex: 1, backgroundColor: COLORS.bg }}>
-      {/* Header */}
-      <View style={t.header}>
-        <View style={t.headerTop}>
-          <Text style={t.headerTitle}>Schedule</Text>
-          <Text style={t.headerSub}>ETD 2026  ·  {totalCount} Sessions</Text>
+      {/* 🌟 Event Branded Header */}
+      <LinearGradient
+        colors={['#050e2d', '#0a1a5e', '#0333b6']}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={t.headerGradient}
+      >
+        <View style={t.auraOrb} />
+        
+        {/* Top Header Row */}
+        <View style={t.headerTopRow}>
+          <View>
+            <View style={t.brandBadgeRow}>
+              <View style={t.brandBadgeDot} />
+              <Text style={t.brandBadgeText}>ETD 2026 · IIT DELHI</Text>
+            </View>
+            <Text style={t.headerTitle}>Event Schedule</Text>
+          </View>
+
+          <View style={t.totalPill}>
+            <Ionicons name="sparkles" size={13} color="#f59e0b" />
+            <Text style={t.totalPillText}>{totalCount} Sessions</Text>
+          </View>
         </View>
 
+        {/* 🌟 Calendar Card Day Selector Tabs */}
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={t.tabScroll}>
           {TABS.map((tab) => {
             const on = activeTab === tab.key;
+            const count = tab.key === 'bookmarks' ? bookmarks.length : (sessions[tab.key]?.length || 0);
+
             return (
               <TouchableOpacity
                 key={tab.key}
-                style={[t.tab, on && t.tabOn]}
-                onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setActiveTab(tab.key); }}
-                activeOpacity={0.8}
+                activeOpacity={0.88}
+                style={[t.dayCard, on && t.dayCardOn]}
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  setActiveTab(tab.key);
+                }}
               >
-                {tab.icon && <Ionicons name={tab.icon} size={13} color={on ? '#fff' : COLORS.textSec} style={{ marginRight: 7 }} />}
-                <View>
-                  <Text style={[t.tabLabel, on && t.tabLabelOn]}>{tab.label}</Text>
-                  <Text style={[t.tabDate, on && t.tabDateOn]}>{tab.date}</Text>
-                </View>
+                {on ? (
+                  <LinearGradient
+                    colors={[COLORS.brand, COLORS.brandDark]}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                    style={t.dayCardGrad}
+                  >
+                    <View style={t.dayCardTopRow}>
+                      {tab.icon && <Ionicons name={tab.icon} size={12} color="#fff" style={{ marginRight: 2 }} />}
+                      <Text style={t.dayCardLabelActive}>{tab.label}</Text>
+                      <View style={t.badgeActive}>
+                        <Text style={t.badgeActiveText}>{count}</Text>
+                      </View>
+                    </View>
+                    <Text style={t.dayCardDateActive}>{tab.date}</Text>
+                  </LinearGradient>
+                ) : (
+                  <View style={t.dayCardInner}>
+                    <View style={t.dayCardTopRow}>
+                      {tab.icon && <Ionicons name={tab.icon} size={12} color="rgba(255,255,255,0.7)" style={{ marginRight: 2 }} />}
+                      <Text style={t.dayCardLabel}>{tab.label}</Text>
+                      <View style={t.badgeInactive}>
+                        <Text style={t.badgeInactiveText}>{count}</Text>
+                      </View>
+                    </View>
+                    <Text style={t.dayCardDate}>{tab.date}</Text>
+                  </View>
+                )}
               </TouchableOpacity>
             );
           })}
         </ScrollView>
-      </View>
+      </LinearGradient>
 
       {!loading && offline && (
         <View style={t.offlineBanner}>
-          <Ionicons name="cloud-offline-outline" size={15} color={COLORS.purple} />
+          <Ionicons name="cloud-offline-outline" size={14} color={COLORS.purple} />
           <Text style={t.offlineText}>Offline — showing cached schedule</Text>
         </View>
       )}
       {!loading && bookmarkOffline && activeTab === 'bookmarks' && (
         <View style={[t.offlineBanner, { backgroundColor: '#f59e0b22', borderColor: '#f59e0b44' }]}>
-          <Ionicons name="wifi-outline" size={15} color={COLORS.warning} />
+          <Ionicons name="wifi-outline" size={14} color={COLORS.warning} />
           <Text style={[t.offlineText, { color: COLORS.warning }]}>Bookmarks need a connection</Text>
         </View>
       )}
@@ -903,15 +933,9 @@ export default function ScheduleTab({ tokens, onOpenPaper }) {
       ) : (
         <ScrollView
           ref={scrollRef}
-          contentContainerStyle={{ padding: 20, paddingBottom: 140 }}
+          contentContainerStyle={{ padding: 16, paddingBottom: 120 }}
           showsVerticalScrollIndicator={false}
-          onScroll={() => {
-            if (!hasScrolledToLive.current && hasLive && liveYPos.current > 0) {
-              hasScrolledToLive.current = true;
-              setTimeout(() => scrollToLive(), 300);
-            }
-          }}
-          scrollEventThrottle={200}
+          scrollEventThrottle={16}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => fetchAll(false, true)} tintColor={COLORS.brand} colors={[COLORS.brand]} />}
         >
           {currentData.length === 0 && (
@@ -919,7 +943,7 @@ export default function ScheduleTab({ tokens, onOpenPaper }) {
               <View style={t.emptyIcon}>
                 <Ionicons
                   name={activeTab === 'bookmarks' ? 'heart-outline' : 'calendar-outline'}
-                  size={40}
+                  size={36}
                   color={COLORS.textTer}
                 />
               </View>
@@ -937,19 +961,21 @@ export default function ScheduleTab({ tokens, onOpenPaper }) {
           {currentData.map((item, i) => {
             if (activeTab === 'bookmarks' && item.type === 'paper') {
               return (
-                <FadeIn key={`p-${i}`} delay={i * 40}>
-                  <View style={t.savedPaperCard}>
-                    <View style={t.savedPaperHeader}>
-                      <Ionicons name="document-text" size={14} color={COLORS.brand} />
-                      <Text style={t.savedPaperLabel}>SAVED PRESENTATION</Text>
+                <View key={`p-${i}`}>
+                  <FadeIn delay={i * 30}>
+                    <View style={t.savedPaperCard}>
+                      <View style={t.savedPaperHeader}>
+                        <Ionicons name="document-text" size={13} color={COLORS.brand} />
+                        <Text style={t.savedPaperLabel}>SAVED PRESENTATION</Text>
+                      </View>
+                      <PaperRow
+                        paper={{ ...item.paper, is_bookmarked: true }}
+                        onOpenPaper={onOpenPaper}
+                        onBookmarkClick={(p) => handleBookmark(p, 'paper')}
+                      />
                     </View>
-                    <PaperRow
-                      paper={{ ...item.paper, is_bookmarked: true }}
-                      onOpenPaper={onOpenPaper}
-                      onBookmarkClick={(p) => handleBookmark(p, 'paper')}
-                    />
-                  </View>
-                </FadeIn>
+                  </FadeIn>
+                </View>
               );
             }
 
@@ -957,23 +983,34 @@ export default function ScheduleTab({ tokens, onOpenPaper }) {
               ? { ...item.session, is_bookmarked: true, bookmark_reminder: item.reminder_minutes }
               : item;
 
+            const isLive = getStatus(sess.start_datetime, sess.end_datetime) === 'live';
+
             return (
-              <FadeIn key={sess.id} delay={i * 40}>
-                <SessionCard
-                  session={sess}
-                  onBookmark={(s, tp) => handleBookmark(s, tp || 'session')}
-                  onFeedback={handleFeedback}
-                  onOpenPaper={onOpenPaper}
-                  onLayoutLive={(y) => { liveYPos.current = y; }}
-                />
-              </FadeIn>
+              <View
+                key={sess.id || i}
+                onLayout={(e) => {
+                  if (isLive) {
+                    liveYPos.current = e.nativeEvent.layout.y;
+                  }
+                }}
+              >
+                <FadeIn delay={i * 30}>
+                  <SessionCard
+                    session={sess}
+                    onBookmark={(s, tp) => handleBookmark(s, tp || 'session')}
+                    onFeedback={handleFeedback}
+                    onOpenPaper={onOpenPaper}
+                  />
+                </FadeIn>
+              </View>
             );
           })}
         </ScrollView>
       )}
 
-      {hasLive && liveYPos.current > 0 && (
-        <TouchableOpacity style={t.jumpBtn} activeOpacity={0.85} onPress={scrollToLive}>
+      {/* Floating Jump to Live Button */}
+      {hasLive && (
+        <TouchableOpacity style={t.jumpBtn} activeOpacity={0.88} onPress={scrollToLive}>
           <PulsingDot color="#fff" size={5} />
           <Text style={t.jumpText}>Jump to Live</Text>
           <Ionicons name="arrow-down" size={14} color="#fff" />
@@ -1006,224 +1043,321 @@ export default function ScheduleTab({ tokens, onOpenPaper }) {
 
 /* ── Styles ── */
 const t = StyleSheet.create({
-  /* ── Header ── */
-  header: {
-    paddingTop: TOP + 12,
-    paddingBottom: 18,
-    backgroundColor: '#fff',
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.border,
+  /* ── Event Branded Gradient Header ── */
+  headerGradient: {
+    paddingTop: TOP + 8,
+    paddingBottom: 16,
+    borderBottomLeftRadius: 24,
+    borderBottomRightRadius: 24,
+    position: 'relative',
+    overflow: 'hidden',
+    ...SHADOW.lg,
   },
-  headerTop: {
-    paddingHorizontal: 24,
-    marginBottom: 20,
+  auraOrb: {
+    position: 'absolute',
+    width: 180,
+    height: 180,
+    borderRadius: 90,
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    top: -50,
+    right: -30,
   },
-  headerTitle: {
-    fontSize: 30,
-    fontWeight: FONT.w9,
-    color: COLORS.brand,
-    letterSpacing: -0.6,
-    marginBottom: 4,
-  },
-  headerSub: {
-    fontSize: 13,
-    color: COLORS.textSec,
-    fontWeight: FONT.w6,
-  },
-
-  tabScroll: { paddingHorizontal: 20, gap: 10 },
-  tab: {
+  headerTopRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: COLORS.bgAlt,
-    paddingHorizontal: 18,
-    paddingVertical: 11,
-    borderRadius: RADIUS.full,
-    borderWidth: 1,
-    borderColor: 'transparent',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    marginBottom: 14,
   },
-  tabOn: { backgroundColor: COLORS.brand, borderColor: COLORS.brand, ...SHADOW.brand },
-  tabLabel: { fontSize: 14, fontWeight: FONT.w8, color: COLORS.text },
-  tabLabelOn: { color: '#fff' },
-  tabDate: { fontSize: 10, fontWeight: FONT.w6, color: COLORS.textSec, marginTop: 2 },
-  tabDateOn: { color: 'rgba(255,255,255,0.75)' },
+  brandBadgeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 2,
+  },
+  brandBadgeDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#60a5fa',
+  },
+  brandBadgeText: {
+    fontSize: 10,
+    fontWeight: FONT.w8,
+    color: 'rgba(255,255,255,0.8)',
+    letterSpacing: 1,
+  },
+  headerTitle: {
+    fontSize: 26,
+    fontWeight: FONT.w9,
+    color: '#fff',
+    letterSpacing: -0.5,
+  },
+  totalPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: 'rgba(255,255,255,0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.2)',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: RADIUS.full,
+  },
+  totalPillText: {
+    fontSize: 11,
+    fontWeight: FONT.w8,
+    color: '#fff',
+  },
+
+  /* ── Calendar Card Day Selector Tabs ── */
+  tabScroll: {
+    paddingHorizontal: 16,
+    gap: 10,
+  },
+  dayCard: {
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.15)',
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    overflow: 'hidden',
+    minWidth: 110,
+  },
+  dayCardOn: {
+    borderColor: '#60a5fa',
+    ...SHADOW.brand,
+  },
+  dayCardInner: {
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+  },
+  dayCardGrad: {
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+  },
+  dayCardTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 6,
+    marginBottom: 4,
+  },
+  dayCardLabel: {
+    fontSize: 11,
+    fontWeight: FONT.w9,
+    color: 'rgba(255,255,255,0.8)',
+    letterSpacing: 0.5,
+  },
+  dayCardLabelActive: {
+    fontSize: 11,
+    fontWeight: FONT.w9,
+    color: '#fff',
+    letterSpacing: 0.5,
+  },
+  dayCardDate: {
+    fontSize: 13,
+    fontWeight: FONT.w7,
+    color: 'rgba(255,255,255,0.95)',
+  },
+  dayCardDateActive: {
+    fontSize: 13,
+    fontWeight: FONT.w8,
+    color: '#fff',
+  },
+  badgeInactive: {
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 8,
+  },
+  badgeInactiveText: {
+    fontSize: 10,
+    fontWeight: FONT.w8,
+    color: 'rgba(255,255,255,0.85)',
+  },
+  badgeActive: {
+    backgroundColor: 'rgba(255,255,255,0.25)',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 8,
+  },
+  badgeActiveText: {
+    fontSize: 10,
+    fontWeight: FONT.w9,
+    color: '#fff',
+  },
 
   /* ── Offline banner ── */
   offlineBanner: {
-    backgroundColor: '#7c3aed22',
+    backgroundColor: '#7c3aed18',
     borderBottomWidth: 1,
-    borderColor: '#7c3aed44',
-    paddingHorizontal: 24,
-    paddingVertical: 10,
+    borderColor: '#7c3aed33',
+    paddingHorizontal: 20,
+    paddingVertical: 8,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+    gap: 8,
   },
   offlineText: { fontSize: FONT.xs, color: COLORS.purple, fontWeight: FONT.w6 },
 
-  /* ── Live wrapper (rainbow gradient border) ── */
-  liveWrapper: { padding: 3, borderRadius: 24 },
+  /* ── Live wrapper ── */
+  liveWrapper: { padding: 2.5, borderRadius: 20 },
 
   /* ── Regular Card ── */
   card: {
     backgroundColor: '#fff',
-    borderRadius: 22,
-    padding: 22,
+    borderRadius: 18,
+    padding: 18,
     borderWidth: 1,
     borderColor: COLORS.border,
     ...SHADOW.sm,
   },
   cardPast: { opacity: 0.65, backgroundColor: '#fafbfc' },
-  cardLive: { borderWidth: 0, borderRadius: 21 },
+  cardLive: { borderWidth: 0, borderRadius: 17.5 },
 
-  /* Live progress bar */
   progressWrap: {
-    height: 4,
+    height: 3.5,
     backgroundColor: COLORS.borderLight,
     borderRadius: 2,
-    marginBottom: 18,
+    marginBottom: 14,
     overflow: 'hidden',
   },
   progressBar: { height: '100%', backgroundColor: COLORS.error, borderRadius: 2 },
 
-  /* Header row */
   cardHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 16,
+    marginBottom: 12,
   },
   typePill: {
-    paddingHorizontal: 11,
-    paddingVertical: 6,
-    borderRadius: 12,
+    paddingHorizontal: 9,
+    paddingVertical: 4,
+    borderRadius: 8,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: 5,
   },
-  typeText: { fontSize: 10, fontWeight: FONT.w9, letterSpacing: 0.8 },
+  typeText: { fontSize: 9.5, fontWeight: FONT.w9, letterSpacing: 0.6 },
 
   headerRight: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: 10,
   },
 
   liveBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 5,
+    gap: 4,
     backgroundColor: COLORS.error,
-    paddingHorizontal: 9,
-    paddingVertical: 5,
-    borderRadius: 10,
+    paddingHorizontal: 7,
+    paddingVertical: 3.5,
+    borderRadius: 8,
   },
-  liveBadgeText: { fontSize: 9, fontWeight: FONT.w9, color: '#fff', letterSpacing: 0.5 },
+  liveBadgeText: { fontSize: 8.5, fontWeight: FONT.w9, color: '#fff', letterSpacing: 0.5 },
 
   pastBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    gap: 3,
     backgroundColor: COLORS.borderLight,
-    paddingHorizontal: 9,
-    paddingVertical: 5,
-    borderRadius: 10,
+    paddingHorizontal: 7,
+    paddingVertical: 3.5,
+    borderRadius: 8,
   },
-  pastBadgeText: { fontSize: 9, fontWeight: FONT.w8, color: COLORS.textSec, letterSpacing: 0.5 },
+  pastBadgeText: { fontSize: 8.5, fontWeight: FONT.w8, color: COLORS.textSec, letterSpacing: 0.5 },
 
-  /* Title */
   sessionTitle: {
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: FONT.w9,
     color: COLORS.text,
-    lineHeight: 25,
-    marginBottom: 14,
+    lineHeight: 22,
+    marginBottom: 12,
     letterSpacing: -0.2,
   },
 
-  /* Meta */
   metaRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 18,
+    gap: 14,
   },
   metaItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 7,
+    gap: 5,
   },
   metaText: {
-    fontSize: 13.5,
+    fontSize: 12.5,
     fontWeight: FONT.w7,
     color: COLORS.textSec,
   },
 
-  /* Parallel badge - own row */
   parallelBadgeWrap: {
-    marginTop: 14,
+    marginTop: 10,
     flexDirection: 'row',
   },
   parallelBadge: {
     backgroundColor: COLORS.accentLight,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 10,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
   },
   parallelText: {
-    fontSize: 9,
+    fontSize: 8.5,
     fontWeight: FONT.w9,
     color: COLORS.accent,
-    letterSpacing: 0.8,
+    letterSpacing: 0.6,
   },
 
   /* ── Featured card ── */
   featuredCard: {
-    borderRadius: 22,
-    padding: 24,
+    borderRadius: 18,
+    padding: 20,
     overflow: 'hidden',
     ...Platform.select({
-      ios: { shadowColor: COLORS.brand, shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.25, shadowRadius: 14 },
-      android: { elevation: 4 },
+      ios: { shadowColor: COLORS.brand, shadowOffset: { width: 0, height: 5 }, shadowOpacity: 0.22, shadowRadius: 12 },
+      android: { elevation: 3 },
     }),
   },
   featBlob: {
     position: 'absolute',
-    width: 220, height: 220, borderRadius: 110,
+    width: 200, height: 200, borderRadius: 100,
     backgroundColor: 'rgba(255,255,255,0.05)',
-    top: -70, right: -50,
+    top: -60, right: -40,
   },
   featTopRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 18,
+    marginBottom: 14,
   },
   featTypeRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 6,
   },
   featType: {
-    fontSize: 10,
+    fontSize: 9.5,
     fontWeight: FONT.w9,
     color: '#fff',
-    letterSpacing: 1,
+    letterSpacing: 0.8,
   },
   featTitle: {
-    fontSize: FONT.xl,
+    fontSize: 18,
     fontWeight: FONT.w9,
     color: '#fff',
     letterSpacing: -0.3,
-    lineHeight: 30,
-    marginBottom: 16,
+    lineHeight: 25,
+    marginBottom: 14,
   },
   featMetaRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 18,
+    gap: 14,
   },
   featTime: {
-    fontSize: 13.5,
+    fontSize: 12.5,
     color: '#fff',
     fontWeight: FONT.w7,
   },
@@ -1231,14 +1365,14 @@ const t = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 6,
-    marginTop: 18,
-    paddingTop: 14,
+    gap: 5,
+    marginTop: 14,
+    paddingTop: 12,
     borderTopWidth: 1,
     borderTopColor: 'rgba(255,255,255,0.15)',
   },
   featExpandText: {
-    fontSize: 11,
+    fontSize: 10.5,
     color: 'rgba(255,255,255,0.7)',
     fontWeight: FONT.w7,
     letterSpacing: 0.3,
@@ -1248,12 +1382,12 @@ const t = StyleSheet.create({
   nowLine: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
-    marginBottom: 14,
-    paddingHorizontal: 4,
+    gap: 8,
+    marginBottom: 10,
+    paddingHorizontal: 2,
   },
   nowDash: { flex: 1, height: 1.5, backgroundColor: COLORS.error },
-  nowText: { fontSize: 10, fontWeight: FONT.w9, color: COLORS.error, letterSpacing: 1 },
+  nowText: { fontSize: 9.5, fontWeight: FONT.w9, color: COLORS.error, letterSpacing: 0.8 },
 
   /* ── Expand trigger ── */
   expandTrigger: {
@@ -1261,118 +1395,131 @@ const t = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     backgroundColor: COLORS.bgAlt,
-    paddingHorizontal: 16,
-    paddingVertical: 13,
-    borderRadius: 14,
-    marginTop: 18,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 12,
+    marginTop: 14,
     borderWidth: 1,
     borderColor: COLORS.border,
   },
-  expandText: { fontSize: 13, fontWeight: FONT.w8 },
+  expandText: { fontSize: 12, fontWeight: FONT.w8 },
 
-  expandedArea: { marginTop: 18 },
+  expandedArea: { marginTop: 14 },
 
   /* ── Sub sessions ── */
   subsContainer: {
-    marginLeft: 20,
-    marginTop: 8,
+    marginLeft: 16,
+    marginTop: 6,
     borderLeftWidth: 2,
     borderLeftColor: COLORS.borderLight,
-    paddingLeft: 16,
+    paddingLeft: 12,
   },
   subRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    gap: 10,
-    paddingVertical: 12,
+    gap: 8,
+    paddingVertical: 10,
   },
-  subDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: COLORS.brand, marginTop: 6 },
-  subTitle: { fontSize: 14, fontWeight: FONT.w8, color: COLORS.text, marginBottom: 3, lineHeight: 20 },
-  subSpeaker: { fontSize: 12, color: COLORS.textSec, fontWeight: FONT.w6 },
-  subTime: { fontSize: 11, color: COLORS.textTer, marginTop: 4, fontWeight: FONT.w7 },
+  subDot: { width: 7, height: 7, borderRadius: 3.5, backgroundColor: COLORS.brand, marginTop: 5 },
+  subTitle: { fontSize: 13, fontWeight: FONT.w8, color: COLORS.text, marginBottom: 2, lineHeight: 18 },
+  subSpeaker: { fontSize: 11, color: COLORS.textSec, fontWeight: FONT.w6 },
+  subTime: { fontSize: 10, color: COLORS.textTer, marginTop: 3, fontWeight: FONT.w7 },
 
   /* ── Papers ── */
   papersContainer: {
-    marginTop: 10,
-    marginLeft: 20,
+    marginTop: 8,
+    marginLeft: 16,
     borderLeftWidth: 2,
     borderLeftColor: COLORS.brandLight,
-    paddingLeft: 16,
-    paddingBottom: 8,
+    paddingLeft: 12,
+    paddingBottom: 6,
   },
   papersHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 7,
-    marginBottom: 16,
+    gap: 6,
+    marginBottom: 12,
   },
   papersSectionLabel: {
-    fontSize: 10,
+    fontSize: 9.5,
     fontWeight: FONT.w9,
     color: COLORS.brand,
-    letterSpacing: 1.2,
+    letterSpacing: 1,
   },
 
   paperRow: {
     flexDirection: 'row',
-    marginBottom: 22,
-    gap: 10,
+    marginBottom: 18,
+    gap: 8,
   },
-  paperTimeline: { width: 20, alignItems: 'center' },
-  paperDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: COLORS.brand, marginTop: 6 },
+  paperTimeline: { width: 16, alignItems: 'center' },
+  paperDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: COLORS.brand, marginTop: 5 },
   paperLine: { width: 2, flex: 1, backgroundColor: COLORS.borderLight, marginTop: 4 },
   paperTop: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
-    marginBottom: 10,
-    gap: 8,
+    marginBottom: 8,
+    gap: 6,
   },
-  paperTime: { fontSize: 12, fontWeight: FONT.w9, color: COLORS.brand },
+  paperTime: { fontSize: 11, fontWeight: FONT.w9, color: COLORS.brand },
   paperIdBadge: {
     backgroundColor: COLORS.brandLight,
-    paddingHorizontal: 7,
-    paddingVertical: 3,
-    borderRadius: 6,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 5,
   },
   paperIdText: {
-    fontSize: 10,
+    fontSize: 9.5,
     fontWeight: FONT.w8,
     color: COLORS.brand,
     fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
   },
   paperTitle: {
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: FONT.w8,
     color: COLORS.text,
-    lineHeight: 22,
-    letterSpacing: -0.1,
+    lineHeight: 20,
   },
   paperAuthorRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    marginTop: 8,
+    gap: 5,
+    marginTop: 6,
   },
   paperAuthor: {
-    fontSize: 12.5,
+    fontSize: 11.5,
     color: COLORS.textSec,
     fontWeight: FONT.w6,
     flex: 1,
   },
   paperAbstract: {
-    fontSize: 13,
+    fontSize: 12,
     color: COLORS.textSec,
-    lineHeight: 20,
+    lineHeight: 18,
     fontWeight: FONT.w5,
   },
   paperToggle: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: FONT.w8,
     color: COLORS.brand,
-    marginTop: 6,
+    marginTop: 4,
   },
   paperReadMoreBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    marginTop: 10,
+    alignSelf: 'flex-start',
+    backgroundColor: COLORS.brandLight,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 12,
+  },
+  paperReadMoreText: { fontSize: 11, fontWeight: FONT.w8, color: COLORS.brand },
+
+  /* ── Feedback ── */
+  feedbackBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
@@ -1380,76 +1527,62 @@ const t = StyleSheet.create({
     alignSelf: 'flex-start',
     backgroundColor: COLORS.brandLight,
     paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 14,
+    paddingVertical: 7,
+    borderRadius: 12,
   },
-  paperReadMoreText: { fontSize: 12, fontWeight: FONT.w8, color: COLORS.brand },
-
-  /* ── Feedback ── */
-  feedbackBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 7,
-    marginTop: 16,
-    alignSelf: 'flex-start',
-    backgroundColor: COLORS.brandLight,
-    paddingHorizontal: 14,
-    paddingVertical: 9,
-    borderRadius: 14,
-  },
-  feedbackBtnText: { fontSize: 12, fontWeight: FONT.w8, color: COLORS.brand },
+  feedbackBtnText: { fontSize: 11, fontWeight: FONT.w8, color: COLORS.brand },
   feedbackBtnFeat: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 7,
+    gap: 6,
     alignSelf: 'flex-start',
-    marginTop: 18,
+    marginTop: 14,
     backgroundColor: 'rgba(255,255,255,0.18)',
-    paddingHorizontal: 15,
-    paddingVertical: 9,
-    borderRadius: 14,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 12,
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.25)',
   },
-  feedbackBtnFeatText: { fontSize: 12, fontWeight: FONT.w8, color: '#fff' },
+  feedbackBtnFeatText: { fontSize: 11, fontWeight: FONT.w8, color: '#fff' },
 
   /* ── Empty state ── */
   empty: {
     alignItems: 'center',
-    marginTop: 80,
-    paddingHorizontal: 24,
+    marginTop: 60,
+    paddingHorizontal: 20,
   },
   emptyIcon: {
-    width: 88,
-    height: 88,
-    borderRadius: 44,
+    width: 72,
+    height: 72,
+    borderRadius: 36,
     backgroundColor: '#fff',
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 20,
+    marginBottom: 16,
     borderWidth: 1,
     borderColor: COLORS.border,
   },
   emptyTitle: {
-    fontSize: 19,
+    fontSize: 17,
     fontWeight: FONT.w9,
     color: COLORS.text,
-    marginBottom: 10,
+    marginBottom: 8,
   },
   emptySub: {
-    fontSize: 13.5,
+    fontSize: 12.5,
     color: COLORS.textSec,
     textAlign: 'center',
-    lineHeight: 21,
+    lineHeight: 19,
     fontWeight: FONT.w6,
   },
 
   /* ── Saved paper card ── */
   savedPaperCard: {
     backgroundColor: '#fff',
-    borderRadius: 22,
-    padding: 22,
-    marginBottom: 20,
+    borderRadius: 18,
+    padding: 18,
+    marginBottom: 16,
     borderWidth: 1,
     borderColor: COLORS.border,
     ...SHADOW.sm,
@@ -1457,84 +1590,84 @@ const t = StyleSheet.create({
   savedPaperHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 7,
-    marginBottom: 18,
+    gap: 6,
+    marginBottom: 14,
   },
   savedPaperLabel: {
-    fontSize: 10,
+    fontSize: 9.5,
     fontWeight: FONT.w9,
     color: COLORS.brand,
-    letterSpacing: 1,
+    letterSpacing: 0.8,
   },
 
   /* ── Jump to live ── */
   jumpBtn: {
     position: 'absolute',
-    bottom: 100,
+    bottom: 90,
     alignSelf: 'center',
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 7,
     backgroundColor: COLORS.error,
-    paddingHorizontal: 18,
-    paddingVertical: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
     borderRadius: RADIUS.full,
     ...SHADOW.lg,
   },
-  jumpText: { color: '#fff', fontWeight: FONT.w8, fontSize: 13 },
+  jumpText: { color: '#fff', fontWeight: FONT.w8, fontSize: 12 },
 });
 
 const f = StyleSheet.create({
   overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
   modal: {
     backgroundColor: COLORS.surface,
-    borderTopLeftRadius: 28,
-    borderTopRightRadius: 28,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
     height: '60%',
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    padding: 24,
+    padding: 20,
     borderBottomWidth: 1,
     borderBottomColor: COLORS.borderLight,
   },
-  headerTitle: { fontSize: FONT.lg, fontWeight: FONT.w9, color: COLORS.text },
-  headerSub: { fontSize: FONT.xs, color: COLORS.textTer, marginTop: 3 },
+  headerTitle: { fontSize: FONT.md, fontWeight: FONT.w9, color: COLORS.text },
+  headerSub: { fontSize: FONT.xs, color: COLORS.textTer, marginTop: 2 },
 
   errBox: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+    gap: 8,
     backgroundColor: COLORS.errorLight,
-    padding: 16,
+    padding: 14,
     borderRadius: RADIUS.md,
   },
   errText: { fontSize: FONT.sm, color: COLORS.error, flex: 1 },
 
-  doneBox: { alignItems: 'center', padding: 30, gap: 12 },
-  doneTitle: { fontSize: FONT.lg, fontWeight: FONT.w8, color: COLORS.success },
+  doneBox: { alignItems: 'center', padding: 24, gap: 10 },
+  doneTitle: { fontSize: FONT.md, fontWeight: FONT.w8, color: COLORS.success },
   doneSub: { fontSize: FONT.sm, color: COLORS.textSec, textAlign: 'center' },
 
   qCard: {
-    marginBottom: 24,
-    paddingBottom: 20,
+    marginBottom: 20,
+    paddingBottom: 16,
     borderBottomWidth: 1,
     borderBottomColor: COLORS.borderLight,
   },
-  qText: { fontSize: FONT.sm, fontWeight: FONT.w7, color: COLORS.text, marginBottom: 14, lineHeight: 20 },
+  qText: { fontSize: FONT.sm, fontWeight: FONT.w7, color: COLORS.text, marginBottom: 12, lineHeight: 18 },
 
-  starRow: { flexDirection: 'row', gap: 10 },
+  starRow: { flexDirection: 'row', gap: 8 },
 
-  boolRow: { flexDirection: 'row', gap: 14 },
+  boolRow: { flexDirection: 'row', gap: 12 },
   boolBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    paddingVertical: 12,
-    paddingHorizontal: 20,
-    borderRadius: RADIUS.lg,
+    gap: 6,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: RADIUS.md,
     borderWidth: 1.5,
     borderColor: COLORS.border,
     backgroundColor: COLORS.bg,
@@ -1545,33 +1678,33 @@ const f = StyleSheet.create({
   textInput: {
     backgroundColor: COLORS.bg,
     borderRadius: RADIUS.md,
-    padding: 14,
+    padding: 12,
     fontSize: FONT.sm,
     color: COLORS.text,
     borderWidth: 1,
     borderColor: COLORS.borderLight,
-    minHeight: 80,
+    minHeight: 70,
   },
 
-  submitBtn: { borderRadius: RADIUS.lg, overflow: 'hidden', marginTop: 12, ...SHADOW.brand },
+  submitBtn: { borderRadius: RADIUS.md, overflow: 'hidden', marginTop: 10, ...SHADOW.brand },
   submitGrad: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 10,
-    paddingVertical: 16,
-    paddingHorizontal: 20,
+    gap: 8,
+    paddingVertical: 14,
+    paddingHorizontal: 18,
   },
-  submitText: { fontSize: FONT.md, fontWeight: FONT.w7, color: '#fff' },
+  submitText: { fontSize: FONT.sm, fontWeight: FONT.w7, color: '#fff' },
 
   reminderRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 14,
-    paddingVertical: 14,
-    paddingHorizontal: 14,
+    gap: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 12,
     borderRadius: RADIUS.md,
   },
   reminderRowOn: { backgroundColor: COLORS.brandLight },
-  reminderLabel: { fontSize: FONT.base, color: COLORS.textSec },
+  reminderLabel: { fontSize: FONT.sm, color: COLORS.textSec },
 });

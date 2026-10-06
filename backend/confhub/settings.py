@@ -45,6 +45,7 @@ LOCAL_APPS = [
     'apps.leaderboard',
     'apps.chat',
     'apps.schedule',
+    'apps.error_reports',
 ]
 
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
@@ -57,6 +58,7 @@ MIDDLEWARE = [
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'confhub.middleware.DisableCSRFForAPI',
+    'apps.error_reports.middleware.ErrorCaptureMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',

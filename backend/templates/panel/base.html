@@ -369,6 +369,9 @@
             </a>
 
             <div class="menu-label">System</div>
+            <a href="/panel/error-reports/" class="menu-item {% if '/error-reports/' in request.path %}active{% endif %}">
+                <i class="fas fa-triangle-exclamation"></i> Error &amp; System Logs
+            </a>
             <a href="/panel/notifications/"
 
  class="menu-item {% if request.resolver_match.url_name == 'notifications_panel' %}active{% endif %}">

@@ -1,3 +1,4 @@
+import ErrorReportsAdmin from './ErrorReportsAdmin';
 import React, { useState } from 'react';
 import {
   View, Text, TouchableOpacity, ScrollView,
@@ -23,6 +24,14 @@ import FeedAdmin from './FeedAdmin';
 const CARD_SIZE = (Dimensions.get('window').width - SPACE.xl * 2 - SPACE.md) / 2;
 
 const ALL_FEATURES = [
+  {
+    key:   'error_reports',
+    label: 'Error Reports',
+    sub:   'User tickets & bug logs',
+    icon:  'bug',
+    grad:  ['#e11d48', '#be123c'],
+    perm:  'error_reports',
+  },
   {
     key:  'checkin',
     icon: 'qr-code',
@@ -151,7 +160,8 @@ export default function AdminTab({ user, tokens, onLogout }) {
 
   if (screen === 'checkin')         return <CheckInScreen        tokens={tokens} onBack={() => setScreen(null)} />;
   if (screen === 'notifications')   return <NotificationsAdmin   tokens={tokens} onBack={() => setScreen(null)} />;
-  if (screen === 'feed_admin')      return <FeedAdmin            tokens={tokens} onBack={() => setScreen(null)} />;
+  if (screen === 'error_reports') return <ErrorReportsAdmin tokens={tokens} onBack={() => setScreen(null)} />;
+    if (screen === 'feed_admin')      return <FeedAdmin            tokens={tokens} onBack={() => setScreen(null)} />;
   if (screen === 'add_participant') return <AddParticipantScreen tokens={tokens} onBack={() => setScreen(null)} onCreated={() => setScreen(null)} />;
   if (screen === 'users')           return <UsersAdmin           tokens={tokens} onBack={() => setScreen(null)} />;
   if (screen === 'staff_admin')     return <StaffAdminScreen     onBack={() => setScreen(null)} />;

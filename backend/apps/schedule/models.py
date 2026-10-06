@@ -1,3 +1,5 @@
+import zoneinfo
+IST_TZ = zoneinfo.ZoneInfo("Asia/Kolkata")
 from django.db import models
 from apps.accounts.models import User
 from datetime import datetime, date, time
@@ -47,7 +49,8 @@ class ScheduleSession(models.Model):
     @property
     def start_datetime(self):
         if self.date and self.start_time:
-            return datetime.combine(self.date, self.start_time)
+            dt = datetime.combine(self.date, self.start_time)
+            return dt.replace(tzinfo=IST_TZ)
         return None
 
     @start_datetime.setter
@@ -69,7 +72,8 @@ class ScheduleSession(models.Model):
     @property
     def end_datetime(self):
         if self.date and self.end_time:
-            return datetime.combine(self.date, self.end_time)
+            dt = datetime.combine(self.date, self.end_time)
+            return dt.replace(tzinfo=IST_TZ)
         return None
 
     @end_datetime.setter

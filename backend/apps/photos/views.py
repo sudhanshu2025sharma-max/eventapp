@@ -6,6 +6,16 @@ from django.utils import timezone
 from django.db.models import Count, Q
 from django.db import IntegrityError
 import math
+import base64
+import uuid
+import re
+import zoneinfo
+from django.core.files.base import ContentFile
+import base64
+import uuid
+import re
+import zoneinfo
+from django.core.files.base import ContentFile
 
 from apps.checkins.models import CheckIn
 from apps.leaderboard.utils import award_points
@@ -18,16 +28,23 @@ def _is_checked_in(user):
 
 
 def _photo_data(photo, request):
+    selfie_spot_name = None
+    if photo.caption and photo.caption.startswith("📸 Selfie Spot:"):
+        selfie_spot_name = photo.caption.split("📸 Selfie Spot:")[1].strip()
+
+    tags = re.findall(r'#([A-Za-z0-9_]+)', photo.caption or '')
+
     return {
         'id': photo.id,
         'image_url': request.build_absolute_uri(photo.image.url) if photo.image else None,
         'caption': photo.caption,
+        'tags': list(dict.fromkeys(tags)),
         'session_id': str(photo.session_id) if photo.session_id else None,
         'session_title': photo.session.title if photo.session_id else None,
         'uploader': photo.uploader.get_full_name() or photo.uploader.email.split('@')[0],
         'created_at': photo.created_at.isoformat(),
+        'selfie_spot_name': selfie_spot_name,
     }
-
 
 def _is_in_corridor(lat_p, lng_p, lat_a, lng_a, lat_b, lng_b, width_meters):
     if lat_a is None or lng_a is None or lat_b is None or lng_b is None:
@@ -117,34 +134,66 @@ def gallery(request):
     # Public approved gallery — upload/check-in gates stay on write endpoints
     qs = Photo.objects.filter(status=Photo.Status.APPROVED).select_related('uploader', 'session')
     session_id = request.query_params.get('session')
+    tag = request.query_params.get('tag')
+    
     if session_id:
         qs = qs.filter(session_id=session_id)
     elif request.query_params.get('wall'):
         qs = qs.filter(session__isnull=True)
+        
+    if tag:
+        clean_tag = tag.lstrip('#').strip()
+        qs = qs.filter(caption__icontains=f'#{clean_tag}')
+
+    # Extract all real active tags from approved photos in DB
+    all_approved_captions = Photo.objects.filter(status=Photo.Status.APPROVED).values_list('caption', flat=True)
+    active_tags = set()
+    for cap in all_approved_captions:
+        if cap:
+            for t in re.findall(r'#([A-Za-z0-9_]+)', cap):
+                active_tags.add(t)
+
     return Response({
         'upload_open': PhotoSettings.get().upload_open,
         'selfie_upload_open': PhotoSettings.get().selfie_upload_open,
+        'available_tags': sorted(list(active_tags)),
         'photos': [_photo_data(p, request) for p in qs[:200]],
     })
 
 
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
-@parser_classes([MultiPartParser, FormParser])
 def upload(request):
     if not _is_checked_in(request.user):
-        return Response({'error': 'Conference check-in required'}, status=403)
+        return Response({'error': 'Conference check-in required. Please check in at registration first.'}, status=403)
     settings = PhotoSettings.get()
     if not settings.upload_open:
-        return Response({'error': 'Photo uploads are currently closed'}, status=403)
+        return Response({'error': 'Photo uploads are currently closed by admin.'}, status=403)
+
     image = request.FILES.get('image')
+    image_b64 = request.data.get('image_base64')
+
+    if not image and image_b64:
+        try:
+            b64_str = str(image_b64)
+            if 'base64,' in b64_str:
+                header, b64_str = b64_str.split('base64,', 1)
+                ext = 'png' if 'image/png' in header else 'jpg'
+            else:
+                ext = 'jpg'
+            b64_str = b64_str.encode('ascii', 'ignore').decode('ascii').strip()
+            missing = len(b64_str) % 4
+            if missing:
+                b64_str += '=' * (4 - missing)
+            img_bytes = base64.b64decode(b64_str)
+            fname = f"ph_{str(request.user.id)[:8]}_{uuid.uuid4().hex[:6]}.{ext}"
+            image = ContentFile(img_bytes, name=fname)
+        except Exception as e:
+            return Response({'error': f'Invalid image data: {str(e)}'}, status=400)
+
     if not image:
-        return Response({'error': 'No image file received.'}, status=400)
-    content_type = getattr(image, 'content_type', '') or ''
-    if content_type and not content_type.startswith('image/'):
-        return Response({'error': 'Only image files are allowed.'}, status=400)
-    if image.size > 10 * 1024 * 1024:
-        return Response({'error': 'Image must be under 10 MB.'}, status=400)
+        return Response({'error': 'No image file or data received.'}, status=400)
+
     session = None
     session_id = request.data.get('session_id')
     if session_id:
@@ -152,11 +201,12 @@ def upload(request):
             session = ScheduleSession.objects.get(pk=session_id, is_published=True)
         except ScheduleSession.DoesNotExist:
             return Response({'error': 'Session not found'}, status=404)
+
+    caption = request.data.get('caption', '').strip()[:300]
     status = Photo.Status.APPROVED if settings.auto_approve else Photo.Status.PENDING
     photo = Photo.objects.create(
         uploader=request.user, image=image,
-        caption=request.data.get('caption', '').strip()[:300],
-        session=session, status=status,
+        caption=caption, session=session, status=status,
     )
     return Response({
         'id': photo.id, 'status': photo.status,
@@ -181,7 +231,7 @@ def sessions_with_photos(request):
         return Response({'error': 'Conference check-in required'}, status=403)
     sessions = ScheduleSession.objects.filter(
         photos__status=Photo.Status.APPROVED, is_published=True,
-    ).annotate(photo_count=Count('photos')).order_by('day', 'start_datetime')
+    ).annotate(photo_count=Count('photos')).order_by('day', 'start_time')
     return Response({
         'sessions': [{'id': str(s.id), 'title': s.title, 'day': s.day, 'session_type': s.session_type, 'photo_count': s.photo_count} for s in sessions]
     })
@@ -327,13 +377,58 @@ def admin_stats(request):
         total_photos=Count('photos'),
         pending_photos=Count('photos', filter=Q(photos__status='pending')),
         approved_photos=Count('photos', filter=Q(photos__status='approved')),
-    ).order_by('day', 'start_datetime').distinct()
+    ).order_by('day', 'start_time').distinct()
     return Response({
         'total': total, 'pending': pending, 'approved': approved,
         'rejected': rejected, 'wall_count': wall_count,
         'sessions': [{'id': str(s.id), 'title': s.title, 'day': s.day, 'session_type': s.session_type,
                        'total_photos': s.total_photos, 'pending_photos': s.pending_photos, 'approved_photos': s.approved_photos} for s in sessions],
     })
+
+
+
+
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def upload_sessions(request):
+    """Live + past sessions for photo tagging. Future sessions hidden."""
+    IST = zoneinfo.ZoneInfo("Asia/Kolkata")
+    now = timezone.now().astimezone(IST)
+    today = now.date()
+    now_time = now.time()
+
+    sessions = ScheduleSession.objects.filter(is_published=True).order_by('-date', '-start_time')
+
+    result = []
+    for s in sessions:
+        if not s.date:
+            continue
+        # If date is strictly in the future, hide it
+        if s.date > today:
+            continue
+        
+        is_live = False
+        if s.date == today and s.start_time:
+            # If starting in future today, hide it
+            if s.start_time > now_time:
+                continue
+            # If start_time <= now_time and end_time >= now_time -> LIVE
+            if s.end_time and (s.start_time <= now_time <= s.end_time):
+                is_live = True
+
+        result.append({
+            'id': str(s.id),
+            'title': s.title,
+            'day': s.day,
+            'session_type': s.session_type,
+            'is_live': is_live,
+        })
+
+    live = [s for s in result if s['is_live']]
+    past = [s for s in result if not s['is_live']]
+    return Response({'sessions': live + past})
 
 
 # ── Selfie Spots / Checkpoints ─────────────────────────────────────

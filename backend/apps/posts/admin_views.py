@@ -45,7 +45,7 @@ def feed_panel(request):
 @login_required
 @admin_required
 def feed_create(request):
-    sessions = ScheduleSession.objects.filter(is_published=True).order_by('day', 'start_datetime')
+    sessions = ScheduleSession.objects.filter(is_published=True).order_by('day', 'date', 'start_time')
     if request.method == 'POST':
         post = _save_post(request, FeedPost())
         if post:
@@ -70,7 +70,7 @@ def feed_create(request):
 @admin_required
 def feed_edit(request, pk):
     post = get_object_or_404(FeedPost, pk=pk)
-    sessions = ScheduleSession.objects.filter(is_published=True).order_by('day', 'start_datetime')
+    sessions = ScheduleSession.objects.filter(is_published=True).order_by('day', 'date', 'start_time')
     if request.method == 'POST':
         updated = _save_post(request, post)
         if updated:

@@ -1,3 +1,5 @@
+import ReportErrorScreen from './screens/ReportErrorScreen';
+import OnboardingGuideScreen from './screens/OnboardingGuideScreen';
 import StaffGroupChatScreen from './screens/StaffGroupChatScreen';
 import StaffScreen from './screens/StaffScreen';
 import StaffDetailScreen from './screens/StaffDetailScreen';
@@ -6,7 +8,7 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { View, Text, TouchableOpacity, Pressable, StyleSheet, Platform, Animated, Modal, BackHandler, Keyboard } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
-import { COLORS, FONT, SPACE, RADIUS, SHADOW, API_URL, API_HEADERS } from './theme';
+import { COLORS, FONT, SPACE, RADIUS, SHADOW, API_URL, API_HEADERS, API_ROOT } from './theme';
 import { apiFetch, setTokens as setApiTokens } from './api';
 
 // Screen Imports
@@ -235,6 +237,15 @@ export default function MainApp({
   const [subParams, setSubParams] = useState({});
   const [user, setUser] = useState(initialUser);
   const [activeCall, setActiveCall] = useState(null);
+  const [showGuide, setShowGuide] = useState(() => {
+    return !!user && user.has_seen_guide === false;
+  });
+
+  useEffect(() => {
+    if (user && user.has_seen_guide === false) {
+      setShowGuide(true);
+    }
+  }, [user?.id, user?.has_seen_guide]);
 
   useEffect(() => {
     if (initialUser) {
@@ -481,10 +492,12 @@ export default function MainApp({
 
     if (subScreen === 'leaderboard') return <LeaderboardScreen onBack={() => setSubScreen(null)} />;
     if (subScreen === 'papers') return <AcceptedPapersScreen onBack={() => setSubScreen(null)} onOpenSchedule={() => { setSubScreen(null); setTab('schedule'); }} initialSearch={subParams.search} />;
-    if (subScreen === 'photos') return <PhotosScreen onBack={() => setSubScreen(null)} onOpenCheckpoint={() => openSubScreen('checkpoint')} onOpenStaffTeam={() => openSubScreen('staff_team')} />;
+    if (subScreen === 'photos') return <PhotosScreen onBack={() => setSubScreen(null)} onOpenCheckpoint={() => openSubScreen('checkpoint')} onOpenStaffTeam={() => openSubScreen('staff_team')}
+        onOpenReportError={() => openSubScreen('report_error')} />;
     if (subScreen === 'polls') return <PollsScreen onBack={() => setSubScreen(null)} />;
     if (subScreen === 'shake_connect') return <ShakeConnectScreen tokens={tokens} user={user} onConnected={(convId) => { if (convId) openSubScreen('chat_room', { conversationId: convId }); else closeSubScreen(); }} onBack={() => setSubScreen(null)} />;
     if (subScreen === 'ideathon') return <IdeathonScreen onBack={() => setSubScreen(null)} onOpenPolls={() => setSubScreen('polls')} />;
+    if (subScreen === 'report_error') return <ReportErrorScreen tokens={tokens} user={user} onBack={closeSubScreen} />;
     if (subScreen === 'recap') return <RecapScreen tokens={tokens} onBack={closeSubScreen} />;
     if (subScreen === 'checkpoint' || subScreen === 'selfie_spots') return <CheckpointScreen tokens={tokens} onBack={closeSubScreen} />;
 
@@ -509,6 +522,7 @@ export default function MainApp({
         onOpenIdeathon={() => openSubScreen('ideathon')}
         onOpenCheckpoint={() => openSubScreen('checkpoint')}
         onOpenStaffTeam={() => openSubScreen('staff_team')}
+        onOpenReportError={() => openSubScreen('report_error')}
         onOpenFeed={() => setTab('feed')}
         onOpenProfile={() => setTab('profile')}
         chatBadge={pendingRequests + chatUnread}
@@ -537,6 +551,7 @@ export default function MainApp({
         onOpenLeaderboard={() => openSubScreen('leaderboard')}
         onOpenSchedule={() => setTab('schedule')}
         onOpenStaffTeam={() => openSubScreen('staff_team')}
+        onOpenReportError={() => openSubScreen('report_error')}
         onOpenChatRoom={(convId) => openSubScreen('chat_room', { conversationId: convId })}
       />
     ),
@@ -571,6 +586,14 @@ export default function MainApp({
       {!subScreen && (
         <BottomTabBar active={tab} onTab={setTab} tabs={tabs} networkBadge={pendingRequests} />
       )}
+
+      <OnboardingGuideScreen 
+        visible={showGuide} 
+        onComplete={() => {
+          setShowGuide(false);
+          setUser(prev => prev ? { ...prev, has_seen_guide: true } : prev);
+        }} 
+      />
     </View>
   );
 }

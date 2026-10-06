@@ -16,7 +16,7 @@ from apps.schedule.models import (
 # Set to date(2026, 10, 23) for exact HTML dates (Oct 23-25, 2026)
 # OR set to date.today() for instant testing today!
 # ==============================================================================
-START_DATE = date(2026, 9, 20) 
+START_DATE = date(2026, 10, 1) 
 # START_DATE = date.today()  # Uncomment this line when testing today!
 
 day1 = START_DATE

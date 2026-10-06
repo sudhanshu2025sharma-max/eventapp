@@ -1,8 +1,3 @@
-/**
- * Auto-refreshing fetch wrapper.
- * On 401 → refreshes JWT → retries original request once.
- * Updates stored tokens in-memory + localStorage.
- */
 import { API_URL, API_HEADERS } from './theme';
 
 let _tokens = null;
@@ -53,39 +48,36 @@ async function _refreshTokens() {
   return _refreshPromise;
 }
 
-/**
- * Drop-in fetch replacement with auto token refresh.
- * Usage: apiFetch('/notifications/my/')
- *        apiFetch('/auth/update-profile/', { method: 'POST', body: JSON.stringify({...}) })
- *        apiFetch('/photos/upload/', { method: 'POST', body: formData }) // FormData auto-handled
- */
 export async function apiFetch(path, options = {}) {
   const url = path.startsWith('http') ? path : `${API_URL}${path}`;
 
-  // Build headers: auth + user-provided, but skip Content-Type for FormData
-  const isFormData = options.body instanceof FormData;
+  // Robust FormData detection for RN SDK 57 TurboModules
+  const isFormData = !!(
+    options.body &&
+    (options.body instanceof FormData ||
+     Object.prototype.toString.call(options.body) === '[object FormData]' ||
+     typeof options.body.getParts === 'function' ||
+     options.body._parts)
+  );
+
   const baseHeaders = _tokens?.access
     ? { Authorization: `Bearer ${_tokens.access}` }
     : {};
 
-  // Only add Content-Type: application/json if NOT FormData and not already set
   if (!isFormData && !options.headers?.['Content-Type']) {
     baseHeaders['Content-Type'] = 'application/json';
   }
 
-  // Add ngrok header
   baseHeaders['ngrok-skip-browser-warning'] = 'true';
 
   const headers = { ...baseHeaders, ...(options.headers || {}) };
 
-  // Remove Content-Type if FormData (let browser set boundary)
   if (isFormData) {
     delete headers['Content-Type'];
   }
 
   let res = await fetch(url, { ...options, headers });
 
-  // If 401 and we have a refresh token, try refreshing
   if (res.status === 401 && _tokens?.refresh) {
     const refreshed = await _refreshTokens();
     if (refreshed) {

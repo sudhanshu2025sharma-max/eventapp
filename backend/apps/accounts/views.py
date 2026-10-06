@@ -636,7 +636,7 @@ def my_recap_view(request):
     bookmarks = SessionBookmark.objects.filter(
         user=user,
         session__day=day,
-    ).select_related('session').order_by('session__start_datetime')
+    ).select_related('session').order_by('session__date', 'session__start_time')
 
     bookmarked = []
     for b in bookmarks:
@@ -888,3 +888,84 @@ def acknowledge_warning_view(request):
         'message': 'Warning acknowledged successfully.',
         'user': UserSerializer(user, context={'request': request}).data,
     })
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def support_team_list(request):
+    """
+    Returns strictly the 8 Central Library & Committee Leaders for Support & Help.
+    CACHED FOR 5 MINUTES via Django cache to eliminate repeated DB queries.
+    """
+    from django.core.cache import cache
+    
+    cache_key = 'support_committee_team_v2'
+    cached_data = cache.get(cache_key)
+    
+    if cached_data is not None:
+        return Response({'success': True, 'support_team': cached_data, 'cached': True})
+
+    emails = [
+        'hodlibrary@admin.iitd.ac.in',
+        'neerajkc@library.iitd.ac.in',
+        'shankar.chavan@library.iitd.ac.in',
+        'vkverma@library.iitd.ac.in',
+        'vanita@library.iitd.ac.in',
+        'gargmohit@library.iitd.ac.in',
+        'manutr@library.iitd.ac.in',
+        'satbir@library.iitd.ac.in',
+    ]
+
+    users = User.objects.filter(email__in=emails).select_related('staff_profile')
+    user_dict = {u.email.lower(): u for u in users}
+
+    results = []
+    for email in emails:
+        u = user_dict.get(email.lower())
+        if u:
+            sp = getattr(u, 'staff_profile', None)
+
+            photo_url = None
+            if sp and getattr(sp, 'photo', None):
+                photo_url = request.build_absolute_uri(sp.photo.url)
+            elif u.profile_photo:
+                photo_url = request.build_absolute_uri(u.profile_photo.url)
+
+            phone = getattr(sp, 'phone', '') or u.phone or ''
+            designation = getattr(sp, 'designation', '') or u.designation or 'Central Library Leader'
+            department = getattr(sp, 'department', '') or 'Central Library, IIT Delhi'
+
+            results.append({
+                'id': str(u.id),
+                'first_name': u.first_name,
+                'last_name': u.last_name,
+                'full_name': f"{u.first_name} {u.last_name}".strip() or u.email,
+                'email': u.email,
+                'phone': phone,
+                'designation': designation,
+                'department': department,
+                'photo_url': photo_url,
+            })
+
+    # Store in cache for 300 seconds (5 minutes)
+    cache.set(cache_key, results, timeout=300)
+
+    return Response({'success': True, 'support_team': results, 'cached': False})
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def complete_guide(request):
+    user = request.user
+    if not user.has_seen_guide:
+        user.has_seen_guide = True
+        user.save(update_fields=['has_seen_guide'])
+        
+        # Easter egg points
+        if request.data.get('found_easter_egg') is True:
+            from apps.leaderboard.utils import award_points
+            try:
+                award_points(user, 'profile_completion', note="Onboarding Shake Bonus!", points_override=10)
+            except Exception:
+                pass
+                
+    return Response({"success": True})

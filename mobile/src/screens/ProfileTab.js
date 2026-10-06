@@ -1,3 +1,4 @@
+import SupportModal from './SupportModal';
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   View, Text, TouchableOpacity, ScrollView, StyleSheet,
@@ -149,10 +150,13 @@ export default function ProfileTab({
   onOpenLeaderboard,
   onOpenSchedule,
   onOpenStaffTeam,
+  onOpenReportError,
+  onOpenChatRoom,
 }) {
   const [stats, setStats] = useState({ points: 0, rank: 0 });
   const [connections, setConnections] = useState(0);
   const [showCert, setShowCert] = useState(false);
+  const [showSupportModal, setShowSupportModal] = useState(false);
   const [showMissingModal, setShowMissingModal] = useState(false);
 
   const fetchStats = useCallback(async () => {
@@ -235,7 +239,8 @@ export default function ProfileTab({
     {
       section: 'Support & Info',
       items: [
-        { icon: 'people-outline',        label: 'Support & Help', sub: 'Meet the committee & staff',       onPress: onOpenStaffTeam },
+        { icon: 'bug-outline',           label: 'Report an Error', sub: 'Submit bug details & screenshots to admin', onPress: onOpenReportError },
+        { icon: 'people-outline',        label: 'Support & Help', sub: 'Central Library & Committee Leaders', onPress: () => setShowSupportModal(true) },
         { icon: 'globe-outline',         label: 'Official Conference Portal', sub: 'https://etd2026.iitd.ac.in',     onPress: () => Linking.openURL('https://etd2026.iitd.ac.in/') },
       ]
     },
@@ -244,6 +249,7 @@ export default function ProfileTab({
   return (
     <View style={{ flex: 1, backgroundColor: '#f0f4f9' }}>
       <CertificateModal visible={showCert} user={user} onDismiss={() => setShowCert(false)} />
+      <SupportModal visible={showSupportModal} onDismiss={() => setShowSupportModal(false)} onOpenChatRoom={onOpenChatRoom} />
 
       <ScrollView showsVerticalScrollIndicator={false}>
 

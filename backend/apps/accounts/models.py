@@ -54,6 +54,7 @@ class User(AbstractBaseUser, PermissionsMixin):
     # State flags
     must_change_password = models.BooleanField(default=True)
     profile_complete    = models.BooleanField(default=False)
+    has_seen_guide      = models.BooleanField(default=False)
     warning_note        = models.TextField(blank=True, help_text='Admin warning message sent to user')
     warning_acknowledged = models.BooleanField(default=False, help_text='Has the user acknowledged the warning')
     warning_acknowledged_at = models.DateTimeField(null=True, blank=True, help_text='When the warning was acknowledged')
@@ -185,6 +186,7 @@ class StaffPermission(models.Model):
         ('users_manage',      'User Management'),
         ('reports',           'Reports'),
         ('settings',          'Settings'),
+        ('error_reports',     'Error Reports & Logs'),
     ]
     user       = models.ForeignKey('accounts.User', on_delete=models.CASCADE,
                         related_name='staff_permissions')

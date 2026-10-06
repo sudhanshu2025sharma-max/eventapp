@@ -9,11 +9,13 @@ import {
   ActivityIndicator,
   StatusBar,
   Dimensions,
+  Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { COLORS, SPACE, RADIUS, SHADOW, fixMediaUrl } from '../theme';
 import { apiFetch } from '../api';
+import TopicPickerModal from './TopicPickerModal';
 
 const CACHE_KEY = '@staff_directory_cache';
 const CACHE_TTL = 10 * 60 * 1000;
@@ -29,16 +31,14 @@ const TIER_COLORS = {
   staff: '#d97706',
 };
 
-const TIER_LABELS = {
-  librarian: 'Chair',
-  deputy: 'Deputy',
-  assistant: 'Assistant',
-  staff: 'Staff',
-};
-
-export default function StaffScreen({ onBack, onOpenStaffDetail, onOpenGroupChat, user }) {
+export default function StaffScreen({ onBack, onOpenStaffDetail, onOpenGroupChat, onOpenChatRoom, user }) {
   const [loading, setLoading] = useState(true);
   const [staffList, setStaffList] = useState([]);
+  const [connectingId, setConnectingId] = useState(null);
+
+  // Topic Picker State
+  const [targetStaff, setTargetStaff] = useState(null);
+  const [showTopicPicker, setShowTopicPicker] = useState(false);
 
   const isStaffUser = user && ['super_admin', 'mgmt_admin', 'team_head', 'staff'].includes(user.role);
 
@@ -78,43 +78,117 @@ export default function StaffScreen({ onBack, onOpenStaffDetail, onOpenGroupChat
     finally { setLoading(false); }
   };
 
+  // 1. User Taps Chat Button -> Open Topic Picker
+  const handleInitiateChat = (staffMember) => {
+    setTargetStaff(staffMember);
+    setShowTopicPicker(true);
+  };
+
+  // 2. Topic Confirmed -> Start Chat Session
+  const handleTopicConfirmed = async ({ topic, custom_topic, message }) => {
+    if (!targetStaff) return;
+    const staffUserId = targetStaff.user_id || targetStaff.id;
+    setShowTopicPicker(false);
+    setConnectingId(staffUserId);
+
+    try {
+      const res = await apiFetch(`/chat/support/start/${staffUserId}/`, {
+        method: 'POST',
+        body: JSON.stringify({
+          topic,
+          custom_topic,
+          message,
+        }),
+      });
+
+      const data = await res.json();
+      if (data.success && data.conversation_id) {
+        if (onOpenChatRoom) {
+          onOpenChatRoom(data.conversation_id);
+        }
+      } else {
+        Alert.alert('Chat Error', data.error || 'Could not start chat session.');
+      }
+    } catch {
+      Alert.alert('Network Error', 'Could not reach chat server.');
+    } finally {
+      setConnectingId(null);
+      setTargetStaff(null);
+    }
+  };
+
   const renderStaffCard = useCallback(({ item }) => {
     const photoUrl = fixMediaUrl(item.photo_url);
     const tierColor = TIER_COLORS[item.tier] || '#4f46e5';
     const initials = (item.first_name?.[0] || '') + (item.last_name?.[0] || '');
+    const fullBadgeTitle = item.designation || 'Organizing Team';
+    const staffUserId = item.user_id || item.id;
 
     return (
-      <TouchableOpacity
-        style={styles.card}
-        activeOpacity={0.85}
-        onPress={() => onOpenStaffDetail && onOpenStaffDetail(item)}
-      >
+      <View style={styles.card}>
+        {/* Top Full Designation Badge */}
         <View style={[styles.tierBar, { backgroundColor: tierColor }]}>
-          <Text style={styles.tierBarText}>{TIER_LABELS[item.tier] || 'Team'}</Text>
+          <Text style={styles.tierBarText} numberOfLines={1}>{fullBadgeTitle}</Text>
         </View>
 
-        <View style={styles.avatarContainer}>
-          {photoUrl ? (
-            <Image source={{ uri: photoUrl }} style={styles.avatar} resizeMode="cover" />
+        {/* Big Avatar Container (Preserves Full Headshot) */}
+        <TouchableOpacity
+          activeOpacity={0.85}
+          style={{ alignItems: 'center', width: '100%' }}
+          onPress={() => onOpenStaffDetail && onOpenStaffDetail(item)}
+        >
+          <View style={styles.avatarContainer}>
+            {photoUrl ? (
+              <Image
+                source={{ uri: photoUrl }}
+                style={styles.avatar}
+                resizeMode="contain"
+              />
+            ) : (
+              <View style={[styles.avatarPlaceholder, { backgroundColor: tierColor }]}>
+                <Text style={styles.avatarText}>{initials}</Text>
+              </View>
+            )}
+          </View>
+
+          <Text style={styles.name} numberOfLines={2}>{item.full_name}</Text>
+          <Text style={styles.department} numberOfLines={1}>{item.department || 'Central Library, IIT Delhi'}</Text>
+        </TouchableOpacity>
+
+        {/* Direct Chat Button */}
+        <TouchableOpacity
+          onPress={() => handleInitiateChat(item)}
+          disabled={connectingId === staffUserId}
+          style={styles.chatBtn}
+          activeOpacity={0.8}
+        >
+          {connectingId === staffUserId ? (
+            <ActivityIndicator color="#fff" size="small" />
           ) : (
-            <View style={[styles.avatarPlaceholder, { backgroundColor: tierColor }]}>
-              <Text style={styles.avatarText}>{initials}</Text>
-            </View>
+            <>
+              <Ionicons name="chatbubbles-outline" size={14} color="#fff" style={{ marginRight: 6 }} />
+              <Text style={styles.chatBtnText}>Chat</Text>
+            </>
           )}
-        </View>
-
-        <Text style={styles.name} numberOfLines={2}>{item.full_name}</Text>
-        <Text style={styles.designation} numberOfLines={2}>{item.designation}</Text>
-        {item.department ? (
-          <Text style={styles.department} numberOfLines={1}>{item.department}</Text>
-        ) : null}
-      </TouchableOpacity>
+        </TouchableOpacity>
+      </View>
     );
-  }, [onOpenStaffDetail]);
+  }, [onOpenStaffDetail, connectingId]);
 
   return (
     <View style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor="#1e1b4b" />
+
+      {/* Topic Picker Modal */}
+      <TopicPickerModal
+        visible={showTopicPicker}
+        onClose={() => {
+          setShowTopicPicker(false);
+          setTargetStaff(null);
+        }}
+        onConfirm={handleTopicConfirmed}
+        title={targetStaff ? `Connect with ${targetStaff.first_name || targetStaff.full_name}` : 'Select Topic'}
+      />
 
       <View style={styles.topBar}>
         <TouchableOpacity style={styles.backBtn} onPress={onBack}>
@@ -137,7 +211,7 @@ export default function StaffScreen({ onBack, onOpenStaffDetail, onOpenGroupChat
           </View>
           <View style={{ flex: 1 }}>
             <Text style={styles.groupTitle}>Staff Coordination Group</Text>
-            <Text style={styles.groupSub}>Broadcast & chat with all organizers</Text>
+            <Text style={styles.groupSub}>Broadcast &amp; chat with all organizers</Text>
           </View>
           <Ionicons name="arrow-forward-circle" size={24} color="#fff" />
         </TouchableOpacity>
@@ -173,7 +247,7 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#f8fafc' },
   topBar: {
     backgroundColor: '#1e1b4b',
-    paddingTop: 48, paddingBottom: 16, paddingHorizontal: SPACE.lg,
+    paddingTop: 20, paddingBottom: 16, paddingHorizontal: SPACE.lg,
     flexDirection: 'row', alignItems: 'center', gap: 12,
   },
   backBtn: { padding: 4 },
@@ -209,23 +283,24 @@ const styles = StyleSheet.create({
   tierBar: {
     position: 'absolute',
     top: 0, left: 0, right: 0,
-    paddingVertical: 4,
+    paddingVertical: 5,
+    paddingHorizontal: 6,
     alignItems: 'center',
   },
   tierBarText: {
-    color: '#fff', fontSize: 10, fontWeight: '700', letterSpacing: 0.5,
+    color: '#fff', fontSize: 9, fontWeight: '700', letterSpacing: 0.3, textAlign: 'center',
   },
   avatarContainer: {
-    marginTop: 22,
+    marginTop: 20,
     width: 90,
-    height: 90,
-    borderRadius: 45,
+    height: 104,
+    borderRadius: 18,
     overflow: 'hidden',
-    borderWidth: 3,
+    borderWidth: 1.5,
     borderColor: '#e0e7ff',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#f1f5f9',
+    backgroundColor: '#f8fafc',
   },
   avatar: {
     width: '100%',
@@ -239,16 +314,26 @@ const styles = StyleSheet.create({
   },
   avatarText: { color: '#fff', fontWeight: '700', fontSize: 28 },
   name: {
-    fontSize: 14, fontWeight: '700', color: '#1e293b',
-    textAlign: 'center', marginTop: 10, minHeight: 36,
-  },
-  designation: {
-    fontSize: 11, color: '#4f46e5', fontWeight: '600',
-    textAlign: 'center', marginTop: 2, minHeight: 28,
+    fontSize: 13, fontWeight: '700', color: '#1e293b',
+    textAlign: 'center', marginTop: 8, minHeight: 34,
   },
   department: {
     fontSize: 10, color: '#64748b',
-    textAlign: 'center', marginTop: 2,
+    textAlign: 'center', marginTop: 2, marginBottom: 10,
+  },
+  chatBtn: {
+    width: '100%',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: COLORS.brand,
+    height: 36,
+    borderRadius: RADIUS.md,
+  },
+  chatBtnText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: '700',
   },
   centerBox: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   loadingText: { marginTop: 12, fontSize: 14, color: '#64748b' },

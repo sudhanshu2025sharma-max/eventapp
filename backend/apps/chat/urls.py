@@ -17,6 +17,7 @@ urlpatterns = [
     path('requests/<uuid:request_id>/withdraw/', views.withdraw_request, name='chat_withdraw_request'),
 
     # Conversations & Messages
+    path('support/start/<uuid:user_id>/', views.start_support_chat, name='start_support_chat'),
     path('conversations/', views.conversation_list, name='chat_conversations'),
     path('conversations/<uuid:conversation_id>/', views.conversation_detail, name='chat_conversation_detail'),
     path('conversations/<uuid:conversation_id>/mute/', views.toggle_mute, name='chat_conversation_mute'),

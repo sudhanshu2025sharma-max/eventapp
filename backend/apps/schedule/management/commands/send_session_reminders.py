@@ -31,53 +31,57 @@ class Command(BaseCommand):
         # -------------------------------------------------------------
         # 1. FEATURED SESSIONS: 60 min reminder to ALL users
         # -------------------------------------------------------------
-        target_60_min = now_ist + timedelta(minutes=60)
         featured = ScheduleSession.objects.filter(
             is_published=True,
             is_featured=True,
             notify_featured_60_sent_at__isnull=True,
-            date=target_60_min.date(),
-            start_time__range=(
-                (target_60_min - timedelta(minutes=2)).time(),
-                (target_60_min + timedelta(minutes=2)).time(),
-            )
+            date=now_ist.date(),
         )
         for sess in featured:
-            if all_tokens:
-                send_to_tokens(
-                    all_tokens,
-                    '⭐ Starting in 1 hour',
-                    f'{sess.title} starts at {sess.start_time.strftime("%I:%M %p")}.' + (f' Room: {sess.room}' if sess.room else ''),
-                    {'type': 'schedule', 'session_id': str(sess.id)}
-                )
-            sess.notify_featured_60_sent_at = timezone.now()
-            sess.save(update_fields=['notify_featured_60_sent_at'])
-            self.stdout.write(f'Featured 60m reminder sent: {sess.title}')
+            if not sess.start_time:
+                continue
+            sess_dt_ist = datetime.combine(sess.date, sess.start_time).replace(tzinfo=IST)
+            remind_time = sess_dt_ist - timedelta(minutes=60)
+            
+            # Send if within 5-minute window or slightly past
+            if remind_time <= now_ist <= (remind_time + timedelta(minutes=10)):
+                if all_tokens:
+                    send_to_tokens(
+                        all_tokens,
+                        '⭐ Starting in 1 hour',
+                        f'{sess.title} starts at {sess.start_time.strftime("%I:%M %p")}.' + (f' Room: {sess.room}' if sess.room else ''),
+                        {'type': 'schedule', 'session_id': str(sess.id)}
+                    )
+                sess.notify_featured_60_sent_at = timezone.now()
+                sess.save(update_fields=['notify_featured_60_sent_at'])
+                self.stdout.write(f'Featured 60m reminder sent: {sess.title}')
 
         # -------------------------------------------------------------
         # 2. ALL SESSIONS: 5 min reminder to ALL users
         # -------------------------------------------------------------
-        target_5_min = now_ist + timedelta(minutes=5)
         upcoming_5m = ScheduleSession.objects.filter(
             is_published=True,
             notify_all_5_sent_at__isnull=True,
-            date=target_5_min.date(),
-            start_time__range=(
-                (target_5_min - timedelta(minutes=2)).time(),
-                (target_5_min + timedelta(minutes=2)).time(),
-            )
+            date=now_ist.date(),
         )
         for sess in upcoming_5m:
-            if all_tokens:
-                send_to_tokens(
-                    all_tokens,
-                    '🔔 Starting in 5 minutes',
-                    f'{sess.title} is starting shortly.' + (f' Room: {sess.room}' if sess.room else ''),
-                    {'type': 'schedule', 'session_id': str(sess.id)}
-                )
-            sess.notify_all_5_sent_at = timezone.now()
-            sess.save(update_fields=['notify_all_5_sent_at'])
-            self.stdout.write(f'5m all-users reminder sent: {sess.title}')
+            if not sess.start_time:
+                continue
+            sess_dt_ist = datetime.combine(sess.date, sess.start_time).replace(tzinfo=IST)
+            remind_time = sess_dt_ist - timedelta(minutes=5)
+
+            # Send if within 5-minute window or slightly past (before start)
+            if remind_time <= now_ist <= (sess_dt_ist + timedelta(minutes=2)):
+                if all_tokens:
+                    send_to_tokens(
+                        all_tokens,
+                        '🔔 Starting in 5 minutes',
+                        f'{sess.title} is starting shortly.' + (f' Room: {sess.room}' if sess.room else ''),
+                        {'type': 'schedule', 'session_id': str(sess.id)}
+                    )
+                sess.notify_all_5_sent_at = timezone.now()
+                sess.save(update_fields=['notify_all_5_sent_at'])
+                self.stdout.write(f'5m all-users reminder sent: {sess.title}')
 
         # -------------------------------------------------------------
         # 3. BOOKMARKED SESSIONS: User custom reminder_minutes
@@ -95,8 +99,8 @@ class Command(BaseCommand):
             sess_dt_ist = datetime.combine(sess.date, sess.start_time).replace(tzinfo=IST)
             remind_time = sess_dt_ist - timedelta(minutes=bm.reminder_minutes)
 
-            # Check if within 2-minute trigger window
-            if abs((now_ist - remind_time).total_seconds()) <= 120:
+            # Check if remind_time has arrived (up to 15 mins late allowed)
+            if remind_time <= now_ist <= (sess_dt_ist + timedelta(minutes=5)):
                 user_tokens = list(DeviceToken.objects.filter(user=bm.user, is_active=True).values_list('token', flat=True))
                 if user_tokens:
                     label = f'{bm.reminder_minutes} min' if bm.reminder_minutes < 60 else '1 hour'
@@ -130,7 +134,7 @@ class Command(BaseCommand):
             paper_dt_ist = datetime.combine(paper_date, paper_start).replace(tzinfo=IST)
             remind_time = paper_dt_ist - timedelta(minutes=pbm.reminder_minutes)
 
-            if abs((now_ist - remind_time).total_seconds()) <= 120:
+            if remind_time <= now_ist <= (paper_dt_ist + timedelta(minutes=5)):
                 user_tokens = list(DeviceToken.objects.filter(user=pbm.user, is_active=True).values_list('token', flat=True))
                 if user_tokens:
                     label = f'{pbm.reminder_minutes} min' if pbm.reminder_minutes < 60 else '1 hour'

@@ -11,6 +11,7 @@ urlpatterns = [
     path('mine/',                 views.my_photos,            name='photo_mine'),
     path('mine/<int:pk>/delete/', views.delete_my_photo,      name='photo_delete_mine'),
     path('sessions/',             views.sessions_with_photos, name='photo_sessions'),
+    path('upload-sessions/',      views.upload_sessions,      name='photo_upload_sessions'),
 
     # Admin API
     path('admin/settings/',       views.admin_settings,       name='photo_admin_settings'),

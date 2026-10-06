@@ -10,6 +10,33 @@ from rest_framework.pagination import PageNumberPagination
 from rest_framework import status
 
 from .models import FeedPost, FeedReaction, FeedComment, REACTION_CHOICES
+import base64
+import uuid
+from django.core.files.base import ContentFile
+
+def _process_base64_image(b64_str, prefix='feed_'):
+    if not b64_str or not isinstance(b64_str, str):
+        return None
+    try:
+        if 'base64,' in b64_str:
+            header, data_str = b64_str.split('base64,', 1)
+            ext = 'png' if 'image/png' in header else 'mp4' if 'video/mp4' in header else 'jpg'
+        else:
+            data_str = b64_str
+            ext = 'jpg'
+
+        data_str = data_str.encode('ascii', 'ignore').decode('ascii').strip()
+        missing_padding = len(data_str) % 4
+        if missing_padding:
+            data_str += '=' * (4 - missing_padding)
+
+        img_data = base64.b64decode(data_str)
+        file_name = f"{prefix}{uuid.uuid4().hex[:8]}.{ext}"
+        return ContentFile(img_data, name=file_name)
+    except Exception as e:
+        print(f"[FEED BASE64 ERROR] {e}")
+        return None
+
 
 
 def _is_true(val, default=False):
@@ -68,8 +95,24 @@ def _session_payload(session):
 
 def _post_payload(request, post, my_reaction=None):
     author_name = 'ETD 2026'
-    if post.author:
-        author_name = post.author.get_full_name().strip() or post.author.email
+    try:
+        if post.author:
+            author_name = post.author.get_full_name().strip() or post.author.email
+    except Exception:
+        pass
+
+    session_obj = None
+    try:
+        session_obj = post.session
+    except Exception:
+        session_obj = None
+
+    poll_id = None
+    try:
+        if post.poll_id:
+            poll_id = str(post.poll_id)
+    except Exception:
+        poll_id = None
 
     return {
         'id': str(post.id),
@@ -84,8 +127,8 @@ def _post_payload(request, post, my_reaction=None):
         'scheduled_at': post.scheduled_at.isoformat() if post.scheduled_at else None,
         'author_name': author_name,
         'author_role': 'Organizer',
-        'session': _session_payload(post.session),
-        'poll_id': str(post.poll_id) if post.poll_id else None,
+        'session': _session_payload(session_obj),
+        'poll_id': poll_id,
         'comment_count': getattr(post, 'comment_count', post.comments.count()),
         'reaction_summary': _reaction_summary(post),
         'my_reaction': my_reaction,
@@ -314,6 +357,10 @@ def admin_feed_list(request):
     )
     if 'image' in request.FILES:
         post.image = request.FILES['image']
+    elif 'image_base64' in data and data['image_base64']:
+        b64_file = _process_base64_image(data['image_base64'], prefix='feed_create_')
+        if b64_file:
+            post.image = b64_file
     post.save()
     print(f"[FEED ADMIN] created post={post.id} send_push={want_push}")
 
@@ -333,7 +380,7 @@ def admin_feed_list(request):
     })
 
 
-@api_view(['PATCH', 'DELETE'])
+@api_view(['PATCH', 'POST', 'DELETE'])
 @permission_classes([IsAuthenticated])
 def admin_feed_detail(request, pk):
     if request.user.role not in ('super_admin', 'mgmt_admin', 'team_head', 'staff'):
@@ -341,19 +388,25 @@ def admin_feed_detail(request, pk):
 
     post = get_object_or_404(FeedPost, pk=pk)
 
-    if request.method == 'PATCH':
-        if 'title' in request.data:
-            post.title = (request.data.get('title') or '').strip() or post.title
-        if 'body' in request.data:
-            post.body = (request.data.get('body') or '').strip() or post.body
-        if 'post_type' in request.data:
-            post.post_type = request.data.get('post_type') or post.post_type
-        if 'pinned' in request.data:
-            post.pinned = _is_true(request.data.get('pinned'), post.pinned)
-        if 'allow_comments' in request.data:
-            post.allow_comments = _is_true(request.data.get('allow_comments'), post.allow_comments)
-        if 'image' in request.FILES:
-            post.image = request.FILES['image']
+    if request.method in ('PATCH', 'POST'):
+        data = request.data
+        if 'title' in data:
+            post.title = (data.get('title') or '').strip() or post.title
+        if 'body' in data:
+            post.body = (data.get('body') or '').strip() or post.body
+        if 'post_type' in data:
+            post.post_type = data.get('post_type') or post.post_type
+        if 'pinned' in data:
+            post.pinned = _is_true(data.get('pinned'), post.pinned)
+        if 'allow_comments' in data:
+            post.allow_comments = _is_true(data.get('allow_comments'), post.allow_comments)
+
+        img_file = request.FILES.get('image')
+        if img_file is None and 'image_base64' in data and data['image_base64']:
+            img_file = _process_base64_image(data['image_base64'], prefix='feed_update_')
+        if img_file is not None:
+            post.image = img_file
+
         post.save()
         return Response({'success': True, 'post': _post_payload(request, post)})
 

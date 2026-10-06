@@ -13,6 +13,7 @@ import * as Haptics from 'expo-haptics';
 import { COLORS, FONT, RADIUS, SHADOW, fixMediaUrl } from '../theme';
 import { apiFetch } from '../api';
 import { getHaversineDistanceMeters, formatDistance } from '../utils/geo';
+import { LEAFLET_CSS, LEAFLET_JS } from '../utils/leafletAssets';
 import SponsorDetailScreen from './SponsorDetailScreen';
 
 const { width: W, height: H } = Dimensions.get('window');
@@ -24,7 +25,6 @@ const SNAP_FULL = H - TOP_INSET - 10;
 const GRID_GAP = 10;
 const CARD_W = (W - 32 - GRID_GAP) / 2;
 
-// CSS Injection to hide Google Maps web banners so our custom top bar is the only option
 const INJECT_HIDE_PROMO = `
   var style = document.createElement('style');
   style.innerHTML = '.ml-promo-app-switcher, .ml-smart-banner, .ml-promotion, .app-view-promo, .ml-snackbar { display: none !important; }';
@@ -341,7 +341,6 @@ export default function CheckpointScreen({tokens,onBack}){
   const spotsRef=useRef([]);
   useEffect(()=>{spotsRef.current=spots},[spots]);
 
-  // SMART BACK HANDLER OVERRIDE
   const handleHardwareBack = useCallback(() => {
     if (directionsUrl) { setDirectionsUrl(null); return true; }
     if (detailSponsorId) { setDetailSponsorId(null); return true; }
@@ -482,18 +481,22 @@ export default function CheckpointScreen({tokens,onBack}){
   },[spots,completedCount,userLocation,getDist]);
 
   const spotKey=useMemo(()=>spots.map(s=>s.id).join(','),[spots]);
+  
   const leafletHTML=useMemo(()=>{
     const sj=JSON.stringify(spots.map(s=>({
       id:s.id,n:s.name,tp:s.checkpoint_type,lat:s.latitude,lng:s.longitude,r:s.radius_meters,
       pa:s.point_a_lat,qa:s.point_a_lng,pb:s.point_b_lat,qb:s.point_b_lng,cw:s.corridor_width_meters,
       dn:s.completed,pt:s.points,sc:(s.sponsors||[]).length
     })));
-    return `<!DOCTYPE html><html><head>
+
+    return `<!DOCTYPE html>
+<html>
+<head>
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"/>
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"><\/script>
 <style>
-*{margin:0;padding:0;box-sizing:border-box}html,body,#map{height:100%;width:100%}
+${LEAFLET_CSS}
+*{margin:0;padding:0;box-sizing:border-box}
+html,body,#map{height:100%;width:100%;background:#e2e8f0}
 .leaflet-control-attribution,.leaflet-control-zoom{display:none!important}
 @keyframes pulse{0%{transform:scale(1);opacity:.6}50%{transform:scale(2.5);opacity:0}100%{transform:scale(1);opacity:0}}
 @keyframes bounce{0%{transform:scale(0)}60%{transform:scale(1.15)}100%{transform:scale(1)}}
@@ -505,43 +508,74 @@ export default function CheckpointScreen({tokens,onBack}){
 .p.z{background:linear-gradient(135deg,#0333b6,#06b6d4);width:40px;height:40px;border-radius:20px}
 .p.d{background:linear-gradient(135deg,#10b981,#047857)}
 .pl{position:absolute;top:100%;left:50%;transform:translateX(-50%);white-space:nowrap;font:800 9px/1 -apple-system,sans-serif;color:#0f172a;background:rgba(255,255,255,.95);padding:2px 5px;border-radius:5px;margin-top:2px;box-shadow:0 1px 3px rgba(0,0,0,.12);pointer-events:none;max-width:80px;overflow:hidden;text-overflow:ellipsis}
-</style></head><body><div id="map"></div>
+</style>
+</head>
+<body>
+<div id="map"></div>
 <script>
-var S=${sj},map=L.map('map',{zoomControl:false,attributionControl:false}).setView([28.5456,77.1923],16),um=null,rLine=null,rLabel=null;
-L.tileLayer('https://{s}.google.com/vt/lyrs=m&x={x}&y={y}&z={z}',{maxZoom:20,subdomains:['mt0','mt1','mt2','mt3'],attribution:'&copy; Google Maps'}).addTo(map);
-var B=[];
-S.forEach(function(s,i){
-  var c=s.dn?'d':s.tp==='selfie'?'s':'z',e=s.dn?'✓':s.tp==='selfie'?'📸':'🏢';
-  if(s.tp==='selfie'&&s.lat){
-    var sz=36,h='<div style="position:relative"><div class="p '+c+'">'+e+'</div><div class="pl">'+s.n+'</div></div>';
-    L.marker([s.lat,s.lng],{icon:L.divIcon({html:h,className:'',iconSize:[sz,sz],iconAnchor:[sz/2,sz/2]})}).addTo(map).on('click',function(){window.ReactNativeWebView.postMessage(JSON.stringify({t:'S',id:s.id}))});
-    L.circle([s.lat,s.lng],{color:s.dn?'#10b981':'#f43f5e',fillColor:s.dn?'#10b981':'#f43f5e',fillOpacity:.07,radius:s.r,weight:1.5,dashArray:s.dn?'':'5,5'}).addTo(map);
-    B.push([s.lat,s.lng]);
-  }else if(s.tp==='sponsor_zone'&&s.pa&&s.pb){
-    var m=[(s.pa+s.pb)/2,(s.qa+s.qb)/2],sz=40;
-    var badge=s.sc?'<span style="font-size:7px;position:absolute;bottom:-1px;right:-2px;background:#fff;color:#0333b6;border-radius:8px;padding:0 3px;font-weight:900">'+s.sc+'</span>':'';
-    var h='<div style="position:relative"><div class="p '+c+'">'+e+badge+'</div><div class="pl">'+s.n+'</div></div>';
-    L.marker(m,{icon:L.divIcon({html:h,className:'',iconSize:[sz,sz],iconAnchor:[sz/2,sz/2]})}).addTo(map).on('click',function(){window.ReactNativeWebView.postMessage(JSON.stringify({t:'S',id:s.id}))});
-    L.polyline([[s.pa,s.qa],[s.pb,s.qb]],{color:s.dn?'#10b981':'#0333b6',weight:8,opacity:.25}).addTo(map);
-    L.polyline([[s.pa,s.qa],[s.pb,s.qb]],{color:s.dn?'#10b981':'#06b6d4',weight:2.5,opacity:.9,dashArray:'7,5'}).addTo(map);
-    B.push(m);
-  }
-});
-if(B.length)try{map.fitBounds(B,{padding:[40,40],maxZoom:17})}catch(e){}
-window.uLoc=function(a,b){
-  if(!um){var h='<div class="um"><div class="ur"></div><div class="ud"></div></div>';um=L.marker([a,b],{icon:L.divIcon({html:h,className:'',iconSize:[20,20],iconAnchor:[10,10]}),zIndexOffset:1000}).addTo(map)}
-  else um.setLatLng([a,b]);
-};
-window.cMe=function(a,b){map.flyTo([a,b],17,{duration:1.2})};
-window.fSpot=function(a,b){map.flyTo([a,b],18,{duration:.7})};
-window.drawRoute=function(ulat,ulng,dlat,dlng,lbl){
-  if(rLine)map.removeLayer(rLine);if(rLabel)map.removeLayer(rLabel);
-  rLine=L.polyline([[ulat,ulng],[dlat,dlng]],{color:'#f59e0b',weight:3,dashArray:'8,6',opacity:.9}).addTo(map);
-  var mid=[(ulat+dlat)/2,(ulng+dlng)/2];
-  rLabel=L.marker(mid,{icon:L.divIcon({html:'<div style="background:#fff;color:#0f172a;font:800 10px/1 -apple-system,sans-serif;padding:3px 8px;border-radius:6px;box-shadow:0 1px 4px rgba(0,0,0,.15);white-space:nowrap">'+lbl+'</div>',className:'',iconSize:[90,20],iconAnchor:[45,10]})}).addTo(map);
-};
-window.clearRoute=function(){if(rLine){map.removeLayer(rLine);rLine=null}if(rLabel){map.removeLayer(rLabel);rLabel=null}};
-<\/script></body></html>`;
+${LEAFLET_JS}
+</script>
+<script>
+try {
+  var S=${sj};
+  var map=L.map('map',{zoomControl:false,attributionControl:false}).setView([28.5456,77.1923],16);
+  var um=null,rLine=null,rLabel=null;
+
+  L.tileLayer('https://mt{s}.google.com/vt/lyrs=m&x={x}&y={y}&z={z}',{
+    maxZoom:20,
+    subdomains:['0','1','2','3'],
+    attribution:'Google Maps'
+  }).addTo(map);
+
+  var B=[];
+  S.forEach(function(s){
+    var c=s.dn?'d':s.tp==='selfie'?'s':'z',e=s.dn?'✓':s.tp==='selfie'?'📸':'🏢';
+    if(s.tp==='selfie'&&s.lat){
+      var sz=36,h='<div style="position:relative"><div class="p '+c+'">'+e+'</div><div class="pl">'+s.n+'</div></div>';
+      L.marker([s.lat,s.lng],{icon:L.divIcon({html:h,className:'',iconSize:[sz,sz],iconAnchor:[sz/2,sz/2]})}).addTo(map).on('click',function(){
+        if(window.ReactNativeWebView){window.ReactNativeWebView.postMessage(JSON.stringify({t:'S',id:s.id}))}
+      });
+      L.circle([s.lat,s.lng],{color:s.dn?'#10b981':'#f43f5e',fillColor:s.dn?'#10b981':'#f43f5e',fillOpacity:.07,radius:s.r,weight:1.5,dashArray:s.dn?'':'5,5'}).addTo(map);
+      B.push([s.lat,s.lng]);
+    }else if(s.tp==='sponsor_zone'&&s.pa&&s.pb){
+      var m=[(s.pa+s.pb)/2,(s.qa+s.qb)/2],sz=40;
+      var badge=s.sc?'<span style="font-size:7px;position:absolute;bottom:-1px;right:-2px;background:#fff;color:#0333b6;border-radius:8px;padding:0 3px;font-weight:900">'+s.sc+'</span>':'';
+      var h='<div style="position:relative"><div class="p '+c+'">'+e+badge+'</div><div class="pl">'+s.n+'</div></div>';
+      L.marker(m,{icon:L.divIcon({html:h,className:'',iconSize:[sz,sz],iconAnchor:[sz/2,sz/2]})}).addTo(map).on('click',function(){
+        if(window.ReactNativeWebView){window.ReactNativeWebView.postMessage(JSON.stringify({t:'S',id:s.id}))}
+      });
+      L.polyline([[s.pa,s.qa],[s.pb,s.qb]],{color:s.dn?'#10b981':'#0333b6',weight:8,opacity:.25}).addTo(map);
+      L.polyline([[s.pa,s.qa],[s.pb,s.qb]],{color:s.dn?'#10b981':'#06b6d4',weight:2.5,opacity:.9,dashArray:'7,5'}).addTo(map);
+      B.push(m);
+    }
+  });
+
+  if(B.length){try{map.fitBounds(B,{padding:[40,40],maxZoom:17})}catch(e){}}
+
+  window.uLoc=function(a,b){
+    if(!um){
+      var h='<div class="um"><div class="ur"></div><div class="ud"></div></div>';
+      um=L.marker([a,b],{icon:L.divIcon({html:h,className:'',iconSize:[20,20],iconAnchor:[10,10]}),zIndexOffset:1000}).addTo(map);
+    }else{
+      um.setLatLng([a,b]);
+    }
+  };
+
+  window.cMe=function(a,b){map.flyTo([a,b],17,{duration:1.2})};
+  window.fSpot=function(a,b){map.flyTo([a,b],18,{duration:.7})};
+  window.drawRoute=function(ulat,ulng,dlat,dlng,lbl){
+    if(rLine)map.removeLayer(rLine);if(rLabel)map.removeLayer(rLabel);
+    rLine=L.polyline([[ulat,ulng],[dlat,dlng]],{color:'#f59e0b',weight:3,dashArray:'8,6',opacity:.9}).addTo(map);
+    var mid=[(ulat+dlat)/2,(ulng+dlng)/2];
+    rLabel=L.marker(mid,{icon:L.divIcon({html:'<div style="background:#fff;color:#0f172a;font:800 10px/1 -apple-system,sans-serif;padding:3px 8px;border-radius:6px;box-shadow:0 1px 4px rgba(0,0,0,.15);white-space:nowrap">'+lbl+'</div>',className:'',iconSize:[90,20],iconAnchor:[45,10]})}).addTo(map);
+  };
+  window.clearRoute=function(){if(rLine){map.removeLayer(rLine);rLine=null}if(rLabel){map.removeLayer(rLabel);rLabel=null}};
+} catch(err) {
+  console.error("Leaflet Map Error: " + err.message);
+}
+</script>
+</body>
+</html>`;
   },[spotKey]);
 
   const onMapMsg=useCallback((e)=>{
@@ -590,7 +624,9 @@ window.clearRoute=function(){if(rLine){map.removeLayer(rLine);rLine=null}if(rLab
     if(dist!=null&&dist>spot.radius_meters){Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(()=>{});Alert.alert('Outside Zone',`You're ${Math.round(dist)}m away. Get within ${spot.radius_meters}m.`);return}
     const perm=await ImagePicker.requestCameraPermissionsAsync();
     if(!perm.granted){Alert.alert('Camera','Allow camera access.');return}
-    const result=await ImagePicker.launchCameraAsync({mediaTypes:ImagePicker.MediaTypeOptions.Images,quality:0.8,allowsEditing:true,aspect:[1,1]});
+    
+    // SDK 57 array syntax
+    const result=await ImagePicker.launchCameraAsync({mediaTypes:['images'],quality:0.8,allowsEditing:true,aspect:[1,1]});
     if(result.canceled||!result.assets?.[0])return;
     const asset=result.assets[0];setUploadingId(spot.id);
     try{
@@ -629,9 +665,30 @@ window.clearRoute=function(){if(rLine){map.removeLayer(rLine);rLine=null}if(rLab
 
       {/* MAP */}
       <View style={$.mapFull}>
-        {loading
-          ?<View style={$.loadW}><LinearGradient colors={[COLORS.bg,COLORS.bgAlt]} style={StyleSheet.absoluteFill}/><View style={$.loadR}><Ionicons name="radio-outline" size={28} color={COLORS.brand}/></View><Text style={$.loadT}>Loading map…</Text></View>
-          :<WebView ref={webViewRef} originWhitelist={['*']} source={{html:leafletHTML}} style={StyleSheet.absoluteFill} onMessage={onMapMsg} scrollEnabled={false} bounces={false} javaScriptEnabled domStorageEnabled overScrollMode="never" renderLoading={()=><View style={$.loadW}><ActivityIndicator color={COLORS.brand}/></View>}/>}
+        {loading ? (
+          <View style={$.loadW}>
+            <LinearGradient colors={[COLORS.bg,COLORS.bgAlt]} style={StyleSheet.absoluteFill}/>
+            <View style={$.loadR}><Ionicons name="radio-outline" size={28} color={COLORS.brand}/></View>
+            <Text style={$.loadT}>Loading map…</Text>
+          </View>
+        ) : (
+          <WebView
+            ref={webViewRef}
+            originWhitelist={['*']}
+            source={{ html: leafletHTML, baseUrl: 'https://etd2026.iitd.ac.in' }}
+            style={$.webView}
+            containerStyle={$.webViewContainer}
+            onMessage={onMapMsg}
+            scrollEnabled={false}
+            bounces={false}
+            javaScriptEnabled={true}
+            domStorageEnabled={true}
+            overScrollMode="never"
+            mixedContentMode="always"
+            setSupportMultipleWindows={false}
+            renderLoading={() => <View style={$.loadW}><ActivityIndicator color={COLORS.brand} /></View>}
+          />
+        )}
       </View>
 
       {/* TOP BAR */}
@@ -754,7 +811,14 @@ window.clearRoute=function(){if(rLine){map.removeLayer(rLine);rLine=null}if(rLab
 
 const $=StyleSheet.create({
   root:{flex:1,backgroundColor:COLORS.bg},
-  mapFull:{...StyleSheet.absoluteFillObject},
+  mapFull:{
+    position: 'absolute',
+    top: 0, left: 0, right: 0, bottom: 0,
+    width: '100%', height: '100%',
+    backgroundColor: '#e2e8f0',
+  },
+  webViewContainer:{flex:1,width:'100%',height:'100%'},
+  webView:{flex:1,width:'100%',height:'100%',backgroundColor:'#e2e8f0'},
   loadW:{flex:1,alignItems:'center',justifyContent:'center',backgroundColor:COLORS.bg},
   loadR:{width:64,height:64,borderRadius:32,backgroundColor:COLORS.brandLight,alignItems:'center',justifyContent:'center',marginBottom:12},
   loadT:{fontSize:FONT.md,fontWeight:FONT.w7,color:COLORS.textSec},

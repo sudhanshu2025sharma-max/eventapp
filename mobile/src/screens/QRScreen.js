@@ -99,6 +99,8 @@ function CheckInPopup({ visible, onClose, data }) {
 
   if (!visible || !data) return null;
 
+  const kitReceived = data.goodies_status === 'received' || data.goodies_status === true;
+
   return (
     <Modal transparent visible={visible} animationType="none">
       <Animated.View style={[pop.overlay, { opacity }]}>
@@ -127,8 +129,8 @@ function CheckInPopup({ visible, onClose, data }) {
             <View style={[pop.infoRow, { borderTopWidth: 1, borderTopColor: COLORS.borderLight }]}>
               <Ionicons name="gift-outline" size={16} color={COLORS.textTer} />
               <Text style={pop.infoLabel}>Conference Kit</Text>
-              <Text style={[pop.infoValue, { color: data.goodies_status === 'received' ? COLORS.success : COLORS.accent }]}>
-                {data.goodies_status === 'received' ? '✓ Received' : data.goodies_status === 'skipped' ? 'Not received' : 'Pending'}
+              <Text style={[pop.infoValue, { color: kitReceived ? COLORS.success : COLORS.accent }]}>
+                {kitReceived ? '✓ Received' : 'Pending'}
               </Text>
             </View>
           </View>
@@ -256,7 +258,7 @@ export default function QRScreen({ user, tokens }) {
   useEffect(() => { load(); }, []);
 
   useEffect(() => {
-    const interval = setInterval(() => load(false), 20000);
+    const interval = setInterval(() => load(false), 15000);
     return () => clearInterval(interval);
   }, []);
 
@@ -377,6 +379,7 @@ export default function QRScreen({ user, tokens }) {
               </View>
             </View>
 
+            {/* Conference Kit Status Card */}
             <View style={[s.kitCard, kitReceived ? s.kitCardReceived : s.kitCardPending]}>
               <View style={[s.kitIconBox, { backgroundColor: kitReceived ? COLORS.success : COLORS.accent }]}>
                 <Ionicons name={kitReceived ? 'gift' : 'gift-outline'} size={20} color="#fff" />

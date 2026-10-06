@@ -1,5 +1,8 @@
 import csv
 import io
+import qrcode
+from email.mime.image import MIMEImage
+from django.core.mail import EmailMultiAlternatives
 import secrets
 import string
 import logging
@@ -191,29 +194,156 @@ def _parse_excel(raw_bytes):
     return rows, errors
 
 
-def _send_credentials_email(email, full_name, temp_password):
-    subject = "ETD 2026 — Your Login Credentials"
-    body = f"""Dear {full_name},
+def _send_credentials_email(email, full_name, temp_password, registration_id=None):
+    if not registration_id:
+        try:
+            u = User.objects.get(email=email)
+            registration_id = u.registration_id
+        except User.DoesNotExist:
+            registration_id = None
 
-Welcome to ETD 2026!
+    reg_id_display = registration_id if registration_id else "ETD-2026-PARTICIPANT"
 
-Your account has been created. Use the details below to log in:
+    # Generate QR Code image in memory
+    qr_img = qrcode.make(reg_id_display)
+    buffer = io.BytesIO()
+    qr_img.save(buffer, format="PNG")
+    qr_bytes = buffer.getvalue()
 
-  Email:    {email}
-  Password: {temp_password}
+    subject = f"ETD 2026 — Official Welcome & Registration Pass [{reg_id_display}]"
 
+    text_content = f"""Dear {full_name},
+
+Welcome to ETD 2026 — "ETDs in the Age of AI" at IIT Delhi!
+
+Your participant account has been created. Use the details below to access your account:
+
+OFFICIAL REGISTRATION DETAILS:
+Full Name:       {full_name}
+Registration ID: {reg_id_display}
+Email Address:   {email}
+Temporary Pass:  {temp_password}
+(Note: You will be asked to change your password on first login.)
+
+CHECK-IN INSTRUCTIONS:
+Present the attached Registration QR Pass at the main hall check-in desk to receive your official conference badge and conference kit.
+
+MOBILE APP DOWNLOAD:
+• Google Play Store: https://play.google.com
+• Apple App Store:   https://apps.apple.com
+
+ETD 2026 Web Site:
 Login at: https://etd2026.iitd.ac.in
-
-IMPORTANT: You will be asked to change your password on first login.
-
-If you did not expect this email, please contact the organising team.
 
 Regards,
 ETD 2026 Organising Committee
-IIT Delhi
+Central Library, IIT Delhi
 """
+
+    html_content = f"""<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif; background-color: #f8fafc; margin: 0; padding: 20px; color: #0f172a; }}
+  .container {{ max-width: 580px; margin: 0 auto; background: #ffffff; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 12px rgba(0,0,0,0.08); border: 1px solid #e2e8f0; }}
+  .header {{ background: linear-gradient(135deg, #0333b6, #0f172a); padding: 32px 24px; text-align: center; color: #ffffff; }}
+  .header h1 {{ margin: 0; font-size: 24px; font-weight: 800; letter-spacing: -0.5px; }}
+  .header p {{ margin: 6px 0 0 0; font-size: 13px; opacity: 0.85; }}
+  .content {{ padding: 28px 24px; }}
+  .salutation {{ font-size: 16px; font-weight: 700; color: #0f172a; margin-bottom: 12px; }}
+  .intro {{ font-size: 14px; color: #475569; line-height: 1.6; margin-bottom: 20px; }}
+  
+  .card {{ background: #f1f5f9; border-radius: 12px; padding: 18px; border: 1px solid #cbd5e1; margin-bottom: 24px; }}
+  .card-title {{ font-size: 11px; font-weight: 800; color: #64748b; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 12px; }}
+  .row {{ margin-bottom: 8px; font-size: 14px; }}
+  .row-label {{ color: #64748b; font-weight: 500; display: inline-block; width: 140px; }}
+  .row-value {{ color: #0f172a; font-weight: 700; font-family: monospace; font-size: 14px; }}
+  
+  .qr-section {{ text-align: center; background: #faf5ff; border: 1.5px dashed #c084fc; border-radius: 16px; padding: 20px; margin-bottom: 24px; }}
+  .qr-title {{ font-size: 15px; font-weight: 800; color: #6b21a8; margin-bottom: 4px; }}
+  .qr-sub {{ font-size: 12px; color: #7e22ce; margin-bottom: 14px; }}
+  .qr-img {{ width: 180px; height: 180px; background: #ffffff; padding: 8px; border-radius: 12px; border: 1px solid #e9d5ff; }}
+  
+  .app-section {{ background: #eff6ff; border-radius: 12px; padding: 18px; border: 1px solid #bfdbfe; margin-bottom: 20px; text-align: center; }}
+  .app-title {{ font-size: 14px; font-weight: 800; color: #1e40af; margin-bottom: 6px; }}
+  .app-sub {{ font-size: 12px; color: #3b82f6; margin-bottom: 12px; }}
+  .btn {{ display: inline-block; background: #0333b6; color: #ffffff !important; text-decoration: none; padding: 10px 16px; border-radius: 8px; font-size: 12px; font-weight: 700; margin: 4px; }}
+  .btn-alt {{ background: #0f172a; }}
+  
+  .footer {{ background: #f8fafc; padding: 20px; text-align: center; font-size: 12px; color: #94a3b8; border-top: 1px solid #e2e8f0; line-height: 1.6; }}
+</style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>ETD 2026 — IIT Delhi</h1>
+      <p>ETDs in the Age of AI | International Conference</p>
+    </div>
+    
+    <div class="content">
+      <div class="salutation">Dear {full_name},</div>
+      <div class="intro">
+        Welcome to <strong>ETD 2026</strong>! Your registration account has been successfully created. Please find your official credentials and Venue Access Pass below:
+      </div>
+      
+      <div class="card">
+        <div class="card-title">Registration & Login Credentials</div>
+        <div class="row"><span class="row-label">Full Name:</span><span class="row-value">{full_name}</span></div>
+        <div class="row"><span class="row-label">Registration ID:</span><span class="row-value" style="color: #0333b6;">{reg_id_display}</span></div>
+        <div class="row"><span class="row-label">Email Address:</span><span class="row-value">{email}</span></div>
+        <div class="row"><span class="row-label">Temp Password:</span><span class="row-value" style="color: #d97706;">{temp_password}</span></div>
+      </div>
+      
+      <div class="qr-section">
+        <div class="qr-title">Your Registration Check-In Pass</div>
+        <div class="qr-sub">Present this QR code or Reg ID (<strong>{reg_id_display}</strong>) at the venue desk</div>
+        <img src="cid:qrcode_image" class="qr-img" alt="Check-in QR Pass" />
+      </div>
+
+      <div class="app-section">
+        <div class="app-title">📱 Download ETD 2026 Mobile App</div>
+        <div class="app-sub">Get live schedule updates, meal passes, interactive venue maps, and networking:</div>
+        <div>
+          <a href="https://play.google.com/store/apps/details?id=ac.in.iitd.etd2026" class="btn">Google Play Store</a>
+          <a href="https://apps.apple.com/app/etd-2026/id123456789" class="btn btn-alt">Apple App Store</a>
+        </div>
+      </div>
+      
+      <div style="font-size: 12px; color: #64748b;">
+        <strong>Web Site:</strong> Access the conference web site at <a href="https://etd2026.iitd.ac.in" style="color: #0333b6;">https://etd2026.iitd.ac.in</a>.
+      </div>
+    </div>
+    
+    <div class="footer">
+      Organising Committee, ETD 2026<br/>
+      Central Library, Indian Institute of Technology Delhi, Hauz Khas, New Delhi - 110016<br/>
+      Website: <a href="https://etd2026.iitd.ac.in" style="color: #0333b6;">https://etd2026.iitd.ac.in</a>
+    </div>
+  </div>
+</body>
+</html>
+"""
+
     try:
-        send_mail(subject, body, None, [email], fail_silently=False)
+        msg = EmailMultiAlternatives(
+            subject=subject,
+            body=text_content,
+            from_email=None,
+            to=[email]
+        )
+        msg.attach_alternative(html_content, "text/html")
+
+        # Inline QR Code image
+        image = MIMEImage(qr_bytes)
+        image.add_header('Content-ID', '<qrcode_image>')
+        image.add_header('Content-Disposition', 'inline', filename=f"QR_{reg_id_display}.png")
+        msg.attach(image)
+
+        # File Attachment
+        msg.attach(f"ETD2026_CheckIn_Pass_{reg_id_display}.png", qr_bytes, "image/png")
+
+        msg.send(fail_silently=False)
         return True
     except Exception as exc:
         logger.error("Email failed for %s: %s", email, exc)
@@ -404,25 +534,26 @@ def participants_preview(request):
         uploaded_by=request.user, status='pending'
     ).order_by('id')
 
-    existing_emails = set(
+    existing_email_map = dict(
         User.objects.filter(
             email__in=[p.email for p in pending]
-        ).values_list('email', flat=True)
+        ).values_list('email', 'first_name')
     )
 
-    existing_reg_ids = set(
+    existing_reg_map = dict(
         User.objects.filter(
             registration_id__in=[p.registration_id for p in pending if p.registration_id]
-        ).values_list('registration_id', flat=True)
+        ).values_list('registration_id', 'email')
     )
 
     rows_display = []
     for p in pending:
         dup_reason = ''
-        if p.email in existing_emails:
-            dup_reason = 'Email exists'
-        elif p.registration_id and p.registration_id in existing_reg_ids:
-            dup_reason = 'Reg ID exists'
+        if p.email in existing_email_map:
+            dup_reason = f"Email exists in system"
+        elif p.registration_id and p.registration_id in existing_reg_map:
+            owner = existing_reg_map[p.registration_id]
+            dup_reason = f"Reg ID '{p.registration_id}' used by {owner}"
         rows_display.append({
             'obj': p,
             'duplicate': bool(dup_reason),
@@ -511,7 +642,7 @@ def participants_confirm(request):
                     pass
 
             if send_email:
-                ok = _send_credentials_email(staged.email, staged.full_name, temp_password)
+                ok = _send_credentials_email(staged.email, staged.full_name, temp_password, registration_id=staged.registration_id)
                 if not ok:
                     email_failed += 1
 
@@ -546,10 +677,11 @@ def participants_list(request):
             Q(email__icontains=search) | Q(registration_id__icontains=search)
         )
 
-    # Fetch all checked-in participant IDs
-    checked_in_ids = set(
-        CheckIn.objects.filter(checkin_type='conference').values_list('user_id', flat=True)
-    )
+    # Fetch all checked-in participant map with kit status & notes
+    checkin_map = {
+        c.user_id: c for c in CheckIn.objects.filter(checkin_type='conference')
+    }
+    checked_in_ids = set(checkin_map.keys())
 
     total_all = User.objects.filter(role='participant').count()
     all_participant_ids = set(User.objects.filter(role='participant').values_list('id', flat=True))
@@ -559,7 +691,10 @@ def participants_list(request):
 
     participants = list(qs)
     for p in participants:
-        p.is_checked_in = p.id in checked_in_ids
+        c = checkin_map.get(p.id)
+        p.is_checked_in = c is not None
+        p.goodies_status = getattr(c, 'goodies_status', 'pending') if c else 'pending'
+        p.goodies_note = getattr(c, 'goodies_note', '') if c else ''
 
     if status_filter == 'checked_in':
         participants = [p for p in participants if p.is_checked_in]
@@ -625,7 +760,7 @@ def participant_add(request):
 
         send_email = request.POST.get('send_email') == 'on'
         if send_email:
-            ok = _send_credentials_email(email, full_name, temp_password)
+            ok = _send_credentials_email(email, full_name, temp_password, registration_id=reg_id)
             if not ok:
                 messages.warning(request, f'User created ({reg_id}) but credential email failed.')
                 return redirect('participants_list')

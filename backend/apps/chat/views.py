@@ -1,3 +1,4 @@
+from django.shortcuts import get_object_or_404
 import uuid
 from django.utils import timezone
 from django.db.models import Q, Count
@@ -1142,3 +1143,54 @@ def mark_messages_read(request, conversation_id):
     ).update(read=True, read_at=now)
 
     return Response({'success': True, 'marked_read': updated})
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def start_support_chat(request, user_id):
+    """Directly opens/creates a 1:1 conversation with support staff with selected topic."""
+    target_user = get_object_or_404(User, id=user_id)
+    if target_user == request.user:
+        return Response({'error': 'Cannot chat with yourself'}, status=400)
+
+    topic = request.data.get('topic', 'networking')
+    custom_topic = request.data.get('custom_topic', '').strip()
+    init_msg = request.data.get('message', '').strip()
+
+    conv = Conversation.objects.filter(
+        Q(participant_a=request.user, participant_b=target_user) |
+        Q(participant_a=target_user, participant_b=request.user)
+    ).first()
+
+    if not conv:
+        conn_req, _ = ConnectionRequest.objects.get_or_create(
+            sender=request.user, receiver=target_user,
+            defaults={
+                'status': 'accepted',
+                'request_type': 'contact',
+                'topic': topic,
+                'custom_topic': custom_topic,
+                'message': init_msg
+            }
+        )
+        conn_req.status = 'accepted'
+        conn_req.save()
+
+        conv = Conversation.objects.create(
+            request=conn_req,
+            participant_a=request.user,
+            participant_b=target_user,
+        )
+
+        # Create initial message if user typed one
+        if init_msg:
+            Message.objects.create(
+                conversation=conv,
+                sender=request.user,
+                content=init_msg
+            )
+
+    return Response({
+        'success': True,
+        'conversation_id': str(conv.id),
+        'other_user': _user_brief(target_user, request)
+    })

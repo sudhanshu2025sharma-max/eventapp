@@ -78,6 +78,12 @@ cd /workspaces/eventapp/mobile
 npx expo start --tunnel --port 8081 --clear
 ```
 
+# Reset the first screen login
+
+python3 reset_guide.py participant@test.com
+python3 reset_guide.py parthasarathi.mukhopadhyay@speaker.etd2026.iitd.ac.in
+
+
 # Default Login Creds for app
 ```
 === ALL LOGIN CREDENTIALS ===
@@ -97,6 +103,67 @@ count = CheckIn.objects.all().delete()[0]
 print(f'✓ Deleted {count} check-ins — ready for fresh testing')
 "
 ```
+
+# Rest a single user check in 
+
+
+cd /home/baadalvm/eventapp/backend && python3 -c "
+import django, os
+os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'confhub.settings')
+django.setup()
+
+from django.db import models
+from apps.checkins.models import CheckIn
+from apps.accounts.models import User
+
+TARGET = 'sudhanshu2025sharma@gmail.com'
+
+user = User.objects.filter(
+    models.Q(email__iexact=TARGET) | models.Q(registration_id__iexact=TARGET)
+).first()
+
+if user:
+    deleted, _ = CheckIn.objects.filter(user=user).delete()
+    print(f'✓ Reset check-in for {user.get_full_name()} ({user.email}) — Deleted {deleted} check-in record(s).')
+else:
+    print(f'❌ User \"{TARGET}\" not found.')
+"
+
+
+# Test Push notification check:
+
+cd /home/baadalvm/eventapp/backend
+
+python3 << 'EOF'
+import os, django
+from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo
+
+os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'confhub.settings')
+django.setup()
+
+from apps.schedule.models import ScheduleSession
+from apps.notifications.fcm import send_to_tokens
+from apps.notifications.models import DeviceToken
+
+IST = ZoneInfo("Asia/Kolkata")
+now_ist = datetime.now(IST)
+
+tokens = list(DeviceToken.objects.filter(is_active=True).values_list('token', flat=True))
+
+print(f"Sending test session push to {len(tokens)} active tokens...")
+
+send_to_tokens(
+    tokens,
+    "🔔 Test Upcoming Session Push",
+    f"Technical Session 2 is starting in 5 minutes at {now_ist.strftime('%I:%M %p')}. Room: Seminar Hall 2.",
+    {"type": "schedule", "session_id": "test"}
+)
+
+print("✅ Test session reminder push dispatched successfully!")
+EOF
+
+
 
 # Reset Meal Passes
 

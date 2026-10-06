@@ -189,7 +189,8 @@ def _parse_excel(raw_bytes):
 def _send_credentials_email(email, full_name, temp_password):
     """Send welcome + credentials email. Returns True on success."""
     subject = "ETD 2026 — Your Login Credentials"
-    body = f"""Dear {full_name},
+    body = f"""
+Dear {full_name},
 
 Welcome to ETD 2026!
 

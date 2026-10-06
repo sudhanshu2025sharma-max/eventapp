@@ -1,7 +1,7 @@
 {% extends "panel/base.html" %}
 {% block title %}Check-In List — ETD 2026{% endblock %}
-{% block page_title %}Check-In List{% endblock %}
-{% block page_subtitle %}Conference check-in and meal pass status{% endblock %}
+{% block page_title %}Check-In & Meal History{% endblock %}
+{% block page_subtitle %}Conference check-in, kit remarks, and meal pass redemption audit{% endblock %}
 
 {% block content %}
 <!-- Stats -->
@@ -16,22 +16,35 @@
   </div>
   <div class="stat-card">
     <div class="stat-value" style="color:var(--primary);">{{ meal_used_count }}</div>
-    <div class="stat-label">Meal Passes Used</div>
+    <div class="stat-label">Meal Passes Redeemed Today</div>
   </div>
 </div>
 
-<!-- Actions -->
+<!-- Actions & Filters -->
 <div style="display:flex;gap:12px;align-items:center;margin-bottom:20px;flex-wrap:wrap;">
   <a href="/panel/checkins/scanner/" class="btn btn-primary">
-    <i class="fas fa-qrcode"></i> Open Scanner
+    <i class="fas fa-qrcode"></i> Open Live Scanner
   </a>
-  <form method="get" style="margin-left:auto;display:flex;gap:8px;">
+
+  <form method="get" style="margin-left:auto;display:flex;gap:8px;align-items:center;">
     <input type="hidden" name="tab" value="{{ tab }}">
+
+    {% if tab == 'meal' and available_meals %}
+    <select name="meal_type" class="form-control" style="width:160px;" onchange="this.form.submit()">
+      <option value="">All Meals</option>
+      {% for m in available_meals %}
+        <option value="{{ m }}" {% if selected_meal == m %}selected{% endif %}>{{ m }}</option>
+      {% endfor %}
+    </select>
+    {% endif %}
+
     <input type="text" name="search" value="{{ search }}"
            placeholder="Search name, email, reg ID…"
-           class="form-control" style="width:260px;">
+           class="form-control" style="width:240px;">
     <button type="submit" class="btn btn-secondary"><i class="fas fa-search"></i></button>
-    {% if search %}<a href="?tab={{ tab }}" class="btn btn-sm" style="align-self:center;">Clear</a>{% endif %}
+    {% if search or selected_meal %}
+      <a href="?tab={{ tab }}" class="btn btn-sm" style="align-self:center;">Clear</a>
+    {% endif %}
   </form>
 </div>
 
@@ -60,8 +73,10 @@
             <th>Registration ID</th>
             <th>Affiliation</th>
             <th>Conference Kit</th>
+            <th>Remarks / Note</th>
             <th>Scanned By</th>
             <th>Time</th>
+            <th style="width:120px;">Action</th>
           </tr>
         </thead>
         <tbody>
@@ -75,15 +90,27 @@
             <td>{{ c.user.affiliation|default:"—" }}</td>
             <td>
               {% if c.goodies_status == 'received' %}
-                <span class="badge badge-success">Received</span>
+                <span class="badge badge-success"><i class="fas fa-check-circle"></i> Received</span>
               {% elif c.goodies_status == 'skipped' %}
-                <span class="badge badge-warning">Skipped</span>
+                <span class="badge badge-warning"><i class="fas fa-exclamation-circle"></i> Skipped</span>
               {% else %}
                 <span class="badge" style="background:var(--bg);color:var(--text-secondary);">Pending</span>
               {% endif %}
             </td>
+            <td style="font-size:13px;color:#92400e;">
+              {% if c.goodies_note %}
+                <i class="fas fa-comment-dots" style="margin-right:4px;"></i> {{ c.goodies_note }}
+              {% else %}
+                <span style="color:var(--text-tertiary);">—</span>
+              {% endif %}
+            </td>
             <td>{{ c.scanned_by.get_full_name|default:"System" }}</td>
             <td style="font-size:13px;color:var(--text-secondary);">{{ c.scanned_at|date:"d M Y, H:i" }}</td>
+            <td>
+              <button class="btn btn-sm btn-secondary" onclick="openKitModal('{{ c.user.id }}', '{{ c.user.get_full_name|escapejs }}', '{{ c.goodies_status }}', '{{ c.goodies_note|escapejs }}')">
+                <i class="fas fa-box-open"></i> Manage Kit
+              </button>
+            </td>
           </tr>
           {% endfor %}
         </tbody>
@@ -94,7 +121,6 @@
       <i class="fas fa-qrcode"></i>
       <h3>No check-ins{% if search %} matching "{{ search }}"{% endif %}</h3>
       <p>{% if search %}Try a different search.{% else %}Start scanning to mark attendees present.{% endif %}</p>
-      {% if not search %}<a href="/panel/checkins/scanner/" class="btn btn-primary">Open Scanner</a>{% endif %}
     </div>
     {% endif %}
   </div>
@@ -141,29 +167,54 @@
       <table class="data-table">
         <thead>
           <tr>
-            <th>Attendee</th><th>Registration ID</th><th>Generated At</th><th>Status</th><th>Used At</th><th>Scanned By</th>
+            <th>Participant / Guest</th>
+            <th>Meal Window / Type</th>
+            <th>Pass ID</th>
+            <th>Status</th>
+            <th>Redeemed Time</th>
+            <th>Scanned By</th>
           </tr>
         </thead>
         <tbody>
           {% for p in meal_passes %}
           <tr>
             <td>
-              <div style="font-weight:600;">{{ p.user.get_full_name }}</div>
-              <div style="font-size:12px;color:var(--text-tertiary);">{{ p.user.email }}</div>
+              <div style="font-weight:700;">{{ p.display_name }}</div>
+              <div style="font-size:12px;color:var(--text-tertiary);">
+                {% if p.user %}
+                  {{ p.user.email }} {% if p.user.registration_id %}· <code>{{ p.user.registration_id }}</code>{% endif %}
+                {% else %}
+                  {{ p.guest_email|default:"Guest Pass" }}
+                {% endif %}
+              </div>
             </td>
-            <td><code>{{ p.user.registration_id|default:"—" }}</code></td>
-            <td style="font-size:13px;color:var(--text-secondary);">{{ p.created_at|date:"d M Y, H:i" }}</td>
+            <td>
+              <span class="badge" style="background:#e8eeff;color:var(--primary);font-weight:700;font-size:12px;">
+                <i class="fas fa-utensils" style="margin-right:4px;"></i> {{ p.meal_type|default:"Meal" }}
+              </span>
+            </td>
+            <td><code style="font-size:11px;">{{ p.id }}</code></td>
             <td>
               {% if p.used %}
-                <span class="badge badge-success">Used</span>
+                <span class="badge badge-success"><i class="fas fa-check-circle"></i> Redeemed</span>
               {% else %}
-                <span class="badge" style="background:var(--bg);color:var(--text-secondary);">Pending</span>
+                <span class="badge" style="background:var(--bg);color:var(--text-secondary);">Active / Unused</span>
               {% endif %}
             </td>
             <td style="font-size:13px;color:var(--text-secondary);">
-              {% if p.used_at %}{{ p.used_at|date:"H:i" }}{% else %}—{% endif %}
+              {% if p.used_at %}
+                <i class="fas fa-clock" style="margin-right:4px;"></i> {{ p.used_at|date:"d M Y, H:i" }}
+              {% else %}
+                —
+              {% endif %}
             </td>
-            <td>{{ p.scanned_by.get_full_name|default:"—" }}</td>
+            <td>
+              {% if p.scanned_by %}
+                <div style="font-weight:600;font-size:13px;">{{ p.scanned_by.get_full_name|default:p.scanned_by.email }}</div>
+              {% else %}
+                <span style="color:var(--text-tertiary);">—</span>
+              {% endif %}
+            </td>
           </tr>
           {% endfor %}
         </tbody>
@@ -172,11 +223,74 @@
     {% else %}
     <div class="empty-state">
       <i class="fas fa-utensils"></i>
-      <h3>No meal passes{% if search %} matching "{{ search }}"{% endif %} today</h3>
-      <p>Meal passes appear here once attendees generate them.</p>
+      <h3>No meal passes{% if selected_meal %} for "{{ selected_meal }}"{% endif %}{% if search %} matching "{{ search }}"{% endif %} today</h3>
     </div>
     {% endif %}
   </div>
 </div>
 {% endif %}
+
+<!-- WEB KIT MODAL -->
+<div id="kitModal" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);z-index:9999;align-items:center;justify-content:center;">
+  <div style="background:#fff;border-radius:16px;padding:24px;width:100%;max-width:440px;box-shadow:0 10px 25px rgba(0,0,0,0.2);">
+    <h3 style="margin-top:0;margin-bottom:4px;font-size:18px;font-weight:700;">Manage Conference Kit</h3>
+    <p id="kitModalName" style="color:var(--text-secondary);font-size:13px;margin-bottom:16px;"></p>
+
+    <input type="hidden" id="kitModalUserId">
+
+    <div style="margin-bottom:14px;">
+      <label style="display:block;font-size:12px;font-weight:700;color:var(--text-secondary);margin-bottom:6px;">Kit Status</label>
+      <select id="kitModalStatus" class="form-control" style="width:100%;">
+        <option value="received">Received / Issued 🎁</option>
+        <option value="skipped">Skipped / Pending ⚠️</option>
+        <option value="pending">Not Issued ⚪</option>
+      </select>
+    </div>
+
+    <div style="margin-bottom:20px;">
+      <label style="display:block;font-size:12px;font-weight:700;color:var(--text-secondary);margin-bottom:6px;">Remark / Reason</label>
+      <input type="text" id="kitModalNote" class="form-control" placeholder="e.g. Bag given, T-shirt size M pending..." style="width:100%;">
+    </div>
+
+    <div style="display:flex;gap:8px;justify-content:flex-end;">
+      <button class="btn btn-secondary" onclick="closeKitModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="saveKitModal()">Save Kit Status</button>
+    </div>
+  </div>
+</div>
+
+<script>
+function openKitModal(userId, name, status, note) {
+  document.getElementById('kitModalUserId').value = userId;
+  document.getElementById('kitModalName').innerText = name;
+  document.getElementById('kitModalStatus').value = status || 'received';
+  document.getElementById('kitModalNote').value = note || '';
+  document.getElementById('kitModal').style.display = 'flex';
+}
+
+function closeKitModal() {
+  document.getElementById('kitModal').style.display = 'none';
+}
+
+function saveKitModal() {
+  const userId = document.getElementById('kitModalUserId').value;
+  const status = document.getElementById('kitModalStatus').value;
+  const note = document.getElementById('kitModalNote').value;
+
+  fetch('/panel/checkins/goodies/', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ user_id: userId, action: status, note: note })
+  })
+  .then(res => res.json())
+  .then(data => {
+    if (data.success) {
+      location.reload();
+    } else {
+      alert(data.message || 'Error updating status');
+    }
+  })
+  .catch(() => alert('Network error'));
+}
+</script>
 {% endblock %}

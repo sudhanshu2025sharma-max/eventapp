@@ -1,0 +1,192 @@
+{% extends "panel/base.html" %}
+{% block title %}Error Report #{{ report.id|stringformat:".8s" }} — ETD 2026{% endblock %}
+{% block page_title %}Error Report Details{% endblock %}
+{% block page_subtitle %}Review bug description, inspect screenshots, and update ticket resolution{% endblock %}
+
+{% block content %}
+{% for m in messages %}
+<div class="alert alert-{{ m.tags|default:'success' }}"><i class="fas fa-check-circle"></i> {{ m }}</div>
+{% endfor %}
+
+<div class="content-grid" style="grid-template-columns: 1fr 380px; align-items: start;">
+
+  <!-- LEFT: Report Information & Screenshots -->
+  <div style="display:flex; flex-direction:column; gap:20px;">
+    
+    <div class="card">
+      <div class="card-header">
+        <h3><i class="fas fa-circle-exclamation" style="color:var(--danger);margin-right:8px;"></i>{{ report.title }}</h3>
+        <span class="badge {% if report.status == 'new' %}badge-danger{% elif report.status == 'resolved' %}badge-success{% else %}badge-warning{% endif %}">
+          {{ report.get_status_display }}
+        </span>
+      </div>
+      <div class="card-body">
+        <div style="margin-bottom:16px;">
+          <label class="form-label" style="font-size:11px; text-transform:uppercase; letter-spacing:0.8px;">Error Description</label>
+          <div style="background:var(--bg); padding:14px; border-radius:10px; font-size:14px; line-height:1.6; white-space:pre-wrap; border:1px solid var(--border);">
+            {{ report.description }}
+          </div>
+        </div>
+
+        <!-- Screenshots Gallery -->
+        <div>
+          <label class="form-label" style="font-size:11px; text-transform:uppercase; letter-spacing:0.8px;">Attached Screenshots ({{ screenshots.count }})</label>
+          {% if screenshots %}
+            <div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(180px, 1fr)); gap:12px; margin-top:8px;">
+              {% for shot in screenshots %}
+                <div style="border:1px solid var(--border); border-radius:10px; overflow:hidden; background:#fff;">
+                  <a href="{{ shot.image.url }}" target="_blank">
+                    <img src="{{ shot.image.url }}" style="width:100%; height:180px; object-fit:contain; background:#1e293b; display:block;">
+                  </a>
+                  <div style="padding:8px; text-align:center;">
+                    <a href="{{ shot.image.url }}" target="_blank" class="btn btn-secondary btn-sm" style="width:100%; justify-content:center;">
+                      <i class="fas fa-expand"></i> View Full Image
+                    </a>
+                  </div>
+                </div>
+              {% endfor %}
+            </div>
+          {% else %}
+            <div style="padding:16px; background:var(--bg); border-radius:10px; color:var(--text-tertiary); font-size:13px;">
+              No screenshots were attached to this report.
+            </div>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+
+    <!-- Client Specs & Phone Contact Card -->
+    <div class="card">
+      <div class="card-header">
+        <h3><i class="fas fa-mobile-screen" style="color:var(--primary);margin-right:8px;"></i>Client &amp; Contact Information</h3>
+      </div>
+      <div class="card-body">
+        <table class="data-table">
+          <tbody>
+            <tr>
+              <td style="font-weight:600; width:180px;">User Phone Contact</td>
+              <td style="font-weight:700; color:var(--primary);">
+                {% if report.device_info.user_phone %}
+                  <a href="tel:{{ report.device_info.user_phone }}" style="color:var(--primary); text-decoration:underline;">
+                    <i class="fas fa-phone"></i> {{ report.device_info.user_phone }}
+                  </a>
+                {% else %}
+                  {{ report.user.phone|default:"Not Provided" }}
+                {% endif %}
+              </td>
+            </tr>
+            <tr>
+              <td style="font-weight:600;">Operating System</td>
+              <td>{{ report.device_info.os|default:"Mobile Client" }} {{ report.device_info.os_version }}</td>
+            </tr>
+            <tr>
+              <td style="font-weight:600;">App Platform / Build</td>
+              <td>{{ report.device_info.platform|default:"React Native Expo SDK 57" }} (v{{ report.device_info.app_version|default:"1.0.0" }})</td>
+            </tr>
+            <tr>
+              <td style="font-weight:600;">Screen Dimensions</td>
+              <td>{{ report.device_info.screen_width|default:"Width" }}x{{ report.device_info.screen_height|default:"Height" }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- RIGHT: Full Edit & Resolution Form -->
+  <div style="display:flex; flex-direction:column; gap:20px;">
+    
+    <div class="card">
+      <div class="card-header">
+        <h3><i class="fas fa-sliders" style="color:var(--primary);margin-right:8px;"></i>Edit Ticket (Full Admin CRUD)</h3>
+      </div>
+      <div class="card-body">
+        <form method="POST" style="display:flex; flex-direction:column; gap:14px;">
+          {% csrf_token %}
+          <input type="hidden" name="action" value="update_status">
+
+          <div>
+            <label class="form-label">Title / Summary</label>
+            <input type="text" name="title" class="form-control" value="{{ report.title }}" required>
+          </div>
+
+          <div>
+            <label class="form-label">Category</label>
+            <select name="category" class="form-control">
+              <option value="ui_ux" {% if report.category == 'ui_ux' %}selected{% endif %}>Screen / UI Glitch</option>
+              <option value="backend_api" {% if report.category == 'backend_api' %}selected{% endif %}>Backend &amp; API Error</option>
+              <option value="notification" {% if report.category == 'notification' %}selected{% endif %}>Push Notifications Issue</option>
+              <option value="network" {% if report.category == 'network' %}selected{% endif %}>Network / Connectivity</option>
+              <option value="auth" {% if report.category == 'auth' %}selected{% endif %}>Login &amp; Password Issue</option>
+              <option value="schedule_meal" {% if report.category == 'schedule_meal' %}selected{% endif %}>Schedule / Meal Scanner Issue</option>
+              <option value="other" {% if report.category == 'other' %}selected{% endif %}>Other Service / Linux Issue</option>
+            </select>
+          </div>
+
+          <div>
+            <label class="form-label">Status</label>
+            <select name="status" class="form-control">
+              <option value="new" {% if report.status == 'new' %}selected{% endif %}>🔴 New</option>
+              <option value="in_progress" {% if report.status == 'in_progress' %}selected{% endif %}>🟡 In Progress</option>
+              <option value="resolved" {% if report.status == 'resolved' %}selected{% endif %}>🟢 Resolved</option>
+              <option value="closed" {% if report.status == 'closed' %}selected{% endif %}>⚪ Closed</option>
+            </select>
+          </div>
+
+          <div>
+            <label class="form-label">Severity</label>
+            <select name="severity" class="form-control">
+              <option value="low" {% if report.severity == 'low' %}selected{% endif %}>Low</option>
+              <option value="medium" {% if report.severity == 'medium' %}selected{% endif %}>Medium</option>
+              <option value="high" {% if report.severity == 'high' %}selected{% endif %}>High</option>
+              <option value="critical" {% if report.severity == 'critical' %}selected{% endif %}>Critical</option>
+            </select>
+          </div>
+
+          <div>
+            <label class="form-label">Admin Resolution Notes</label>
+            <textarea name="admin_notes" class="form-control" rows="4" placeholder="Mention root cause or fixes applied...">{{ report.admin_notes }}</textarea>
+          </div>
+
+          <button type="submit" class="btn btn-primary" style="justify-content:center;">
+            <i class="fas fa-floppy-disk"></i> Save Ticket Changes
+          </button>
+        </form>
+      </div>
+    </div>
+
+    <!-- User Information Card -->
+    <div class="card">
+      <div class="card-header">
+        <h3><i class="fas fa-user" style="color:var(--primary);margin-right:8px;"></i>Reporter Details</h3>
+      </div>
+      <div class="card-body">
+        <div style="font-weight:700; font-size:15px;">{{ report.user_name|default:report.user_email }}</div>
+        <div style="color:var(--text-secondary); font-size:13px; margin-top:2px;">{{ report.user_email }}</div>
+        <div style="color:var(--text-tertiary); font-size:12px; margin-top:8px;">Submitted on {{ report.created_at|date:"M d, Y @ H:i:s" }}</div>
+
+        {% if report.resolved_by %}
+          <div style="margin-top:14px; padding-top:12px; border-top:1px solid var(--border);">
+            <div style="font-size:11px; text-transform:uppercase; color:var(--text-tertiary);">Resolved by</div>
+            <div style="font-weight:600; font-size:13px;">{{ report.resolved_by.get_full_name|default:report.resolved_by.email }}</div>
+            <div style="font-size:11px; color:var(--text-tertiary);">{{ report.resolved_at|date:"M d, Y @ H:i" }}</div>
+          </div>
+        {% endif %}
+
+        <div style="margin-top:20px; border-top:1px solid var(--border); padding-top:14px;">
+          <form method="POST" onsubmit="return confirm('Permanently delete this error report?');">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="delete">
+            <button type="submit" class="btn btn-danger btn-sm" style="width:100%; justify-content:center;">
+              <i class="fas fa-trash"></i> Delete Ticket
+            </button>
+          </form>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+</div>
+{% endblock %}

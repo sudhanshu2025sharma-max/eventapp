@@ -26,13 +26,16 @@ def _today():
 
 def _meal_payload(window):
     if not window:
-        return {"is_open": False, "meal_type": "Lunch", "start_time": None, "end_time": None}
+        return {"is_open": False, "meal_type": "Lunch", "start_time": None, "end_time": None, "scanned_count": 0}
+    today = _today()
+    scanned_count = MealPass.objects.filter(date=today, meal_type=window.meal_type, used=True).count()
     return {
         "is_open": bool(window.is_open),
         "meal_type": window.meal_type or "Lunch",
         "start_time": window.start_time.strftime("%I:%M %p") if window.start_time else None,
         "end_time": window.end_time.strftime("%I:%M %p") if window.end_time else None,
         "date": str(window.date),
+        "scanned_count": scanned_count,
     }
 
 
@@ -57,10 +60,77 @@ def scanner_view(request):
 @module_required('checkin_scanner')
 def checkin_list_view(request):
     today = _today()
-    checkins = CheckIn.objects.select_related('user').filter(
-        scanned_at__date=today
-    ).order_by('-scanned_at')
-    return render(request, 'panel/checkin_list.html', {"checkins": checkins, "today": today})
+    tab = request.GET.get('tab', 'checked_in')
+    search = request.GET.get('search', '').strip()
+    selected_meal = request.GET.get('meal_type', '').strip()
+
+    tabs = [
+        ('checked_in', 'Checked In Attendees'),
+        ('not_checked_in', 'Not Checked In'),
+        ('meal', 'Meal Pass History'),
+    ]
+
+    checked_in_qs = CheckIn.objects.select_related('user', 'scanned_by').filter(checkin_type='conference').order_by('-scanned_at')
+    
+    if search:
+        checked_in_qs = checked_in_qs.filter(
+            models.Q(user__first_name__icontains=search) |
+            models.Q(user__last_name__icontains=search) |
+            models.Q(user__email__icontains=search) |
+            models.Q(user__registration_id__icontains=search)
+        )
+
+    checked_in_count = CheckIn.objects.filter(checkin_type='conference').count()
+    total_users_count = User.objects.filter(
+        models.Q(role='participant') | models.Q(role='attendee') | models.Q(role='speaker')
+    ).count() or User.objects.count()
+    not_checked_in_count = max(0, total_users_count - checked_in_count)
+
+    meal_passes_qs = MealPass.objects.select_related('user', 'scanned_by').filter(date=today).order_by('-used_at', '-created_at')
+    
+    if selected_meal:
+        meal_passes_qs = meal_passes_qs.filter(meal_type__iexact=selected_meal)
+        
+    if search:
+        meal_passes_qs = meal_passes_qs.filter(
+            models.Q(user__first_name__icontains=search) |
+            models.Q(user__last_name__icontains=search) |
+            models.Q(user__email__icontains=search) |
+            models.Q(guest_name__icontains=search) |
+            models.Q(guest_email__icontains=search)
+        )
+
+    checked_in_user_ids = list(CheckIn.objects.filter(checkin_type='conference').values_list('user_id', flat=True))
+    not_checked_in_users = User.objects.filter(
+        models.Q(role='participant') | models.Q(role='attendee') | models.Q(role='speaker'),
+        is_active=True
+    ).exclude(id__in=checked_in_user_ids).order_by('first_name')
+
+    if search and tab == 'not_checked_in':
+        not_checked_in_users = not_checked_in_users.filter(
+            models.Q(first_name__icontains=search) |
+            models.Q(last_name__icontains=search) |
+            models.Q(email__icontains=search) |
+            models.Q(registration_id__icontains=search)
+        )
+
+    # Unique meal categories available today for filter dropdown
+    available_meals = list(MealPass.objects.filter(date=today).values_list('meal_type', flat=True).distinct())
+
+    return render(request, 'panel/checkin_list.html', {
+        "today": today,
+        "tab": tab,
+        "tabs": tabs,
+        "search": search,
+        "selected_meal": selected_meal,
+        "available_meals": available_meals,
+        "checkins": checked_in_qs[:200],
+        "not_checked_in": not_checked_in_users[:200],
+        "meal_passes": meal_passes_qs[:200],
+        "checked_in_count": checked_in_count,
+        "not_checked_in_count": not_checked_in_count,
+        "meal_used_count": MealPass.objects.filter(date=today, used=True).count(),
+    })
 
 
 @csrf_exempt
@@ -104,21 +174,34 @@ def panel_goodies(request):
         data = json.loads(request.body.decode('utf-8'))
     except Exception:
         data = request.POST
-    code = str(data.get('registration_id') or data.get('qr_data') or '').strip()
+    code = str(data.get('registration_id') or data.get('qr_data') or data.get('user_id') or '').strip()
+    action = str(data.get('action') or 'received').strip()
+    note = str(data.get('note') or '').strip()
+
     target_user = User.objects.filter(
-        models.Q(registration_id=code) | models.Q(email__iexact=code)
+        models.Q(registration_id__iexact=code) |
+        models.Q(email__iexact=code) |
+        models.Q(id=code if len(code)==36 else None)
     ).first()
+
     if not target_user:
         return JsonResponse({"success": False, "message": "Participant not found"}, status=404)
+
     checkin, _ = CheckIn.objects.get_or_create(
         user=target_user, checkin_type='conference',
         defaults={'scanned_by': request.user},
     )
-    checkin.goodies_status = 'received'
+    checkin.goodies_status = action
+    checkin.goodies_note = note
     checkin.goodies_confirmed_by = request.user
     checkin.goodies_confirmed_at = timezone.now()
     checkin.save()
-    return JsonResponse({"success": True, "message": f"Kit marked received for {target_user.get_full_name() or target_user.email}!"})
+    return JsonResponse({
+        "success": True,
+        "message": f"Kit status updated for {target_user.get_full_name() or target_user.email}!",
+        "goodies_status": action,
+        "goodies_note": note,
+    })
 
 
 @login_required

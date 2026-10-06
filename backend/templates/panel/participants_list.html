@@ -69,10 +69,11 @@
             <th>Email</th>
             <th>Reg ID</th>
             <th>Affiliation</th>
-            <th>Phone</th>
-            <th>Check-in Status</th>
+            <th>Check-In</th>
+            <th>Kit Status</th>
+            <th>Kit Remarks</th>
             <th>Account</th>
-            <th style="width:100px;"></th>
+            <th style="width:100px;">Actions</th>
           </tr>
         </thead>
         <tbody>
@@ -82,16 +83,37 @@
             <td>{{ p.email }}</td>
             <td><code>{{ p.registration_id|default:"—" }}</code></td>
             <td>{{ p.affiliation|default:"—" }}</td>
-            <td>{{ p.phone|default:"—" }}</td>
             <td>
               {% if p.is_checked_in %}
                 <span class="badge badge-success" style="background:#d1fae5;color:#059669;font-weight:700;">
-                  <i class="fas fa-check-circle"></i> Checked In
+                  <i class="fas fa-check-circle"></i> CHECKED IN
                 </span>
               {% else %}
                 <span class="badge" style="background:#f1f5f9;color:#64748b;font-weight:600;">
-                  <i class="fas fa-clock"></i> Not Checked In
+                  <i class="fas fa-clock"></i> PENDING
                 </span>
+              {% endif %}
+            </td>
+            <td>
+              {% if p.goodies_status == 'received' %}
+                <span class="badge badge-success" style="background:#d1fae5;color:#059669;font-weight:700;">
+                  <i class="fas fa-gift"></i> Kit Given
+                </span>
+              {% elif p.goodies_status == 'skipped' %}
+                <span class="badge badge-warning" style="background:#fef3c7;color:#d97706;font-weight:700;">
+                  <i class="fas fa-exclamation-circle"></i> Skipped
+                </span>
+              {% else %}
+                <span class="badge" style="background:#f1f5f9;color:#94a3b8;font-weight:600;">
+                  Not Issued
+                </span>
+              {% endif %}
+            </td>
+            <td style="font-size:12px;color:#92400e;">
+              {% if p.goodies_note %}
+                <i class="fas fa-comment-dots" style="margin-right:4px;"></i> {{ p.goodies_note }}
+              {% else %}
+                <span style="color:var(--text-tertiary);">—</span>
               {% endif %}
             </td>
             <td>
@@ -133,6 +155,6 @@
   </div>
 </div>
 {% if search and showing != total %}
-<p style="margin-top:12px;font-size:13px;color:var(--text-tertiary);">Showing {{ showing }} of {{ total }} participants.</p>
+<p style="margin-top:12px;font-size:13px;color:var(--text-tertiary);">Showing {{ showing }} of {{ total}} participants.</p>
 {% endif %}
 {% endblock %}

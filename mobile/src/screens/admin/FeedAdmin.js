@@ -55,11 +55,14 @@ export default function FeedAdmin({ onBack }) {
 
   const pickImage = async () => {
     const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.All,
+      mediaTypes: ['images', 'videos'],
       allowsEditing: true,
-      quality: 0.8,
+      quality: 0.7,
+      base64: true, // Enables Base64 string for JSON payload (SDK 57 safe)
     });
-    if (!result.canceled) setImage(result.assets[0]);
+    if (!result.canceled && result.assets?.[0]) {
+      setImage(result.assets[0]);
+    }
   };
 
   const closeForm = () => {
@@ -107,34 +110,33 @@ export default function FeedAdmin({ onBack }) {
     }
     setSaving(true);
 
-    const formData = new FormData();
-    formData.append('title', title.trim());
-    formData.append('body', body.trim());
-    formData.append('post_type', postType);
-    formData.append('pinned', pinned ? 'true' : 'false');
-    formData.append('allow_comments', allowComments ? 'true' : 'false');
-    if (!editingId) formData.append('send_push', sendPush ? 'true' : 'false');
-
-    if (image) {
-      const name = (image.fileName || image.uri.split('/').pop() || 'media.jpg').split('?')[0];
-      const isVid = (image.type === 'video') || /\.(mp4|mov|m4v)$/i.test(name);
-      formData.append('image', {
-        uri: image.uri,
-        name,
-        type: isVid ? 'video/mp4' : (image.mimeType || 'image/jpeg'),
-      });
+    let imageBase64 = null;
+    if (image?.base64) {
+      const mime = image.mimeType || (image.type === 'video' ? 'video/mp4' : 'image/jpeg');
+      imageBase64 = `data:${mime};base64,${image.base64}`;
     }
 
+    const payload = {
+      title: title.trim(),
+      body: body.trim(),
+      post_type: postType,
+      pinned: pinned,
+      allow_comments: allowComments,
+      send_push: !editingId ? sendPush : false,
+      image_base64: imageBase64,
+    };
+
     try {
-      // IMPORTANT: do NOT set Content-Type manually with FormData
       const endpoint = editingId ? `/posts/admin/feed/${editingId}/` : '/posts/admin/feed/';
       const res = await apiFetch(endpoint, {
         method: editingId ? 'PATCH' : 'POST',
-        body: formData,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
       });
+
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        Alert.alert('Error', data.detail || 'Failed to save post.');
+        Alert.alert('Error', data.detail || data.error || 'Failed to save post.');
         return;
       }
 
@@ -148,8 +150,9 @@ export default function FeedAdmin({ onBack }) {
         [{ text: 'OK', onPress: closeForm }]
       );
       fetchPosts();
-    } catch {
-      Alert.alert('Error', 'Request failed.');
+    } catch (err) {
+      console.log('FeedAdmin save error:', err);
+      Alert.alert('Error', err?.message || 'Request failed.');
     } finally {
       setSaving(false);
     }
@@ -213,7 +216,6 @@ export default function FeedAdmin({ onBack }) {
   return (
     <View style={s.container}>
       <StatusBar barStyle="dark-content" />
-      {/* MAIN LIST HEADER */}
       <View style={s.header}>
         <TouchableOpacity onPress={onBack} style={s.btnIcon} hitSlop={12}>
           <Ionicons name="arrow-back" size={22} color={COLORS.text} />
@@ -281,7 +283,7 @@ export default function FeedAdmin({ onBack }) {
         />
       )}
 
-      {/* ════════ CREATE / EDIT — full screen with clear BACK ════════ */}
+      {/* CREATE / EDIT Modal */}
       <Modal
         visible={isModalOpen}
         animationType="slide"
@@ -407,7 +409,6 @@ export default function FeedAdmin({ onBack }) {
               </View>
             )}
 
-            {/* Bottom primary action */}
             <TouchableOpacity
               style={[s.submitBtn, saving && { opacity: 0.7 }]}
               onPress={handleSave}

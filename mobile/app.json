@@ -2,7 +2,7 @@
   "expo": {
     "name": "ETD 2026",
     "slug": "etd2026",
-    "version": "1.0.1",
+    "version": "1.0.2",
     "orientation": "portrait",
     "userInterfaceStyle": "light",
     "icon": "./assets/icon.png",
@@ -45,10 +45,9 @@
         "android.permission.READ_MEDIA_VIDEO",
         "android.permission.READ_MEDIA_AUDIO"
       ],
-      "versionCode": 2
+      "versionCode": 3
     },
     "plugins": [
-      "./plugins/withNoMediaPermissions.js",
       "./plugins/withNetworkSecurity.js",
       "expo-video",
       [
@@ -67,7 +66,8 @@
             "enableShrinkResourcesInReleaseBuilds": true
           }
         }
-      ]
+      ],
+      "./plugins/withNoMediaPermissions.js"
     ]
   }
 }

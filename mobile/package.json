@@ -12,18 +12,18 @@
     "@expo/vector-icons": "^15.0.2",
     "@react-native-async-storage/async-storage": "2.2.0",
     "buffer": "^6.0.3",
-    "expo": "~57.0.0",
+    "expo": "~57.0.27",
     "expo-build-properties": "~57.0.22",
-    "expo-camera": "~57.0.5",
+    "expo-camera": "~57.0.6",
     "expo-clipboard": "~57.0.2",
-    "expo-constants": "~57.0.19",
-    "expo-document-picker": "~57.0.2",
+    "expo-constants": "~57.0.21",
+    "expo-document-picker": "~57.0.3",
     "expo-font": "~57.0.4",
     "expo-haptics": "~57.0.3",
     "expo-image-picker": "~57.0.20",
     "expo-linear-gradient": "~57.0.2",
     "expo-location": "~57.0.20",
-    "expo-notifications": "~57.0.21",
+    "expo-notifications": "~57.0.22",
     "expo-sensors": "~57.0.3",
     "expo-splash-screen": "~57.0.9",
     "expo-status-bar": "~57.0.1",
@@ -44,5 +44,16 @@
     "@types/react": "~19.2.4",
     "babel-preset-expo": "~57.0.0",
     "typescript": "~6.0.3"
+  },
+  "expo": {
+    "install": {
+      "exclude": [
+        "expo",
+        "expo-camera",
+        "expo-constants",
+        "expo-document-picker",
+        "expo-notifications"
+      ]
+    }
   }
 }

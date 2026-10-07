@@ -142,9 +142,6 @@ export default function CheckpointAdminScreen({ tokens, onBack }) {
 
   // Picker Camera/Gallery
   const handlePickImage = async () => {
-    if (Platform.OS === 'ios') {
-      // Using System Photo Picker directly (Android 13+ compliant)
-
     const res = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
       quality: 0.8,

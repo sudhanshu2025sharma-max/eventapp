@@ -134,9 +134,6 @@ function UploadSheet({ onClose, onUploaded }) {
   }, []);
 
   const pickImage = async () => {
-    if (Platform.OS === 'ios') {
-      // Using System Photo Picker directly (Android 13+ compliant)
-    }
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ['images'],
       quality: 0.75,

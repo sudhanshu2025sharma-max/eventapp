@@ -55,7 +55,7 @@ export function SectionHeader({ title, action, onAction, style }) {
   return (
     <View style={[s.sectionHeader, style]}>
       <Text style={s.sectionTitle}>{title}</Text>
-      {action && <TouchableOpacity onPress={onAction}><Text style={s.sectionAction}>{action}</Text></TouchableOpacity>}
+      {action && <TouchableOpacity onPress={onAction} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}><Text style={s.sectionAction}>{action}</Text></TouchableOpacity>}
     </View>
   );
 }
@@ -74,7 +74,7 @@ export function PrimaryButton({ label, onPress, loading, disabled, style }) {
   );
 }
 
-export function IconBox({ name, size = 20, color = COLORS.brand, bg, boxSize = 42, radius = RADIUS.md, style }) {
+export function IconBox({ name, size = 20, color = COLORS.brand, bg, boxSize = 44, radius = RADIUS.md, style }) {
   return (
     <View style={[{ width: boxSize, height: boxSize, borderRadius: radius, backgroundColor: bg || color + '14', alignItems: 'center', justifyContent: 'center' }, style]}>
       <Ionicons name={name} size={size} color={color} />

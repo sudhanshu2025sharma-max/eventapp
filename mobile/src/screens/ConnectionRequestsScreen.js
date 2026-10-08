@@ -265,7 +265,7 @@ const s = StyleSheet.create({
     borderBottomRightRadius: 28,
   },
   headerRow: { flexDirection: 'row', alignItems: 'center', gap: SPACE.md, marginBottom: SPACE.lg },
-  backBtn: { width: 38, height: 38, borderRadius: 19, backgroundColor: 'rgba(255,255,255,0.15)', alignItems: 'center', justifyContent: 'center' },
+  backBtn: { width: 44, height: 44, borderRadius: 22, backgroundColor: 'rgba(255,255,255,0.15)', alignItems: 'center', justifyContent: 'center' },
   headerTitle: { fontSize: 20, fontWeight: FONT.w9, color: '#fff' },
   headerSub: { fontSize: FONT.xs, color: 'rgba(255,255,255,0.7)', marginTop: 2 },
   tabRow: { flexDirection: 'row', gap: SPACE.sm, backgroundColor: 'rgba(255,255,255,0.12)', padding: 4, borderRadius: RADIUS.full },

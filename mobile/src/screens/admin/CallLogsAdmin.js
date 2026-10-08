@@ -5,7 +5,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { COLORS, FONT, RADIUS, SHADOW, SPACE } from '../../theme';
+import { COLORS, FONT, RADIUS, SHADOW, SPACE, TOP, BOTTOM } from '../../theme';
 import { apiFetch } from '../../api';
 
 const STATUS_META = {
@@ -123,7 +123,7 @@ export default function CallLogsAdmin({ tokens, onBack }) {
       <StatusBar barStyle="light-content" backgroundColor="#0F172A" />
 
       <LinearGradient colors={['#0F172A', '#1E293B']} style={s.header}>
-        <TouchableOpacity onPress={onBack} style={s.backBtn}>
+        <TouchableOpacity onPress={onBack} style={s.backBtn} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
           <Ionicons name="arrow-back" size={22} color="#FFF" />
         </TouchableOpacity>
         <Text style={s.headerTitle}>📞 Call Logs</Text>
@@ -192,9 +192,9 @@ const s = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.bg },
   header: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingTop: Platform.OS === 'ios' ? 52 : 36, paddingBottom: SPACE.lg, paddingHorizontal: SPACE.md,
+    paddingTop: TOP + 8, paddingBottom: SPACE.lg, paddingHorizontal: SPACE.md,
   },
-  backBtn: { width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.1)', justifyContent: 'center', alignItems: 'center' },
+  backBtn: { width: 44, height: 44, borderRadius: 22, backgroundColor: 'rgba(255,255,255,0.1)', justifyContent: 'center', alignItems: 'center' },
   headerTitle: { color: '#FFF', fontSize: FONT.lg, fontWeight: '700' },
   statsRow: { flexDirection: 'row', justifyContent: 'space-around', padding: SPACE.md, gap: 8 },
   statPill: { backgroundColor: COLORS.surface, borderRadius: RADIUS.md, padding: SPACE.sm, alignItems: 'center', flex: 1, ...SHADOW.sm },
@@ -205,7 +205,7 @@ const s = StyleSheet.create({
   chipActive: { backgroundColor: COLORS.brand, borderColor: COLORS.brand },
   chipText: { fontSize: FONT.xs, color: COLORS.textSec, fontWeight: '600' },
   chipTextActive: { color: '#FFF' },
-  listContent: { padding: SPACE.md, paddingBottom: 100 },
+  listContent: { padding: SPACE.md, paddingBottom: 100 + BOTTOM },
   card: { backgroundColor: COLORS.surface, borderRadius: RADIUS.lg, padding: SPACE.md, marginBottom: SPACE.sm, ...SHADOW.sm },
   cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: SPACE.sm },
   statusBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 8, paddingVertical: 3, borderRadius: RADIUS.full },

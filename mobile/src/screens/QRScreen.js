@@ -8,7 +8,7 @@ import Svg, { Rect } from 'react-native-svg';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
-import { COLORS, FONT, SPACE, RADIUS, API_URL, API_HEADERS, fixMediaUrl } from '../theme';
+import { COLORS, FONT, SPACE, RADIUS, TOP, BOTTOM, API_URL, API_HEADERS, fixMediaUrl } from '../theme';
 import { GradientAvatar, FadeIn, PulsingDot } from '../components';
 import qrGenerator from 'qrcode-generator';
 
@@ -102,7 +102,7 @@ function CheckInPopup({ visible, onClose, data }) {
   const kitReceived = data.goodies_status === 'received' || data.goodies_status === true;
 
   return (
-    <Modal transparent visible={visible} animationType="none">
+    <Modal transparent visible={visible} animationType="none" presentationStyle="overFullScreen">
       <Animated.View style={[pop.overlay, { opacity }]}>
         <Animated.View style={[pop.popup, { transform: [{ scale }] }]}>
           <View style={pop.iconCircle}>
@@ -164,7 +164,7 @@ function MealPassModal({ visible, pass, onClose }) {
   const mealName = pass.meal_type || 'MEAL';
 
   return (
-    <Modal transparent visible={visible} animationType="none">
+    <Modal transparent visible={visible} animationType="none" presentationStyle="overFullScreen">
       <Animated.View style={[pop.overlay, { opacity }]}>
         <Animated.View style={[pop.popup, { transform: [{ scale }] }]}>
           <LinearGradient colors={[COLORS.brand, COLORS.brandDark]} style={ml.modalHeader}>
@@ -521,9 +521,9 @@ const ml = StyleSheet.create({
 
 const s = StyleSheet.create({
   bg: { flex: 1, backgroundColor: '#f0f4f9' },
-  container: { paddingHorizontal: SPACE.xl, paddingBottom: 48, alignItems: 'center' },
+  container: { paddingHorizontal: SPACE.xl, paddingBottom: 130 + BOTTOM, alignItems: 'center' },
   center: { flex: 1, backgroundColor: '#f0f4f9', justifyContent: 'center', alignItems: 'center', gap: SPACE.md },
-  header: { paddingTop: Platform.OS === 'ios' ? 58 : 46, paddingBottom: SPACE.lg, width: '100%' },
+  header: { paddingTop: TOP + 8, paddingBottom: SPACE.lg, width: '100%' },
   title: { fontSize: 28, fontWeight: '900', color: COLORS.brand, letterSpacing: -0.5 },
   sub: { fontSize: FONT.xs, color: COLORS.textblack, marginTop: 3 },
   ticket: { width: '100%', backgroundColor: '#fff', borderRadius: 22, overflow: 'hidden', position: 'relative' },

@@ -6,7 +6,7 @@ import {
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
-import { COLORS, FONT, SPACE, RADIUS, SHADOW, API_URL, API_HEADERS, fixMediaUrl } from '../theme';
+import { COLORS, FONT, SPACE, RADIUS, SHADOW, TOP, API_URL, API_HEADERS, fixMediaUrl } from '../theme';
 import { GradientAvatar, FadeIn, IconBox, Divider } from '../components';
 
 // ── Interactive Certificate Modal ─────────────────────────────────────────────
@@ -30,7 +30,7 @@ https://etd2026.iitd.ac.in/`,
   };
 
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onDismiss}>
+    <Modal visible={visible} transparent animationType="fade" presentationStyle="overFullScreen" onRequestClose={onDismiss}>
       <View style={cert.overlay}>
         <View style={cert.card}>
           {/* Header foil */}
@@ -95,7 +95,7 @@ https://etd2026.iitd.ac.in/`,
               <Ionicons name="share-social-outline" size={18} color="#fff" />
               <Text style={cert.shareBtnText}>Share Certificate</Text>
             </TouchableOpacity>
-            <TouchableOpacity onPress={onDismiss} style={cert.closeBtn} activeOpacity={0.75}>
+            <TouchableOpacity onPress={onDismiss} style={cert.closeBtn} activeOpacity={0.75} hitSlop={{ top: 8, bottom: 8, left: 16, right: 16 }}>
               <Text style={cert.closeBtnText}>Close</Text>
             </TouchableOpacity>
           </View>
@@ -123,17 +123,17 @@ const cert = StyleSheet.create({
   descText: { fontSize: 10, color: COLORS.textSec, textAlign: 'center', marginTop: 10, lineHeight: 14 },
   dividerLine: { width: '100%', height: 1, backgroundColor: '#f1f5f9', marginVertical: SPACE.md },
   metaRow: { width: '100%', flexDirection: 'row', justifyContent: 'space-between' },
-  metaLabel: { fontSize: 8, fontWeight: FONT.w8, color: COLORS.textTer, letterSpacing: 0.8 },
+  metaLabel: { fontSize: 9.5, fontWeight: FONT.w8, color: COLORS.textTer, letterSpacing: 0.8 },
   metaVal: { fontSize: 10, fontWeight: FONT.w7, color: COLORS.text, marginTop: 1 },
   sigRow: { width: '100%', flexDirection: 'row', justifyContent: 'space-between', marginTop: SPACE.md },
   sigBlock: { width: '44%', alignItems: 'center' },
   sigLine: { width: '100%', height: 1, backgroundColor: COLORS.textTer, marginBottom: 4 },
-  sigName: { fontSize: 9, fontWeight: FONT.w7, color: COLORS.text },
-  sigTitle: { fontSize: 8, color: COLORS.textTer },
+  sigName: { fontSize: 9.5, fontWeight: FONT.w7, color: COLORS.text },
+  sigTitle: { fontSize: 9, color: COLORS.textTer },
   actions: { padding: SPACE.md, backgroundColor: '#f8fafc', borderTopWidth: 1, borderTopColor: '#f1f5f9', gap: SPACE.xs },
   shareBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, backgroundColor: COLORS.brand, height: 44, borderRadius: RADIUS.md },
   shareBtnText: { fontSize: FONT.sm, fontWeight: FONT.w7, color: '#fff' },
-  closeBtn: { alignItems: 'center', justifyContent: 'center', height: 34 },
+  closeBtn: { alignItems: 'center', justifyContent: 'center', height: 44 },
   closeBtnText: { fontSize: FONT.xs, fontWeight: FONT.w6, color: COLORS.textTer },
 });
 
@@ -241,6 +241,8 @@ export default function ProfileTab({
       items: [
         { icon: 'bug-outline',           label: 'Report an Error', sub: 'Submit bug details & screenshots to admin', onPress: onOpenReportError },
         { icon: 'people-outline',        label: 'Support & Help', sub: 'Central Library & Committee Leaders', onPress: () => setShowSupportModal(true) },
+        { icon: 'shield-checkmark-outline', label: 'Privacy Policy', sub: 'https://etd2026.iitd.ac.in/app-privacy-policy/', onPress: () => Linking.openURL('https://etd2026.iitd.ac.in/app-privacy-policy/').catch(() => {}) },
+        { icon: 'trash-outline',         label: 'Account Deletion', sub: 'https://etd2026.iitd.ac.in/app-account-deletion/', onPress: () => Linking.openURL('https://etd2026.iitd.ac.in/app-account-deletion/').catch(() => {}) },
         { icon: 'globe-outline',         label: 'Official Conference Portal', sub: 'https://etd2026.iitd.ac.in',     onPress: () => Linking.openURL('https://etd2026.iitd.ac.in/') },
       ]
     },
@@ -461,7 +463,7 @@ export default function ProfileTab({
 
 const p = StyleSheet.create({
   hero: {
-    paddingTop: Platform.OS === 'ios' ? 58 : 46,
+    paddingTop: TOP + 8,
     paddingBottom: SPACE.xxl, paddingHorizontal: SPACE.xl,
     backgroundColor: COLORS.brand, alignItems: 'center', overflow: 'hidden',
   },
@@ -504,7 +506,7 @@ const p = StyleSheet.create({
     borderWidth: 1, borderColor: '#e2e8f0', ...SHADOW.sm,
   },
   statPillValue: { fontSize: FONT.md, fontWeight: FONT.w9, color: COLORS.text, marginTop: 2 },
-  statPillLabel: { fontSize: 8, fontWeight: FONT.w8, color: COLORS.textTer, letterSpacing: 0.8, marginTop: 2 },
+  statPillLabel: { fontSize: 9.5, fontWeight: FONT.w8, color: COLORS.textTer, letterSpacing: 0.8, marginTop: 2 },
 
   strengthCard: {
     backgroundColor: '#FFFFFF', borderRadius: 20, padding: SPACE.lg,

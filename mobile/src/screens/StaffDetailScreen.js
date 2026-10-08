@@ -14,7 +14,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
-import { COLORS, FONT, RADIUS, SHADOW, SPACE, fixMediaUrl } from '../theme';
+import { COLORS, FONT, RADIUS, SHADOW, SPACE, fixMediaUrl, TOP, BOTTOM } from '../theme';
 import { apiFetch } from '../api';
 
 const TIER_META = {
@@ -64,14 +64,11 @@ export default function StaffDetailScreen({
 
   const handleVoiceCall = () => {
     try { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); } catch (_) {}
-    if (onInitiateVoiceCall && targetUserId) {
-      onInitiateVoiceCall({
-        id: targetUserId,
-        full_name: staff.full_name || staff.name || `${staff.first_name || ''} ${staff.last_name || ''}`.trim(),
-        role: staff.role || 'staff',
-        designation: profile.designation || staff.designation || 'Conference Team',
-        photo_url: photoUri,
-      });
+    const ph = profile.phone || staff.phone;
+    if (ph) {
+      Linking.openURL(`tel:${ph}`);
+    } else {
+      Alert.alert('Phone Call', 'Phone number not available for this staff member.');
     }
   };
 
@@ -154,7 +151,7 @@ export default function StaffDetailScreen({
               <LinearGradient colors={['#10B981', '#059669']} style={styles.actionIcon}>
                 <Ionicons name="call" size={20} color="#FFF" />
               </LinearGradient>
-              <Text style={styles.actionLabel}>Voice Call</Text>
+              <Text style={styles.actionLabel}>Call</Text>
             </TouchableOpacity>
           )}
 
@@ -266,14 +263,14 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingTop: Platform.OS === 'ios' ? 52 : 36,
+    paddingTop: TOP + 8,
     paddingBottom: SPACE.lg,
     paddingHorizontal: SPACE.md,
   },
   backBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     backgroundColor: 'rgba(255, 255, 255, 0.1)',
     justifyContent: 'center',
     alignItems: 'center',
@@ -285,6 +282,7 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     padding: SPACE.md,
+    paddingBottom: SPACE.xxl + BOTTOM,
   },
   avatarCard: {
     backgroundColor: COLORS.surface,

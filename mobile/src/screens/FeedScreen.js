@@ -8,7 +8,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useVideoPlayer, VideoView } from 'expo-video';
-import { COLORS, FONT, SPACE, RADIUS, SHADOW, W, H } from '../theme';
+import { COLORS, FONT, SPACE, RADIUS, SHADOW, TOP, BOTTOM, W, H } from '../theme';
 import { apiFetch } from '../api';
 import { useKeyboardHeight } from '../useKeyboard';
 
@@ -322,7 +322,7 @@ export default function FeedScreen({ onBack }) {
       <Animated.FlatList
         data={posts}
         keyExtractor={i => String(i.id)}
-        contentContainerStyle={{ padding: SPACE.lg, paddingBottom: 95 }}
+        contentContainerStyle={{ padding: SPACE.lg, paddingBottom: 120 + BOTTOM }}
         onScroll={Animated.event([{ nativeEvent: { contentOffset: { y: scrollY } } }], { useNativeDriver: false })}
         scrollEventThrottle={16}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor={COLORS.brand} />}
@@ -337,7 +337,7 @@ export default function FeedScreen({ onBack }) {
         }
       />
 
-      <Modal visible={!!fullMedia} transparent animationType="fade" onRequestClose={() => setFullMedia(null)}>
+      <Modal visible={!!fullMedia} transparent animationType="fade" presentationStyle="overFullScreen" onRequestClose={() => setFullMedia(null)}>
         <View style={s.mediaViewerContainer}>
           <TouchableOpacity style={s.mediaCloseBtn} onPress={() => setFullMedia(null)}>
             <Ionicons name="close" size={32} color="#fff" />
@@ -350,7 +350,7 @@ export default function FeedScreen({ onBack }) {
         </View>
       </Modal>
 
-      <Modal visible={modalOpen} animationType="none" transparent onRequestClose={closeComments}>
+      <Modal visible={modalOpen} animationType="none" transparent presentationStyle="overFullScreen" onRequestClose={closeComments}>
         <View style={s.modalWrap}>
           <Animated.View style={[StyleSheet.absoluteFill, { backgroundColor: COLORS.brandDeeper, opacity: overlay.interpolate({ inputRange: [0, 1], outputRange: [0, 0.45] }) }]}><TouchableOpacity style={{ flex: 1 }} activeOpacity={1} onPress={closeComments} /></Animated.View>
           <Animated.View style={[s.sheet, { transform: [{ translateY: sheetY }] }]}>
@@ -385,7 +385,7 @@ export default function FeedScreen({ onBack }) {
 
 const s = StyleSheet.create({
   screen: { flex: 1, backgroundColor: COLORS.bg },
-  header: { paddingTop: Platform.OS === 'ios' ? 58 : 42, paddingBottom: SPACE.md, paddingHorizontal: SPACE.lg, flexDirection: 'row', alignItems: 'center', gap: SPACE.md, backgroundColor: COLORS.bg, borderBottomWidth: 1, borderBottomColor: 'transparent', zIndex: 10 },
+  header: { paddingTop: TOP + 8, paddingBottom: SPACE.md, paddingHorizontal: SPACE.lg, flexDirection: 'row', alignItems: 'center', gap: SPACE.md, backgroundColor: COLORS.bg, borderBottomWidth: 1, borderBottomColor: 'transparent', zIndex: 10 },
   headerIcon: { width: 40, height: 40, borderRadius: RADIUS.full, backgroundColor: COLORS.surface, alignItems: 'center', justifyContent: 'center', ...SHADOW.sm },
   headerTitle: { fontSize: FONT.xl, fontWeight: FONT.w9, color: COLORS.text, letterSpacing: -0.3 },
   headerSub:   { fontSize: FONT.xs, color: COLORS.textTer, marginTop: 2 },

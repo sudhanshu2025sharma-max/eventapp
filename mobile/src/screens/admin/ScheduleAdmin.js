@@ -16,7 +16,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { COLORS, FONT, SPACE, RADIUS, SHADOW, TOP, API_URL, API_HEADERS } from '../../theme';
+import { COLORS, FONT, SPACE, RADIUS, SHADOW, TOP, BOTTOM, API_URL, API_HEADERS } from '../../theme';
 
 /* ── Constants ─────────────────────────────────────────────────────────── */
 const DAYS_FILTER = [
@@ -194,7 +194,7 @@ function DateTimePickerModal({ visible, value, onSelect, onClose, label }) {
   };
 
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+    <Modal visible={visible} transparent animationType="fade" presentationStyle="overFullScreen" onRequestClose={onClose}>
       <TouchableOpacity style={dt.overlay} activeOpacity={1} onPress={onClose}>
         <TouchableOpacity style={dt.modal} activeOpacity={1} onPress={() => {}}>
           <View style={dt.header}>
@@ -461,7 +461,7 @@ const dt = StyleSheet.create({
 function Header({ title, sub, onBack, right }) {
   return (
     <View style={s.header}>
-      <TouchableOpacity onPress={onBack} style={s.backBtn}>
+      <TouchableOpacity onPress={onBack} style={s.backBtn} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
         <Ionicons name="arrow-back" size={22} color={COLORS.text} />
       </TouchableOpacity>
       <View style={{ flex: 1 }}>
@@ -518,7 +518,7 @@ function AnalyticsView({ session, tokens, onBack }) {
   return (
     <View style={{ flex: 1, backgroundColor: COLORS.bg }}>
       <Header title="Feedback Analytics" sub={session.title} onBack={onBack} />
-      <ScrollView contentContainerStyle={{ padding: SPACE.xl, paddingBottom: 100 }}>
+      <ScrollView contentContainerStyle={{ padding: SPACE.xl, paddingBottom: 100 + BOTTOM }}>
         {loading && <ActivityIndicator color={COLORS.brand} style={{ marginTop: SPACE.xxl }} />}
         
         {data && (
@@ -735,7 +735,7 @@ function SessionForm({ session, tokens, onBack, onSaved }) {
       <Header title={isEdit ? 'Edit Session' : 'New Session'} sub={isEdit ? session.title : null} onBack={onBack} />
       
       <ScrollView 
-        contentContainerStyle={{ padding: SPACE.xl, paddingBottom: 120 }} 
+        contentContainerStyle={{ padding: SPACE.xl, paddingBottom: 120 + BOTTOM }} 
         showsVerticalScrollIndicator={false} 
         keyboardShouldPersistTaps="handled"
       >
@@ -1017,7 +1017,7 @@ function SessionDetail({ session: initial, tokens, onBack, onRefresh }) {
           </TouchableOpacity>
         } 
       />
-      <ScrollView contentContainerStyle={{ padding: SPACE.xl, paddingBottom: 120 }} showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerStyle={{ padding: SPACE.xl, paddingBottom: 120 + BOTTOM }} showsVerticalScrollIndicator={false}>
         <View style={s.detailCard}>
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: SPACE.sm, marginBottom: SPACE.md }}>
             {sess.is_featured && <Text style={{ fontSize: 18, color: COLORS.accent }}>★</Text>}
@@ -1209,7 +1209,7 @@ export default function ScheduleAdmin({ tokens, onBack }) {
 
       {loading ? <ListSkeleton /> : (
         <ScrollView 
-          contentContainerStyle={{ padding: SPACE.xl, paddingBottom: 120 }} 
+          contentContainerStyle={{ padding: SPACE.xl, paddingBottom: 120 + BOTTOM }} 
           showsVerticalScrollIndicator={false} 
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => load(true)} colors={[COLORS.brand]} />}
         >
@@ -1262,7 +1262,7 @@ export default function ScheduleAdmin({ tokens, onBack }) {
 /* ── Styles ────────────────────────────────────────────────────────────── */
 const s = StyleSheet.create({
   header: { 
-    flexDirection: 'row', alignItems: 'center', paddingTop: TOP, 
+    flexDirection: 'row', alignItems: 'center', paddingTop: TOP + 8, 
     paddingBottom: SPACE.md, paddingHorizontal: SPACE.xl, 
     backgroundColor: COLORS.bg, gap: SPACE.md 
   },

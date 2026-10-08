@@ -8,7 +8,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import * as Haptics from 'expo-haptics';
-import { COLORS, FONT, SPACE, RADIUS, SHADOW, fixMediaUrl } from '../theme';
+import { COLORS, FONT, SPACE, RADIUS, SHADOW, TOP, BOTTOM, fixMediaUrl } from '../theme';
 import { apiFetch } from '../api';
 import { useKeyboardHeight } from '../useKeyboard';
 import { PulsingDot } from '../components';
@@ -46,7 +46,7 @@ function Lightbox({ photo, onClose, onTagPress }) {
   const scale = anim.interpolate({ inputRange: [0, 1], outputRange: [0.82, 1] });
 
   return (
-    <Modal visible transparent animationType="fade" onRequestClose={onClose}>
+    <Modal visible transparent animationType="fade" presentationStyle="overFullScreen" onRequestClose={onClose}>
       <View style={lb.overlay}>
         <TouchableOpacity style={lb.dismiss} onPress={onClose} activeOpacity={1} />
         <Animated.View style={[lb.card, { transform: [{ scale }] }]}>
@@ -200,7 +200,7 @@ function UploadSheet({ onClose, onUploaded }) {
   };
 
   return (
-    <Modal visible transparent animationType="fade" onRequestClose={onClose}>
+    <Modal visible transparent animationType="fade" presentationStyle="overFullScreen" onRequestClose={onClose}>
       <View style={up.overlay}>
         <TouchableOpacity style={{ flex: 1 }} onPress={onClose} activeOpacity={1} />
         <Animated.View style={[up.sheet, { transform: [{ translateY: slideAnim }] }]}>
@@ -734,7 +734,7 @@ const ph = StyleSheet.create({
   thumbOverlayText: { fontSize: 9, fontWeight: FONT.w8, color: '#fff', letterSpacing: 0.5 },
   thumbBadge: { position: 'absolute', bottom: 5, right: 5, width: 16, height: 16, borderRadius: 8, backgroundColor: COLORS.brand, alignItems: 'center', justifyContent: 'center' },
   selfieBadge: { position: 'absolute', bottom: 0, left: 0, right: 0, flexDirection: 'row', alignItems: 'center', gap: 2, paddingHorizontal: 4, paddingVertical: 3, backgroundColor: 'rgba(236,72,153,0.88)', borderBottomLeftRadius: 14, borderBottomRightRadius: 14 },
-  selfieBadgeText: { fontSize: 7, fontWeight: FONT.w8, color: '#fff', flex: 1 },
+  selfieBadgeText: { fontSize: 9, fontWeight: FONT.w8, color: '#fff', flex: 1 },
   thumbDeleteBtn: { position: 'absolute', top: 4, right: 4, width: 24, height: 24, borderRadius: 12, backgroundColor: 'rgba(239,68,68,0.85)', alignItems: 'center', justifyContent: 'center' },
 });
 
@@ -749,13 +749,13 @@ const sf = StyleSheet.create({
 
 const s = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#f3f6fb' },
-  header: { paddingTop: Platform.OS === 'ios' ? 54 : 44, paddingBottom: SPACE.md, overflow: 'hidden' },
+  header: { paddingTop: TOP + 8, paddingBottom: SPACE.md, overflow: 'hidden' },
   headerBlob1: { position: 'absolute', top: -40, right: -20, width: 150, height: 150, borderRadius: 75, backgroundColor: 'rgba(255,255,255,0.07)' },
   headerBlob2: { position: 'absolute', bottom: -30, left: -10, width: 100, height: 100, borderRadius: 50, backgroundColor: 'rgba(245,158,11,0.08)' },
   topbar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: PAD, marginBottom: SPACE.sm },
-  backBtn: { width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.12)', alignItems: 'center', justifyContent: 'center' },
+  backBtn: { width: 44, height: 44, borderRadius: 22, backgroundColor: 'rgba(255,255,255,0.12)', alignItems: 'center', justifyContent: 'center' },
   headerTitle: { fontSize: FONT.xl, fontWeight: FONT.w8, color: '#fff', letterSpacing: -0.2 },
-  uploadBtn: { width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.18)', alignItems: 'center', justifyContent: 'center' },
+  uploadBtn: { width: 44, height: 44, borderRadius: 22, backgroundColor: 'rgba(255,255,255,0.18)', alignItems: 'center', justifyContent: 'center' },
   statusRow: { flexDirection: 'row', alignItems: 'center', gap: SPACE.sm, paddingHorizontal: PAD, marginBottom: SPACE.sm },
   statusDot: { width: 7, height: 7, borderRadius: 4 },
   statusText: { fontSize: FONT.xs, color: 'rgba(255,255,255,0.7)', fontWeight: FONT.w6 },
@@ -795,6 +795,6 @@ const s = StyleSheet.create({
   emptyBtn: { marginTop: SPACE.xl, borderRadius: 16, overflow: 'hidden' },
   emptyBtnGrad: { flexDirection: 'row', alignItems: 'center', gap: SPACE.sm, paddingHorizontal: SPACE.xxl, paddingVertical: SPACE.lg },
   emptyBtnText: { fontSize: FONT.md, fontWeight: FONT.w8, color: '#fff' },
-  fabWrap: { position: 'absolute', bottom: 32, right: PAD },
+  fabWrap: { position: 'absolute', bottom: 32 + BOTTOM, right: PAD },
   fab: { width: 60, height: 60, borderRadius: 30, alignItems: 'center', justifyContent: 'center', ...SHADOW.lg },
 });

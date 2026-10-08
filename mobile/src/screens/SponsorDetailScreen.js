@@ -5,7 +5,7 @@ import {
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
-import { COLORS, FONT, SPACE, RADIUS, SHADOW, API_URL, API_HEADERS } from '../theme';
+import { COLORS, FONT, SPACE, RADIUS, SHADOW, API_URL, API_HEADERS, TOP, BOTTOM } from '../theme';
 
 const PAD = SPACE.xl;
 
@@ -86,12 +86,12 @@ export default function SponsorDetailScreen({ sponsorId, onBack }) {
     <View style={{ flex: 1, backgroundColor: '#f0f4f9' }}>
       <StatusBar barStyle="light-content" />
 
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 40 }}>
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 40 + BOTTOM }}>
 
         {/* Hero */}
         <LinearGradient colors={['#0a1a5e', '#0333b6']} style={st.hero}>
           <View style={st.heroTopBar}>
-            <TouchableOpacity onPress={onBack} style={st.backBtn}>
+            <TouchableOpacity onPress={onBack} style={st.backBtn} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
               <Ionicons name="chevron-back" size={22} color="#fff" />
             </TouchableOpacity>
             <Text style={st.tierBadge}>{tierLabel}</Text>
@@ -176,7 +176,7 @@ export default function SponsorDetailScreen({ sponsorId, onBack }) {
 
 const st = StyleSheet.create({
   hero: {
-    paddingTop: Platform.OS === 'ios' ? 54 : 44,
+    paddingTop: TOP + 8,
     paddingBottom: SPACE.xxl + SPACE.lg,
     paddingHorizontal: PAD,
     borderBottomLeftRadius: 32, borderBottomRightRadius: 32,

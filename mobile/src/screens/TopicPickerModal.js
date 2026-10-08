@@ -4,7 +4,7 @@ import {
   TextInput, StyleSheet, Platform, KeyboardAvoidingView,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { COLORS, FONT, SPACE, RADIUS, SHADOW } from '../theme';
+import { COLORS, FONT, SPACE, RADIUS, SHADOW, BOTTOM } from '../theme';
 
 const TOPICS = [
   { key: 'research_collab',   label: 'Research Collaboration', icon: 'flask-outline' },
@@ -36,7 +36,7 @@ export default function TopicPickerModal({ visible, onClose, onConfirm, title = 
   };
 
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={handleClose}>
+    <Modal visible={visible} transparent animationType="slide" presentationStyle="overFullScreen" onRequestClose={handleClose}>
       <KeyboardAvoidingView
         style={s.overlay}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
@@ -49,7 +49,7 @@ export default function TopicPickerModal({ visible, onClose, onConfirm, title = 
           {/* Header */}
           <View style={s.header}>
             <Text style={s.title}>{title}</Text>
-            <TouchableOpacity onPress={handleClose} style={s.closeBtn}>
+            <TouchableOpacity onPress={handleClose} style={s.closeBtn} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
               <Ionicons name="close" size={20} color={COLORS.textSec} />
             </TouchableOpacity>
           </View>
@@ -128,7 +128,7 @@ const s = StyleSheet.create({
     borderTopLeftRadius: 32,
     borderTopRightRadius: 32,
     paddingHorizontal: SPACE.xl,
-    paddingBottom: Platform.OS === 'ios' ? 40 : 24,
+    paddingBottom: BOTTOM + 8,
     paddingTop: SPACE.md,
     ...SHADOW.xl,
   },

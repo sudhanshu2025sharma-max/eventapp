@@ -13,7 +13,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { COLORS, SPACE, RADIUS, SHADOW, fixMediaUrl } from '../theme';
+import { COLORS, SPACE, RADIUS, SHADOW, fixMediaUrl, TOP, BOTTOM } from '../theme';
 import { apiFetch } from '../api';
 import TopicPickerModal from './TopicPickerModal';
 
@@ -161,6 +161,7 @@ export default function StaffScreen({ onBack, onOpenStaffDetail, onOpenGroupChat
           disabled={connectingId === staffUserId}
           style={styles.chatBtn}
           activeOpacity={0.8}
+          hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
         >
           {connectingId === staffUserId ? (
             <ActivityIndicator color="#fff" size="small" />
@@ -191,7 +192,7 @@ export default function StaffScreen({ onBack, onOpenStaffDetail, onOpenGroupChat
       />
 
       <View style={styles.topBar}>
-        <TouchableOpacity style={styles.backBtn} onPress={onBack}>
+        <TouchableOpacity style={styles.backBtn} onPress={onBack} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
           <Ionicons name="arrow-back" size={24} color="#fff" />
         </TouchableOpacity>
         <View style={{ flex: 1 }}>
@@ -247,10 +248,10 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#f8fafc' },
   topBar: {
     backgroundColor: '#1e1b4b',
-    paddingTop: 20, paddingBottom: 16, paddingHorizontal: SPACE.lg,
+    paddingTop: TOP + 8, paddingBottom: 16, paddingHorizontal: SPACE.lg,
     flexDirection: 'row', alignItems: 'center', gap: 12,
   },
-  backBtn: { padding: 4 },
+  backBtn: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
   topTitle: { fontSize: 20, fontWeight: '700', color: '#fff' },
   topSub: { fontSize: 12, color: '#c7d2fe', marginTop: 2 },
   groupBanner: {
@@ -267,7 +268,7 @@ const styles = StyleSheet.create({
   },
   groupTitle: { fontSize: 14, fontWeight: '700', color: '#fff' },
   groupSub: { fontSize: 11, color: '#c7d2fe', marginTop: 2 },
-  listContent: { paddingVertical: SPACE.md, paddingBottom: 40 },
+  listContent: { paddingVertical: SPACE.md, paddingBottom: 60 + BOTTOM },
   card: {
     width: CARD_WIDTH,
     backgroundColor: '#fff',

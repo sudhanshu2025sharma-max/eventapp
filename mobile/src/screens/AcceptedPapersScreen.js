@@ -7,7 +7,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { COLORS, FONT, RADIUS, SHADOW, fixMediaUrl } from '../theme';
+import { COLORS, FONT, RADIUS, SHADOW, fixMediaUrl, TOP, BOTTOM } from '../theme';
 import { apiFetch } from '../api';
 
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
@@ -15,7 +15,7 @@ if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental
 }
 
 const { width: W } = Dimensions.get('window');
-const TOP_INSET = Platform.OS === 'ios' ? 54 : 44;
+const TOP_INSET = TOP;
 
 /* ─────────────────────────────────────────────────────────────
    Animated Card Component (staggered entrance + expand animation)
@@ -510,9 +510,9 @@ const $ = StyleSheet.create({
     paddingTop: 8,
   },
   backBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: 'rgba(255,255,255,0.18)',
@@ -599,7 +599,7 @@ const $ = StyleSheet.create({
   searchInput: { flex: 1, fontSize: FONT.sm, color: COLORS.text, padding: 0, fontWeight: FONT.w6 },
 
   /* ── List ── */
-  listContent: { paddingHorizontal: 16, paddingBottom: 60, paddingTop: 14 },
+  listContent: { paddingHorizontal: 16, paddingBottom: 60 + BOTTOM, paddingTop: 14 },
 
   /* ── Card ── */
   card: {

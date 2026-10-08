@@ -5,7 +5,7 @@ import {
   KeyboardAvoidingView, Image, RefreshControl,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { COLORS, FONT, SPACE, RADIUS, API_URL, API_HEADERS } from '../../theme';
+import { COLORS, FONT, SPACE, RADIUS, API_URL, API_HEADERS, TOP, BOTTOM } from '../../theme';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Helpers
@@ -84,7 +84,7 @@ function EditScreen({ notif, tokens, onDone, onBack }) {
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
       <View style={s.header}>
-        <TouchableOpacity onPress={onBack} style={s.backBtn}>
+        <TouchableOpacity onPress={onBack} style={s.backBtn} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
           <Ionicons name="arrow-back" size={22} color={COLORS.text} />
         </TouchableOpacity>
         <View>
@@ -94,7 +94,7 @@ function EditScreen({ notif, tokens, onDone, onBack }) {
       </View>
 
       <ScrollView
-        contentContainerStyle={{ padding: SPACE.xl, paddingBottom: 120 }}
+        contentContainerStyle={{ padding: SPACE.xl, paddingBottom: 120 + BOTTOM }}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
@@ -459,7 +459,7 @@ export default function NotificationsAdmin({ tokens, onBack }) {
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
       <View style={s.header}>
-        <TouchableOpacity onPress={onBack} style={s.backBtn}>
+        <TouchableOpacity onPress={onBack} style={s.backBtn} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
           <Ionicons name="arrow-back" size={22} color={COLORS.text} />
         </TouchableOpacity>
         <View>
@@ -469,7 +469,7 @@ export default function NotificationsAdmin({ tokens, onBack }) {
       </View>
 
       <ScrollView
-        contentContainerStyle={{ padding: SPACE.xl, paddingBottom: 120 }}
+        contentContainerStyle={{ padding: SPACE.xl, paddingBottom: 120 + BOTTOM }}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
       >
@@ -492,7 +492,7 @@ export default function NotificationsAdmin({ tokens, onBack }) {
 const s = StyleSheet.create({
   header: {
     flexDirection: 'row', alignItems: 'center',
-    paddingTop: Platform.OS === 'ios' ? 54 : 44,
+    paddingTop: TOP + 8,
     paddingBottom: SPACE.lg, paddingHorizontal: SPACE.xl,
     backgroundColor: COLORS.bg, gap: SPACE.md,
   },

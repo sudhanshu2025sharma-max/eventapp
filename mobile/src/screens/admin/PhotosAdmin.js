@@ -6,7 +6,7 @@ import {
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
-import { COLORS, FONT, SPACE, RADIUS, fixMediaUrl } from '../../theme';
+import { COLORS, FONT, SPACE, RADIUS, fixMediaUrl, TOP, BOTTOM } from '../../theme';
 import { apiFetch } from '../../api';
 import { PulsingDot } from '../../components';
 
@@ -132,7 +132,7 @@ export default function PhotosAdmin({ onBack }) {
       <LinearGradient colors={[COLORS.brandDeep, COLORS.brand]} style={s.header}>
         <View style={s.blob1} />
         <View style={s.topbar}>
-          <TouchableOpacity onPress={onBack} style={s.backBtn}>
+          <TouchableOpacity onPress={onBack} style={s.backBtn} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
             <Ionicons name="arrow-back" size={22} color="#fff" />
           </TouchableOpacity>
           <Text style={s.headerTitle}>Photo Moderation</Text>
@@ -256,7 +256,7 @@ export default function PhotosAdmin({ onBack }) {
           keyExtractor={item => String(item.id)}
           numColumns={COLS}
           columnWrapperStyle={{ gap: SPACE.sm }}
-          contentContainerStyle={{ padding: PAD, gap: SPACE.sm, paddingBottom: isSelecting ? 100 : 40 }}
+          contentContainerStyle={{ padding: PAD, gap: SPACE.sm, paddingBottom: (isSelecting ? 100 : 40) + BOTTOM }}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); fetchAll(); }} tintColor={COLORS.brand} />}
           showsVerticalScrollIndicator={false}
           renderItem={({ item }) => (
@@ -327,14 +327,14 @@ function AdminLightbox({ photo, tab, onClose, onApprove, onReject, onDelete }) {
   const scale = anim.interpolate({ inputRange: [0, 1], outputRange: [0.85, 1] });
 
   return (
-    <Modal visible transparent animationType="fade" onRequestClose={onClose}>
+    <Modal visible transparent animationType="fade" presentationStyle="overFullScreen" onRequestClose={onClose}>
       <View style={lx.overlay}>
         <TouchableOpacity style={lx.dismiss} onPress={onClose} activeOpacity={1} />
 
         <Animated.View style={[lx.card, { transform: [{ scale }] }]}>
           <Image source={{ uri: fixMediaUrl(photo.image_url) }} style={lx.img} resizeMode="contain" />
 
-          <TouchableOpacity style={lx.closeBtn} onPress={onClose}>
+          <TouchableOpacity style={lx.closeBtn} onPress={onClose} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
             <Ionicons name="close" size={22} color="#fff" />
           </TouchableOpacity>
 
@@ -416,7 +416,7 @@ const sf = StyleSheet.create({
 
 const s = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#f3f6fb' },
-  header: { paddingTop: Platform.OS === 'ios' ? 54 : 44, paddingBottom: SPACE.md, overflow: 'hidden' },
+  header: { paddingTop: TOP + 8, paddingBottom: SPACE.md, overflow: 'hidden' },
   blob1: { position: 'absolute', top: -40, right: -20, width: 150, height: 150, borderRadius: 75, backgroundColor: 'rgba(255,255,255,0.06)' },
   topbar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: PAD, marginBottom: SPACE.md },
   backBtn: { width: 42, height: 42, borderRadius: 21, backgroundColor: 'rgba(255,255,255,0.12)', alignItems: 'center', justifyContent: 'center' },

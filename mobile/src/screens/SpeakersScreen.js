@@ -6,7 +6,7 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import {
-  COLORS, FONT, SPACE, RADIUS, SHADOW, API_URL, API_HEADERS, TOP, fixMediaUrl,
+  COLORS, FONT, SPACE, RADIUS, SHADOW, API_URL, API_HEADERS, TOP, BOTTOM, fixMediaUrl,
 } from '../theme';
 import SpeakerDetailScreen from './SpeakerDetailScreen';
 
@@ -412,7 +412,7 @@ export default function SpeakersScreen({ tokens, onBack, onOpenChatRoom }) {
         contentContainerStyle={{
           paddingHorizontal: PAD,
           paddingTop: NAVBAR_HEIGHT + SPACE.sm,
-          paddingBottom: 100,
+          paddingBottom: 100 + BOTTOM,
         }}
         showsVerticalScrollIndicator={false}
         refreshControl={
@@ -604,9 +604,9 @@ const st = StyleSheet.create({
     paddingHorizontal: PAD,
   },
   backBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     backgroundColor: COLORS.glass,
     alignItems: 'center',
     justifyContent: 'center',
@@ -813,7 +813,7 @@ const st = StyleSheet.create({
     borderRadius: RADIUS.full,
   },
   keynoteBadgeText: {
-    fontSize: 8,
+    fontSize: 9.5,
     fontWeight: FONT.w9,
     color: COLORS.accentDark,
     letterSpacing: 0.4,

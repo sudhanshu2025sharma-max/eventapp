@@ -95,7 +95,7 @@ export default function OnboardingGuideScreen({ visible, onComplete }) {
   const handleShakeSuccess = () => {
     setHasShaken(true);
     try {
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
     } catch (e) {}
   };
 
@@ -134,7 +134,7 @@ export default function OnboardingGuideScreen({ visible, onComplete }) {
   });
 
   return (
-    <Modal visible={visible} animationType="fade" transparent={true}>
+    <Modal visible={visible} animationType="fade" transparent={true} presentationStyle="overFullScreen">
       <View style={st.overlay}>
         <Animated.View style={[st.card, { opacity: cardOpacity, transform: [{ scale: cardScale }] }]}>
           
@@ -248,7 +248,7 @@ export default function OnboardingGuideScreen({ visible, onComplete }) {
 
           {/* SKIP BUTTON (Only on slide 1 and 2) */}
           {currentIndex < 2 && (
-            <TouchableOpacity style={st.skipBtn} onPress={finishOnboarding}>
+            <TouchableOpacity style={st.skipBtn} onPress={finishOnboarding} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
               <Text style={st.skipBtnText}>Skip tour</Text>
             </TouchableOpacity>
           )}

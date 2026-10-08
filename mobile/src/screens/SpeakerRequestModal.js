@@ -4,7 +4,7 @@ import {
   Platform, TextInput, ScrollView, KeyboardAvoidingView,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { COLORS, FONT, SPACE, RADIUS, SHADOW, API_URL, API_HEADERS, fixMediaUrl } from '../theme';
+import { COLORS, FONT, SPACE, RADIUS, SHADOW, API_URL, API_HEADERS, fixMediaUrl, BOTTOM } from '../theme';
 import { GradientAvatar } from '../components';
 import TopicPickerModal from './TopicPickerModal';
 
@@ -70,7 +70,7 @@ export default function SpeakerRequestModal({ visible, onClose, speaker, tokens,
 
   return (
     <>
-      <Modal visible={visible} transparent animationType="slide" onRequestClose={handleClose}>
+      <Modal visible={visible} transparent animationType="slide" onRequestClose={handleClose} presentationStyle="overFullScreen">
         <KeyboardAvoidingView
           style={s.overlay}
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
@@ -85,7 +85,7 @@ export default function SpeakerRequestModal({ visible, onClose, speaker, tokens,
                 <Text style={s.title}>Speaker Discussion</Text>
                 <Text style={s.subtitle}>Request a conversation</Text>
               </View>
-              <TouchableOpacity style={s.closeBtn} onPress={handleClose}>
+              <TouchableOpacity style={s.closeBtn} onPress={handleClose} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
                 <Ionicons name="close" size={18} color={COLORS.textSec} />
               </TouchableOpacity>
             </View>
@@ -224,7 +224,7 @@ const s = StyleSheet.create({
     backgroundColor: '#fff',
     borderTopLeftRadius: 32, borderTopRightRadius: 32,
     paddingHorizontal: SPACE.xl,
-    paddingBottom: Platform.OS === 'ios' ? 40 : 24,
+    paddingBottom: 24 + BOTTOM,
     paddingTop: SPACE.md,
     maxHeight: '92%',
     ...SHADOW.xl,

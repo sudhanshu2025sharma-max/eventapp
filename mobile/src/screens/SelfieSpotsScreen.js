@@ -10,7 +10,7 @@ import { Ionicons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
 import * as ImagePicker from 'expo-image-picker';
 import * as Haptics from 'expo-haptics';
-import { COLORS, FONT, SPACE, RADIUS, SHADOW, fixMediaUrl } from '../theme';
+import { COLORS, FONT, SPACE, RADIUS, SHADOW, fixMediaUrl, TOP, BOTTOM } from '../theme';
 import { apiFetch } from '../api';
 import { getHaversineDistanceMeters, formatDistance } from '../utils/geo';
 import { PulsingDot } from '../components';
@@ -441,7 +441,7 @@ window.updateUserLocation=function(lat,lng){
           {/* Quest Mission Cards Scroller */}
           <ScrollView
             showsVerticalScrollIndicator={false}
-            contentContainerStyle={{ paddingHorizontal: PAD, paddingBottom: 100 }}
+            contentContainerStyle={{ paddingHorizontal: PAD, paddingBottom: 100 + BOTTOM }}
             refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); fetchSpots(); }} tintColor={COLORS.brand} />}
           >
             {displaySpots.length === 0 ? (
@@ -573,7 +573,7 @@ window.updateUserLocation=function(lat,lng){
 
       {/* Lightbox Modal with Nav */}
       {previewModal && (
-        <Modal transparent animationType="fade" visible={Boolean(previewModal)} onRequestClose={() => setPreviewModal(null)}>
+        <Modal transparent animationType="fade" visible={Boolean(previewModal)} onRequestClose={() => setPreviewModal(null)} presentationStyle="overFullScreen">
           <View style={s.modalBackdrop}>
             <TouchableOpacity style={StyleSheet.absoluteFill} activeOpacity={1} onPress={() => setPreviewModal(null)} />
             <View style={s.modalFrame}>
@@ -585,7 +585,7 @@ window.updateUserLocation=function(lat,lng){
                   <>
                     <View style={s.modalTop}>
                       <Text style={s.modalTitle} numberOfLines={1}>{spot.name}</Text>
-                      <TouchableOpacity style={s.modalClose} onPress={() => setPreviewModal(null)}>
+                      <TouchableOpacity style={s.modalClose} onPress={() => setPreviewModal(null)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
                         <Ionicons name="close" size={20} color="#fff" />
                       </TouchableOpacity>
                     </View>
@@ -601,7 +601,7 @@ window.updateUserLocation=function(lat,lng){
                       </TouchableOpacity>
                       {Boolean(spot.sample_photo_url && spot.submission?.photo_url) && (
                         <TouchableOpacity
-                          style={s.modalSwitchBtn}
+                           style={s.modalSwitchBtn}
                           onPress={() => setPreviewModal((p) => ({ ...p, mode: p.mode === 'sample' ? 'submission' : 'sample' }))}
                         >
                           <Text style={s.modalSwitchText}>{previewModal.mode === 'sample' ? 'Show My Selfie' : 'Show Target Goal'}</Text>
@@ -626,16 +626,16 @@ window.updateUserLocation=function(lat,lng){
 
       {/* In-App Walking Navigation WebView Modal */}
       {directionsUrl && (
-        <Modal animationType="slide" visible={Boolean(directionsUrl)} onRequestClose={() => setDirectionsUrl(null)}>
+        <Modal animationType="slide" visible={Boolean(directionsUrl)} onRequestClose={() => setDirectionsUrl(null)} presentationStyle="fullScreen">
           <View style={{ flex: 1, backgroundColor: '#fff' }}>
             <View style={s.dirBar}>
-              <TouchableOpacity onPress={() => setDirectionsUrl(null)} style={s.dirBack}>
+              <TouchableOpacity onPress={() => setDirectionsUrl(null)} style={s.dirBack} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
                 <Ionicons name="arrow-back" size={22} color={COLORS.text} />
               </TouchableOpacity>
               <Text style={s.dirTitle}>In-App Walking Navigation</Text>
               <View style={{ width: 40 }} />
             </View>
-            <WebView source={{ uri: directionsUrl }} startInLoadingState style={{ flex: 1 }} javaScriptEnabled={true} domStorageEnabled={true} />
+            <WebView source={{ uri: directionsUrl }} startInLoadingState style={{ flex: 1 }} javaScriptEnabled={true} domStorageEnabled={true} originWhitelist={['*']} allowsInlineMediaPlayback={true} />
           </View>
         </Modal>
       )}
@@ -645,9 +645,9 @@ window.updateUserLocation=function(lat,lng){
 
 const s = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#f0f4f9' },
-  header: { paddingTop: Platform.OS === 'ios' ? 54 : 44, paddingBottom: SPACE.lg, paddingHorizontal: PAD },
+  header: { paddingTop: TOP + 8, paddingBottom: SPACE.lg, paddingHorizontal: PAD },
   topbar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: SPACE.md },
-  backBtn: { width: 38, height: 38, borderRadius: 19, backgroundColor: 'rgba(255,255,255,0.15)', alignItems: 'center', justifyContent: 'center' },
+  backBtn: { width: 44, height: 44, borderRadius: 22, backgroundColor: 'rgba(255,255,255,0.15)', alignItems: 'center', justifyContent: 'center' },
   headerTitle: { fontSize: FONT.lg, fontWeight: FONT.w9, color: '#fff', letterSpacing: -0.2 },
   headerSubtitle: { fontSize: FONT.xs, color: 'rgba(255,255,255,0.7)', fontWeight: FONT.w6 },
 
@@ -737,7 +737,7 @@ const s = StyleSheet.create({
   polaroidBox: { width: 72, height: 72, borderRadius: RADIUS.md, overflow: 'hidden', borderWidth: 1.5, borderColor: COLORS.border, position: 'relative' },
   polaroidImg: { width: '100%', height: '100%' },
   polaroidTag: { position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: 'rgba(15,23,42,0.75)', paddingVertical: 2, alignItems: 'center' },
-  polaroidTagText: { fontSize: 8, fontWeight: FONT.w8, color: '#fff' },
+  polaroidTagText: { fontSize: 9.5, fontWeight: FONT.w8, color: '#fff' },
 
   cardActions: { flexDirection: 'row', gap: SPACE.sm },
   dirBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, paddingVertical: 12, paddingHorizontal: SPACE.lg, borderRadius: RADIUS.xl, backgroundColor: COLORS.brandLight },
@@ -766,7 +766,7 @@ const s = StyleSheet.create({
   modalSwitchBtn: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8, backgroundColor: COLORS.brand },
   modalSwitchText: { color: '#fff', fontSize: 11, fontWeight: FONT.w8 },
 
-  dirBar: { paddingTop: Platform.OS === 'ios' ? 50 : 20, paddingBottom: 12, paddingHorizontal: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderBottomWidth: 1, borderBottomColor: COLORS.border },
-  dirBack: { padding: 4 },
+  dirBar: { paddingTop: TOP + 8, paddingBottom: 12, paddingHorizontal: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderBottomWidth: 1, borderBottomColor: COLORS.border },
+  dirBack: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
   dirTitle: { fontSize: FONT.md, fontWeight: FONT.w8, color: COLORS.text },
 });

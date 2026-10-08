@@ -4,8 +4,9 @@ import {
   Image, ActivityIndicator, KeyboardAvoidingView, Platform, StatusBar,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { COLORS, SPACE, RADIUS, fixMediaUrl } from '../theme';
+import { COLORS, SPACE, RADIUS, fixMediaUrl, TOP, BOTTOM } from '../theme';
 import { apiFetch } from '../api';
+import { useKeyboardHeight } from '../useKeyboard';
 
 export default function StaffGroupChatScreen({ onBack, user }) {
   const [messages, setMessages] = useState([]);
@@ -13,6 +14,7 @@ export default function StaffGroupChatScreen({ onBack, user }) {
   const [text, setText] = useState('');
   const [sending, setSending] = useState(false);
   const flatListRef = useRef(null);
+  const kbHeight = useKeyboardHeight();
 
   useEffect(() => {
     fetchMessages();
@@ -141,7 +143,7 @@ export default function StaffGroupChatScreen({ onBack, user }) {
         )}
 
         {/* Input Bar */}
-        <View style={styles.inputContainer}>
+        <View style={[styles.inputContainer, kbHeight > 0 && { paddingBottom: 10 }]}>
           <TextInput
             style={styles.input}
             placeholder="Message all organizers..."
@@ -168,14 +170,14 @@ const styles = StyleSheet.create({
   innerContainer: { flex: 1 },
   header: {
     backgroundColor: '#1e1b4b',
-    paddingTop: 48,
+    paddingTop: TOP + 8,
     paddingBottom: 16,
     paddingHorizontal: SPACE.lg,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
   },
-  backBtn: { padding: 4 },
+  backBtn: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
   headerTitle: { fontSize: 18, fontWeight: '700', color: '#fff' },
   headerSub: { fontSize: 12, color: '#c7d2fe', marginTop: 2 },
   listContent: { padding: SPACE.md, paddingBottom: 20 },
@@ -208,7 +210,7 @@ const styles = StyleSheet.create({
     borderTopColor: '#e2e8f0',
     alignItems: 'center',
     gap: 8,
-    paddingBottom: Platform.OS === 'ios' ? 24 : 10, // flush safe padding on iOS
+    paddingBottom: BOTTOM,
   },
   input: {
     flex: 1,

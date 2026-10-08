@@ -5,7 +5,7 @@ import {
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
-import { COLORS, FONT, SPACE, RADIUS, SHADOW, API_URL, API_HEADERS } from '../theme';
+import { COLORS, FONT, SPACE, RADIUS, SHADOW, API_URL, API_HEADERS, TOP, BOTTOM } from '../theme';
 import SponsorDetailScreen from './SponsorDetailScreen';
 
 const { width: W } = Dimensions.get('window');
@@ -134,7 +134,7 @@ export default function SponsorsScreen({ tokens, onBack }) {
         </View>
       ) : (
         <ScrollView
-          contentContainerStyle={{ paddingHorizontal: PAD, paddingTop: 8, paddingBottom: 40 }}
+          contentContainerStyle={{ paddingHorizontal: PAD, paddingTop: 8, paddingBottom: 40 + BOTTOM }}
           showsVerticalScrollIndicator={false}
           refreshControl={
             <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#fff" />
@@ -164,7 +164,7 @@ export default function SponsorsScreen({ tokens, onBack }) {
 const st = StyleSheet.create({
   topbar: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingTop: Platform.OS === 'ios' ? 54 : 44,
+    paddingTop: TOP + 8,
     paddingBottom: SPACE.md, paddingHorizontal: PAD,
   },
   backBtn: {

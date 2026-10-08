@@ -5,7 +5,7 @@ import {
   Image, RefreshControl, Modal,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { COLORS, FONT, SPACE, RADIUS, API_URL, API_HEADERS } from '../../theme';
+import { COLORS, FONT, SPACE, RADIUS, API_URL, API_HEADERS, TOP, BOTTOM } from '../../theme';
 import { GradientAvatar } from '../../components';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -94,7 +94,7 @@ function ActionModal({ user, tokens, onClose, onDone }) {
   };
 
   return (
-    <Modal transparent animationType="slide" onRequestClose={onClose}>
+    <Modal transparent animationType="slide" presentationStyle="overFullScreen" onRequestClose={onClose}>
       <View style={m.overlay}>
         <View style={m.sheet}>
           {/* user header */}
@@ -279,7 +279,7 @@ export default function UsersAdmin({ tokens, onBack }) {
     <View style={{ flex: 1, backgroundColor: COLORS.bg }}>
       {/* header */}
       <View style={u.header}>
-        <TouchableOpacity onPress={onBack} style={u.backBtn}>
+        <TouchableOpacity onPress={onBack} style={u.backBtn} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
           <Ionicons name="arrow-back" size={22} color={COLORS.text} />
         </TouchableOpacity>
         <View style={{ flex: 1 }}>
@@ -300,7 +300,7 @@ export default function UsersAdmin({ tokens, onBack }) {
           returnKeyType="search"
         />
         {!!search && (
-          <TouchableOpacity onPress={() => setSearch('')}>
+          <TouchableOpacity onPress={() => setSearch('')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
             <Ionicons name="close-circle" size={16} color={COLORS.textTer} />
           </TouchableOpacity>
         )}
@@ -330,7 +330,7 @@ export default function UsersAdmin({ tokens, onBack }) {
         </View>
       ) : (
         <ScrollView
-          contentContainerStyle={{ padding: SPACE.xl, paddingBottom: 120 }}
+          contentContainerStyle={{ padding: SPACE.xl, paddingBottom: 120 + BOTTOM }}
           showsVerticalScrollIndicator={false}
           refreshControl={
             <RefreshControl refreshing={refreshing} onRefresh={() => load(true)} colors={[COLORS.brand]} />
@@ -369,7 +369,7 @@ export default function UsersAdmin({ tokens, onBack }) {
 const u = StyleSheet.create({
   header: {
     flexDirection: 'row', alignItems: 'center',
-    paddingTop: Platform.OS === 'ios' ? 54 : 44,
+    paddingTop: TOP + 8,
     paddingBottom: SPACE.md, paddingHorizontal: SPACE.xl,
     backgroundColor: COLORS.bg, gap: SPACE.md,
   },
@@ -452,7 +452,7 @@ const m = StyleSheet.create({
   },
   sheet: {
     backgroundColor: '#fff', borderTopLeftRadius: 28, borderTopRightRadius: 28,
-    padding: SPACE.xl, paddingBottom: Platform.OS === 'ios' ? 40 : SPACE.xl,
+    padding: SPACE.xl, paddingBottom: 24 + BOTTOM,
   },
   userRow: {
     flexDirection: 'row', alignItems: 'center',

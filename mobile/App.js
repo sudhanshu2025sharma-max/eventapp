@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { View, StatusBar, Animated, Text, Platform } from 'react-native';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { LinearGradient } from 'expo-linear-gradient';
 import LoginScreen          from './src/screens/LoginScreen';
@@ -312,27 +313,35 @@ export default function App() {
     setScreen('login');
   };
 
-  if (screen === 'splash') return <SplashScreen />;
-  if (screen === 'login') return <LoginScreen onLogin={handleLogin} />;
-  if (screen === 'change_password') {
+  const renderContent = () => {
+    if (screen === 'splash') return <SplashScreen />;
+    if (screen === 'login') return <LoginScreen onLogin={handleLogin} />;
+    if (screen === 'change_password') {
+      return (
+        <ChangePasswordScreen
+          user={user} tokens={tokens}
+          onDone={handlePasswordChanged}
+          onLogout={handleLogout}
+        />
+      );
+    }
+
     return (
-      <ChangePasswordScreen
-        user={user} tokens={tokens}
-        onDone={handlePasswordChanged}
+      <MainApp
+        user={user}
+        tokens={tokens}
         onLogout={handleLogout}
+        setUser={setUser}
+        refreshUser={refreshUser}
+        notificationRoute={notificationRoute}
+        clearNotificationRoute={() => setNotificationRoute(null)}
       />
     );
-  }
+  };
 
   return (
-    <MainApp
-      user={user}
-      tokens={tokens}
-      onLogout={handleLogout}
-      setUser={setUser}
-      refreshUser={refreshUser}
-      notificationRoute={notificationRoute}
-      clearNotificationRoute={() => setNotificationRoute(null)}
-    />
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      {renderContent()}
+    </GestureHandlerRootView>
   );
 }

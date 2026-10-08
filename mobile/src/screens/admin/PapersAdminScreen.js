@@ -5,10 +5,8 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as DocumentPicker from 'expo-document-picker';
-import { COLORS, FONT, RADIUS, SHADOW } from '../../theme';
+import { COLORS, FONT, RADIUS, SHADOW, TOP, BOTTOM } from '../../theme';
 import { apiFetch } from '../../api';
-
-const TOP = Platform.OS === 'ios' ? 54 : 44;
 
 export default function PapersAdminScreen({ onBack }) {
   const [papers, setPapers] = useState([]);
@@ -146,7 +144,7 @@ export default function PapersAdminScreen({ onBack }) {
       {loading ? (
         <ActivityIndicator style={{ marginTop: 40 }} color={COLORS.brand} size="large" />
       ) : (
-        <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 40 }}>
+        <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 60 + BOTTOM }}>
           {filtered.length === 0 ? (
             <Text style={s.empty}>No items yet. Tap + to add.</Text>
           ) : filtered.map(p => (
@@ -159,7 +157,7 @@ export default function PapersAdminScreen({ onBack }) {
                 <Text style={s.title}>{p.title}</Text>
                 <Text style={s.auth} numberOfLines={2}>{p.authors}</Text>
               </View>
-              <TouchableOpacity onPress={() => handleDelete(p.id, p.title)} hitSlop={10}>
+              <TouchableOpacity onPress={() => handleDelete(p.id, p.title)} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
                 <Ionicons name="trash-outline" size={20} color={COLORS.error || '#ef4444'} />
               </TouchableOpacity>
             </View>
@@ -167,16 +165,16 @@ export default function PapersAdminScreen({ onBack }) {
         </ScrollView>
       )}
 
-      <Modal visible={showForm} animationType="slide">
+      <Modal visible={showForm} animationType="slide" presentationStyle="fullScreen">
         <View style={s.root}>
           <View style={[s.header, { backgroundColor: '#fff' }]}>
-            <TouchableOpacity onPress={resetForm}>
+            <TouchableOpacity onPress={resetForm} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
               <Ionicons name="close" size={26} color={COLORS.text} />
             </TouchableOpacity>
             <Text style={[s.headerTitle, { color: COLORS.text }]}>Add Submission</Text>
             <View style={{ width: 26 }} />
           </View>
-          <ScrollView contentContainerStyle={{ padding: 16 }} keyboardShouldPersistTaps="handled">
+          <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 40 + BOTTOM }} keyboardShouldPersistTaps="handled">
             <Text style={s.label}>Type</Text>
             <View style={{ flexDirection: 'row', gap: 10, marginBottom: 12 }}>
               {['paper', 'poster'].map(t => (

@@ -5,7 +5,7 @@ import {
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
-import { COLORS, FONT, SPACE, RADIUS, SHADOW, fixMediaUrl } from '../theme';
+import { COLORS, FONT, SPACE, RADIUS, SHADOW, fixMediaUrl, TOP, BOTTOM } from '../theme';
 import { apiFetch } from '../api';
 import { GradientAvatar, PulsingDot } from '../components';
 
@@ -768,7 +768,7 @@ export default function LeaderboardScreen({ onBack }) {
         <Animated.View style={[s.blob2, { transform: [{ translateX: blob2TranslateX }] }]} />
 
         <View style={s.topbar}>
-          <TouchableOpacity onPress={onBack} style={s.backBtn} activeOpacity={0.8}>
+          <TouchableOpacity onPress={onBack} style={s.backBtn} activeOpacity={0.8} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
             <Ionicons name="arrow-back" size={20} color={COLORS.textInverse} />
           </TouchableOpacity>
 
@@ -787,6 +787,7 @@ export default function LeaderboardScreen({ onBack }) {
             }}
             style={s.backBtn}
             activeOpacity={0.8}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           >
             <Ionicons name="refresh" size={18} color={COLORS.textInverse} />
           </TouchableOpacity>
@@ -829,7 +830,7 @@ export default function LeaderboardScreen({ onBack }) {
 
       <ScrollView
         style={{ flex: 1 }}
-        contentContainerStyle={{ paddingBottom: SPACE.huge }}
+        contentContainerStyle={{ paddingBottom: SPACE.huge + BOTTOM }}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
@@ -1434,7 +1435,7 @@ const s = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.bg },
 
   header: {
-    paddingTop: Platform.OS === 'ios' ? 50 : 38,
+    paddingTop: TOP + 8,
     paddingBottom: SPACE.lg,
     borderBottomLeftRadius: RADIUS.xxl,
     borderBottomRightRadius: RADIUS.xxl,
@@ -1466,9 +1467,9 @@ const s = StyleSheet.create({
     justifyContent: 'space-between',
   },
   backBtn: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     backgroundColor: COLORS.glass,
     borderWidth: 1,
     borderColor: COLORS.glassBorder,

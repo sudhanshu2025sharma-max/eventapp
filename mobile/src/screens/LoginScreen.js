@@ -1,8 +1,8 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { View, Text, TextInput, TouchableOpacity, ScrollView, StatusBar, KeyboardAvoidingView, Platform, Animated, StyleSheet } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, ScrollView, StatusBar, KeyboardAvoidingView, Platform, Animated, StyleSheet, Linking, Keyboard, TouchableWithoutFeedback } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
-import { COLORS, FONT, SPACE, RADIUS, SHADOW, API_URL, API_HEADERS } from '../theme';
+import { COLORS, FONT, SPACE, RADIUS, SHADOW, TOP, BOTTOM, H, API_URL, API_HEADERS } from '../theme';
 import { PrimaryButton, FadeIn, GlassCard, Divider } from '../components';
 
 function Field({ icon, placeholder, value, onChange, secure, right, error, keyboardType }) {
@@ -182,6 +182,9 @@ export default function LoginScreen({ onLogin }) {
           </FadeIn>
           <FadeIn delay={400}>
             <Text style={st.footer}>Need help? Contact the conference organizer</Text>
+            <TouchableOpacity onPress={() => Linking.openURL('https://etd2026.iitd.ac.in/app-privacy-policy/').catch(() => {})} style={{ marginTop: 4 }} hitSlop={{ top: 12, bottom: 12, left: 16, right: 16 }}>
+              <Text style={[st.footer, { color: COLORS.brand, fontWeight: '600', textDecorationLine: 'underline' }]}>Privacy Policy</Text>
+            </TouchableOpacity>
             <Text style={st.version}>ETD 2026  ·  IIT Delhi  ·  v1.0</Text>
           </FadeIn>
         </View>
@@ -191,7 +194,7 @@ export default function LoginScreen({ onLogin }) {
 }
 
 const st = StyleSheet.create({
-  header: { paddingTop: Platform.OS === 'ios' ? 72 : 60, paddingBottom: 52, alignItems: 'center', overflow: 'hidden' },
+  header: { paddingTop: Platform.OS === 'ios' ? (H <= 667 ? 46 : 64) : 50, paddingBottom: H <= 667 ? 32 : 48, alignItems: 'center', overflow: 'hidden' },
   deco1: { position: 'absolute', width: 200, height: 200, borderRadius: 100, borderWidth: 1, borderColor: 'rgba(255,255,255,0.06)', top: -50, right: -50 },
   deco2: { position: 'absolute', width: 120, height: 120, borderRadius: 60, backgroundColor: 'rgba(245,158,11,0.06)', bottom: 20, left: -30 },
   logoBox: { width: 80, height: 80, borderRadius: RADIUS.xl, alignItems: 'center', justifyContent: 'center', marginBottom: SPACE.lg, backgroundColor: 'rgba(255,255,255,0.10)', borderColor: 'rgba(255,255,255,0.20)' },
@@ -202,7 +205,7 @@ const st = StyleSheet.create({
   accentDash: { width: 28, height: 2, backgroundColor: COLORS.accent, borderRadius: 2 },
   accentDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: COLORS.accent, marginHorizontal: SPACE.xs },
   curve: { flex: 1, backgroundColor: COLORS.bg, borderTopLeftRadius: RADIUS.xxxl, borderTopRightRadius: RADIUS.xxxl },
-  formWrap: { backgroundColor: COLORS.bg, paddingHorizontal: SPACE.xl, paddingBottom: SPACE.xxxl, marginTop: -6 },
+  formWrap: { backgroundColor: COLORS.bg, paddingHorizontal: SPACE.xl, paddingBottom: SPACE.xxxl + BOTTOM, marginTop: -6 },
   card: { backgroundColor: COLORS.surface, borderRadius: RADIUS.xxl, padding: SPACE.xxl, ...SHADOW.lg, borderWidth: Platform.OS === 'android' ? 1 : 0, borderColor: COLORS.borderLight },
   title: { fontSize: FONT.xxl, fontWeight: FONT.w8, color: COLORS.text, letterSpacing: -0.3 },
   subtitle: { fontSize: FONT.sm, color: COLORS.textTer, marginTop: 4, marginBottom: SPACE.xxl },

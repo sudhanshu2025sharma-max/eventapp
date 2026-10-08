@@ -93,9 +93,15 @@ export const SHADOW = {
   }),
 };
 
-export const TOP = Platform.OS === 'ios' ? 54 : 44;
+const isIos = Platform.OS === 'ios';
+const isSmallIos = isIos && H <= 667;
+export const IS_SMALL_DEVICE = W <= 375;
+export const TOP = isIos ? (isSmallIos ? 28 : 54) : 44;
+export const BOTTOM = isIos ? (isSmallIos ? 16 : 34) : 16;
 
-const DEV_API_URL  = 'http://10.17.9.48:8000/api/v1';
+const DEV_API_URL  = Platform.OS === 'android'
+  ? 'http://etd2026.iitd.ac.in/api/v1'
+  : 'https://etd2026.iitd.ac.in/api/v1';
 const PROD_API_URL = 'https://etd2026.iitd.ac.in/api/v1';
 
 export const API_URL  = __DEV__ ? DEV_API_URL : PROD_API_URL;
@@ -112,7 +118,13 @@ export const API_HEADERS = { ...BASE_HEADERS, 'ngrok-skip-browser-warning': 'tru
 // Fix media URLs — replaces relative/localhost URLs with public domain
 export function fixMediaUrl(url) {
   if (!url) return null;
-  if (url.startsWith('http') && !url.includes('localhost') && !url.includes('10.17.9.48')) return url;
-  const path = url.includes('/media/') ? '/media/' + url.split('/media/')[1] : url;
+  let clean = url;
+  if (API_ROOT.startsWith('http://')) {
+    clean = clean.replace('https://etd2026.iitd.ac.in', 'http://etd2026.iitd.ac.in');
+  } else if (clean.startsWith('http://etd2026.iitd.ac.in')) {
+    clean = clean.replace('http://etd2026.iitd.ac.in', 'https://etd2026.iitd.ac.in');
+  }
+  if (clean.startsWith('http') && !clean.includes('localhost') && !clean.includes('10.17.9.48')) return clean;
+  const path = clean.includes('/media/') ? '/media/' + clean.split('/media/')[1] : clean;
   return API_ROOT + (path.startsWith('/') ? path : '/' + path);
 }

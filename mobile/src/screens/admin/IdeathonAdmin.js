@@ -6,7 +6,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { COLORS, FONT, SPACE, RADIUS, SHADOW, fixMediaUrl } from '../../theme';
+import { COLORS, FONT, SPACE, RADIUS, SHADOW, fixMediaUrl, TOP, BOTTOM } from '../../theme';
 import { apiFetch } from '../../api';
 import { PulsingDot, GradientAvatar } from '../../components';
 
@@ -235,7 +235,7 @@ export default function IdeathonAdmin({ onBack }) {
       {/* Header */}
       <LinearGradient colors={[COLORS.brandDeep, COLORS.brand]} style={s.header}>
         <View style={s.topRow}>
-          <TouchableOpacity style={s.backBtn} onPress={onBack}>
+          <TouchableOpacity style={s.backBtn} onPress={onBack} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
             <Ionicons name="arrow-back" size={22} color="#fff" />
           </TouchableOpacity>
           <View style={{ flex: 1, marginLeft: SPACE.md }}>
@@ -411,12 +411,12 @@ export default function IdeathonAdmin({ onBack }) {
       </TouchableOpacity> */}
 
       {/* ═══════ CREATE TEAM MODAL ═══════ */}
-      <Modal visible={modalMode === 'create'} animationType="slide" transparent>
+      <Modal visible={modalMode === 'create'} animationType="slide" transparent presentationStyle="overFullScreen">
         <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={s.modalOverlay}>
           <View style={s.modalCard}>
             <View style={s.modalHeader}>
               <Text style={s.modalTitle}>Create Team</Text>
-              <TouchableOpacity onPress={closeModal}><Ionicons name="close" size={24} color={COLORS.textTer} /></TouchableOpacity>
+              <TouchableOpacity onPress={closeModal} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}><Ionicons name="close" size={24} color={COLORS.textTer} /></TouchableOpacity>
             </View>
             <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ gap: SPACE.md }}>
               <Text style={s.fieldLabel}>Team Name *</Text>
@@ -456,12 +456,12 @@ export default function IdeathonAdmin({ onBack }) {
       </Modal>
 
       {/* ═══════ EDIT TEAM MODAL ═══════ */}
-      <Modal visible={modalMode === 'edit'} animationType="slide" transparent>
+      <Modal visible={modalMode === 'edit'} animationType="slide" transparent presentationStyle="overFullScreen">
         <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={s.modalOverlay}>
           <View style={s.modalCard}>
             <View style={s.modalHeader}>
               <Text style={s.modalTitle}>Edit Team</Text>
-              <TouchableOpacity onPress={closeModal}><Ionicons name="close" size={24} color={COLORS.textTer} /></TouchableOpacity>
+              <TouchableOpacity onPress={closeModal} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}><Ionicons name="close" size={24} color={COLORS.textTer} /></TouchableOpacity>
             </View>
             <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ gap: SPACE.md }}>
               <Text style={s.fieldLabel}>Team Name</Text>
@@ -479,12 +479,12 @@ export default function IdeathonAdmin({ onBack }) {
       </Modal>
 
       {/* ═══════ MANAGE MEMBERS MODAL ═══════ */}
-      <Modal visible={modalMode === 'members'} animationType="slide" transparent>
+      <Modal visible={modalMode === 'members'} animationType="slide" transparent presentationStyle="overFullScreen">
         <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={s.modalOverlay}>
           <View style={[s.modalCard, { maxHeight: '90%' }]}>
             <View style={s.modalHeader}>
               <Text style={s.modalTitle}>{selectedTeam?.name} — Members</Text>
-              <TouchableOpacity onPress={closeModal}><Ionicons name="close" size={24} color={COLORS.textTer} /></TouchableOpacity>
+              <TouchableOpacity onPress={closeModal} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}><Ionicons name="close" size={24} color={COLORS.textTer} /></TouchableOpacity>
             </View>
             <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ gap: SPACE.md }}>
               {/* Current Members */}
@@ -532,14 +532,14 @@ export default function IdeathonAdmin({ onBack }) {
 const s = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.bg },
   centered: { justifyContent: 'center', alignItems: 'center' },
-  header: { paddingTop: Platform.OS === 'ios' ? 54 : 44, paddingBottom: SPACE.lg },
+  header: { paddingTop: TOP + 8, paddingBottom: SPACE.lg },
   topRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: PAD },
   backBtn: { width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.15)', alignItems: 'center', justifyContent: 'center' },
   headerTitle: { fontSize: FONT.lg, fontWeight: FONT.w9, color: '#fff' },
   headerSub: { fontSize: FONT.xs, color: 'rgba(255,255,255,0.7)', marginTop: 2 },
   statusBadge: { paddingHorizontal: SPACE.md, paddingVertical: 6, borderRadius: RADIUS.full },
   statusText: { fontSize: 10, fontWeight: FONT.w8, color: '#fff', letterSpacing: 0.5 },
-  scrollContent: { padding: PAD, paddingBottom: 180, gap: SPACE.lg }, // Raised bottom padding to completely bypass FAB area
+  scrollContent: { padding: PAD, paddingBottom: 180 + BOTTOM, gap: SPACE.lg },
   card: { backgroundColor: '#fff', borderRadius: 16, padding: SPACE.xl, borderWidth: 1, borderColor: COLORS.border, ...SHADOW.sm },
   cardHeader: { flexDirection: 'row', alignItems: 'center', gap: SPACE.sm, marginBottom: SPACE.sm },
   cardTitle: { fontSize: FONT.md, fontWeight: FONT.w8, color: COLORS.text },
@@ -593,10 +593,10 @@ const s = StyleSheet.create({
   lookingBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: 'rgba(245,158,11,0.1)', paddingHorizontal: SPACE.sm, paddingVertical: 3, borderRadius: RADIUS.full, alignSelf: 'flex-start', marginTop: 4 },
   lookingText: { fontSize: 9.5, fontWeight: FONT.w7, color: COLORS.warning },
   // FAB (Styled with higher z-index to stay clean)
-  fab: { position: 'absolute', right: PAD, bottom: 30, width: 56, height: 56, borderRadius: 28, backgroundColor: COLORS.brand, alignItems: 'center', justifyContent: 'center', ...SHADOW.sm, elevation: 8, zIndex: 99 },
+  fab: { position: 'absolute', right: PAD, bottom: 20 + BOTTOM, width: 56, height: 56, borderRadius: 28, backgroundColor: COLORS.brand, alignItems: 'center', justifyContent: 'center', ...SHADOW.sm, elevation: 8, zIndex: 99 },
   // Modals
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
-  modalCard: { backgroundColor: '#fff', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: PAD, paddingBottom: 40, maxHeight: '85%' },
+  modalCard: { backgroundColor: '#fff', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: PAD, paddingBottom: 24 + BOTTOM, maxHeight: '85%' },
   modalHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: SPACE.lg },
   modalTitle: { fontSize: FONT.lg, fontWeight: FONT.w9, color: COLORS.text },
   fieldLabel: { fontSize: FONT.xs, fontWeight: FONT.w8, color: COLORS.textSec, marginTop: SPACE.xs },

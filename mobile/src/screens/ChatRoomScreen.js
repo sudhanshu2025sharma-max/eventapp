@@ -8,8 +8,9 @@ import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import * as Clipboard from 'expo-clipboard';
 import { LinearGradient } from 'expo-linear-gradient';
-import { COLORS, FONT, SPACE, RADIUS, TOP, API_URL, API_HEADERS, fixMediaUrl } from '../theme';
+import { COLORS, FONT, SPACE, RADIUS, TOP, BOTTOM, API_URL, API_HEADERS, fixMediaUrl } from '../theme';
 import { GradientAvatar } from '../components';
+import { useKeyboardHeight } from '../useKeyboard';
 
 const POLL_MS = 3000;
 const { width: SW, height: SH } = Dimensions.get('window');
@@ -71,6 +72,7 @@ export default function ChatRoomScreen({ tokens, conversationId, onBack, onDisco
   const [reportTarget,   setReportTarget]  = useState(null);  // message for report modal
   const [reportReason,   setReportReason]  = useState('spam');
   const [isMuted,      setIsMuted]        = useState(false);
+  const kbHeight = useKeyboardHeight();
 
   const listRef  = useRef(null);
   const pollRef  = useRef(null);
@@ -442,7 +444,7 @@ export default function ChatRoomScreen({ tokens, conversationId, onBack, onDisco
       </LinearGradient>
 
       {/* Disconnect menu modal */}
-      <Modal visible={menuOpen} transparent animationType="fade" onRequestClose={() => setMenuOpen(false)}>
+      <Modal visible={menuOpen} transparent animationType="fade" presentationStyle="overFullScreen" onRequestClose={() => setMenuOpen(false)}>
         <TouchableOpacity style={s.menuOverlay} activeOpacity={1} onPress={() => setMenuOpen(false)}>
           <View style={s.menuCard}>
             <View style={s.menuHeader}>
@@ -521,7 +523,7 @@ export default function ChatRoomScreen({ tokens, conversationId, onBack, onDisco
           )}
 
           {/* Input bar */}
-          <View style={s.inputBar}>
+          <View style={[s.inputBar, kbHeight > 0 && { paddingBottom: SPACE.sm }]}>
             <TouchableOpacity style={s.mediaBtn} onPress={() => pickAndSend(false)} disabled={sending} activeOpacity={0.7}>
               <Ionicons name="image-outline" size={20} color={COLORS.brand} />
             </TouchableOpacity>
@@ -552,7 +554,7 @@ export default function ChatRoomScreen({ tokens, conversationId, onBack, onDisco
       )}
 
       {/* ── Reaction Picker Modal ── */}
-      <Modal visible={!!reactionTarget} transparent animationType="fade" onRequestClose={() => setReactionTarget(null)}>
+      <Modal visible={!!reactionTarget} transparent animationType="fade" presentationStyle="overFullScreen" onRequestClose={() => setReactionTarget(null)}>
         <TouchableOpacity style={s.reactionOverlay} activeOpacity={1} onPress={() => setReactionTarget(null)}>
           <View style={s.reactionPicker}>
             <Text style={s.reactionPickerTitle}>React to message</Text>
@@ -578,7 +580,7 @@ export default function ChatRoomScreen({ tokens, conversationId, onBack, onDisco
       </Modal>
 
       {/* ── Report Modal ── */}
-      <Modal visible={!!reportTarget} transparent animationType="slide" onRequestClose={() => setReportTarget(null)}>
+      <Modal visible={!!reportTarget} transparent animationType="slide" presentationStyle="overFullScreen" onRequestClose={() => setReportTarget(null)}>
         <View style={s.reportOverlay}>
           <TouchableOpacity style={StyleSheet.absoluteFill} activeOpacity={1} onPress={() => setReportTarget(null)} />
           <View style={s.reportSheet}>
@@ -611,7 +613,7 @@ export default function ChatRoomScreen({ tokens, conversationId, onBack, onDisco
       </Modal>
 
       {/* ── Image Viewer ── */}
-      <Modal visible={!!viewImage} transparent animationType="fade" onRequestClose={() => setViewImage(null)}>
+      <Modal visible={!!viewImage} transparent animationType="fade" presentationStyle="overFullScreen" onRequestClose={() => setViewImage(null)}>
         <View style={s.imageViewer}>
           <TouchableOpacity style={s.imageViewerClose} onPress={() => setViewImage(null)}>
             <Ionicons name="close" size={26} color="#fff" />
@@ -637,7 +639,7 @@ const s = StyleSheet.create({
     gap: SPACE.md,
   },
   backBtn: {
-    width: 36, height: 36, borderRadius: 12,
+    width: 44, height: 44, borderRadius: 14,
     backgroundColor: 'rgba(255,255,255,0.15)',
     alignItems: 'center', justifyContent: 'center',
   },
@@ -646,7 +648,7 @@ const s = StyleSheet.create({
   headerName:  { fontSize: FONT.md, fontWeight: FONT.w7, color: '#fff' },
   headerTopic: { fontSize: FONT.xs, color: 'rgba(255,255,255,0.6)', marginTop: 1 },
   muteBtn: {
-    width: 36, height: 36, borderRadius: 12,
+    width: 44, height: 44, borderRadius: 14,
     backgroundColor: 'rgba(255,255,255,0.12)',
     alignItems: 'center', justifyContent: 'center',
   },
@@ -749,25 +751,25 @@ const s = StyleSheet.create({
   inputBar: {
     flexDirection: 'row', alignItems: 'flex-end',
     paddingHorizontal: SPACE.md, paddingVertical: SPACE.sm,
-    paddingBottom: Platform.OS === 'ios' ? 28 : 28,
+    paddingBottom: BOTTOM,
     backgroundColor: '#fff',
     borderTopWidth: 1, borderTopColor: COLORS.borderLight,
     gap: SPACE.xs,
   },
   mediaBtn: {
-    width: 36, height: 36, borderRadius: 10,
+    width: 40, height: 40, borderRadius: 12,
     backgroundColor: COLORS.brandLight,
     alignItems: 'center', justifyContent: 'center',
   },
   input: {
-    flex: 1, minHeight: 38, maxHeight: 120,
+    flex: 1, minHeight: 40, maxHeight: 120,
     backgroundColor: COLORS.borderLight, borderRadius: 18,
     paddingHorizontal: SPACE.lg, paddingVertical: SPACE.sm,
     fontSize: FONT.sm, color: COLORS.text,
     borderWidth: 1, borderColor: COLORS.border,
   },
   sendBtn: {
-    width: 36, height: 36, borderRadius: 18,
+    width: 40, height: 40, borderRadius: 20,
     backgroundColor: COLORS.brand,
     alignItems: 'center', justifyContent: 'center',
   },

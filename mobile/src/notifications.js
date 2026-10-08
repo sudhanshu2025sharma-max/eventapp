@@ -6,9 +6,11 @@ const EAS_PROJECT_ID = 'afa28d7e-10d5-4e85-bed4-783b7371a56b';
 
 // Detect if running inside Expo Go
 const isExpoGo =
+  Boolean(Constants.expoGoConfig) ||
   Constants.executionEnvironment === ExecutionEnvironment?.StoreClient ||
   Constants.executionEnvironment === 'storeClient' ||
-  Constants.appOwnership === 'expo';
+  Constants.appOwnership === 'expo' ||
+  Boolean(global.ExpoGo);
 
 let Notifications = null;
 
@@ -16,15 +18,20 @@ let Notifications = null;
 if (!isExpoGo) {
   try {
     Notifications = require('expo-notifications');
-    Notifications.setNotificationHandler({
-      handleNotification: async () => ({
-        shouldShowAlert: true,
-        shouldPlaySound: true,
-        shouldSetBadge: true,
-      }),
-    });
+    if (Notifications && typeof Notifications.setNotificationHandler === 'function') {
+      Notifications.setNotificationHandler({
+        handleNotification: async () => ({
+          shouldShowBanner: true,
+          shouldShowList: true,
+          shouldPlaySound: true,
+          shouldSetBadge: true,
+          shouldShowAlert: true,
+        }),
+      });
+    }
   } catch (e) {
     console.warn('Failed to load expo-notifications:', e);
+    Notifications = null;
   }
 }
 
@@ -90,22 +97,35 @@ export function setupNotificationListeners(onNotificationReceived, onNotificatio
   }
 
   try {
-    const receivedSub = Notifications.addNotificationReceivedListener(notification => {
-      if (typeof onNotificationReceived === 'function') {
-        onNotificationReceived(notification);
-      }
-    });
+    // Check for cold-start notification response (app opened via notification tap when terminated)
+    if (typeof Notifications.getLastNotificationResponseAsync === 'function') {
+      Notifications.getLastNotificationResponseAsync().then(response => {
+        if (response && typeof onNotificationResponse === 'function') {
+          onNotificationResponse(response);
+        }
+      }).catch(() => {});
+    }
 
-    const responseSub = Notifications.addNotificationResponseReceivedListener(response => {
-      if (typeof onNotificationResponse === 'function') {
-        onNotificationResponse(response);
-      }
-    });
+    const receivedSub = typeof Notifications.addNotificationReceivedListener === 'function'
+      ? Notifications.addNotificationReceivedListener(notification => {
+          if (typeof onNotificationReceived === 'function') {
+            onNotificationReceived(notification);
+          }
+        })
+      : null;
+
+    const responseSub = typeof Notifications.addNotificationResponseReceivedListener === 'function'
+      ? Notifications.addNotificationResponseReceivedListener(response => {
+          if (typeof onNotificationResponse === 'function') {
+            onNotificationResponse(response);
+          }
+        })
+      : null;
 
     return () => {
       try {
-        receivedSub.remove();
-        responseSub.remove();
+        if (receivedSub && typeof receivedSub.remove === 'function') receivedSub.remove();
+        if (responseSub && typeof responseSub.remove === 'function') responseSub.remove();
       } catch (e) {}
     };
   } catch (e) {
@@ -115,7 +135,7 @@ export function setupNotificationListeners(onNotificationReceived, onNotificatio
 }
 
 export async function sendLocalNotification(title, body, data = {}) {
-  if (isExpoGo || !Notifications) return;
+  if (isExpoGo || !Notifications || typeof Notifications.scheduleNotificationAsync !== 'function') return;
   try {
     await Notifications.scheduleNotificationAsync({
       content: {

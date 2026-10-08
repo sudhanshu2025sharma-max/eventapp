@@ -4,7 +4,7 @@ import {
   StyleSheet, Platform, ActivityIndicator, Alert, Switch,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { COLORS, FONT, SPACE, RADIUS, API_URL, API_HEADERS } from '../../theme';
+import { COLORS, FONT, SPACE, RADIUS, API_URL, API_HEADERS, TOP, BOTTOM } from '../../theme';
 
 function authHeaders(tokens) {
   return { ...API_HEADERS, Authorization: `Bearer ${tokens.access}` };
@@ -79,7 +79,7 @@ export default function AddParticipantScreen({ tokens, onBack, onCreated }) {
     <View style={{ flex: 1, backgroundColor: COLORS.bg }}>
       {/* header */}
       <View style={s.header}>
-        <TouchableOpacity onPress={onBack} style={s.backBtn}>
+        <TouchableOpacity onPress={onBack} style={s.backBtn} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
           <Ionicons name="arrow-back" size={22} color={COLORS.text} />
         </TouchableOpacity>
         <View style={{ flex: 1 }}>
@@ -89,7 +89,7 @@ export default function AddParticipantScreen({ tokens, onBack, onCreated }) {
       </View>
 
       <ScrollView
-        contentContainerStyle={{ padding: SPACE.xl, paddingBottom: 120 }}
+        contentContainerStyle={{ padding: SPACE.xl, paddingBottom: 120 + BOTTOM }}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
       >
@@ -188,7 +188,7 @@ export default function AddParticipantScreen({ tokens, onBack, onCreated }) {
 const s = StyleSheet.create({
   header: {
     flexDirection: 'row', alignItems: 'center',
-    paddingTop: Platform.OS === 'ios' ? 54 : 44,
+    paddingTop: TOP + 8,
     paddingBottom: SPACE.md, paddingHorizontal: SPACE.xl,
     backgroundColor: COLORS.bg, gap: SPACE.md,
   },

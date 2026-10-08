@@ -577,6 +577,7 @@ export default function SpeakerDetailScreen({ tokens, speakerId, onBack, onOpenC
         visible={zoomVisible}
         transparent
         animationType="fade"
+        presentationStyle="overFullScreen"
         onRequestClose={() => setZoomVisible(false)}
       >
         <Pressable style={st.modalBackdrop} onPress={() => setZoomVisible(false)}>
@@ -591,7 +592,7 @@ export default function SpeakerDetailScreen({ tokens, speakerId, onBack, onOpenC
                   <Text style={st.modalSub} numberOfLines={1}>{speaker.institute}</Text>
                 )}
               </View>
-              <TouchableOpacity onPress={() => setZoomVisible(false)} style={st.modalCloseBtn}>
+              <TouchableOpacity onPress={() => setZoomVisible(false)} style={st.modalCloseBtn} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
                 <Ionicons name="close" size={18} color={COLORS.text} />
               </TouchableOpacity>
             </View>
@@ -664,9 +665,9 @@ const st = StyleSheet.create({
     justifyContent: 'space-between',
   },
   iconBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     backgroundColor: COLORS.glass,
     borderWidth: 1,
     borderColor: COLORS.glassBorder,

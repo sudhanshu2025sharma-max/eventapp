@@ -6,7 +6,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
-import { COLORS, FONT, SPACE, RADIUS, SHADOW, TOP } from '../theme';
+import { COLORS, FONT, SPACE, RADIUS, SHADOW, TOP, BOTTOM } from '../theme';
 import { apiFetch } from '../api';
 
 const PAD = SPACE.xl;
@@ -95,7 +95,7 @@ function VoteSuccessModal({ visible, onClose, points, optionText, isIdeathon }) 
   if (!visible) return null;
 
   return (
-    <Modal visible transparent animationType="fade" onRequestClose={onClose}>
+    <Modal visible transparent animationType="fade" onRequestClose={onClose} presentationStyle="overFullScreen">
       <View style={vm.overlay}>
         <Animated.View style={[vm.card, { transform: [{ scale: cardScale }] }]}>
           {/* Confetti */}
@@ -658,7 +658,7 @@ export default function PollsScreen({ onBack }) {
         </View>
       ) : (
         <ScrollView
-          contentContainerStyle={{ padding: PAD, paddingBottom: 120, gap: SPACE.lg }}
+          contentContainerStyle={{ padding: PAD, paddingBottom: 120 + BOTTOM, gap: SPACE.lg }}
           showsVerticalScrollIndicator={false}
           refreshControl={
             <RefreshControl refreshing={refreshing}
@@ -694,7 +694,7 @@ export default function PollsScreen({ onBack }) {
 const sc = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#f0f4f9' },
   header: {
-    paddingTop: Platform.OS === 'ios' ? 54 : 44,
+    paddingTop: TOP + 8,
     borderBottomLeftRadius: 28, borderBottomRightRadius: 28, overflow: 'hidden',
   },
   blob: {
@@ -707,7 +707,7 @@ const sc = StyleSheet.create({
     paddingHorizontal: PAD, paddingBottom: SPACE.lg,
   },
   backBtn: {
-    width: 40, height: 40, borderRadius: 20,
+    width: 44, height: 44, borderRadius: 22,
     backgroundColor: 'rgba(255,255,255,0.12)',
     alignItems: 'center', justifyContent: 'center',
   },

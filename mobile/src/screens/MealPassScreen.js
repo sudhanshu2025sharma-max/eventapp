@@ -6,13 +6,14 @@ import {
 import Svg, { Rect } from 'react-native-svg';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { COLORS, FONT, SPACE, RADIUS, API_URL, API_HEADERS } from '../theme';
+import { COLORS, FONT, SPACE, RADIUS, API_URL, API_HEADERS, TOP, BOTTOM } from '../theme';
 import { FadeIn } from '../components';
 import qrGenerator from 'qrcode-generator';
 
 function QRCodeSVG({ value, size = 180, color = '#0a1628' }) {
+  const safeVal = String(value || 'ETD-2026');
   const qr = qrGenerator(0, 'M');
-  qr.addData(value);
+  qr.addData(safeVal);
   qr.make();
   const count    = qr.getModuleCount();
   const cellSize = size / count;
@@ -45,7 +46,7 @@ function PassModal({ visible, pass, onClose }) {
   const icon = pass.meal_type === 'lunch' ? '🍽️' : '🍷';
 
   return (
-    <Modal transparent visible={visible} animationType="none">
+    <Modal transparent visible={visible} animationType="none" presentationStyle="overFullScreen">
       <Animated.View style={[m.overlay, { opacity }]}>
         <Animated.View style={[m.modal, { transform: [{ scale }] }]}>
           <LinearGradient
@@ -257,7 +258,7 @@ export default function MealPassScreen({ tokens, onBack }) {
               </View>
             </FadeIn>
 
-            <View style={{ height: 120 }} />
+            <View style={{ height: 120 + BOTTOM }} />
           </ScrollView>
         )}
       </View>
@@ -286,8 +287,8 @@ const m = StyleSheet.create({
 const s = StyleSheet.create({
   bg:       { flex: 1, backgroundColor: '#f0f4f9' },
   header:   { flexDirection: 'row', alignItems: 'center', gap: SPACE.md,
-    paddingTop: Platform.OS === 'ios' ? 58 : 46, paddingBottom: SPACE.lg, paddingHorizontal: SPACE.xl },
-  backBtn:  { width: 38, height: 38, borderRadius: 12, backgroundColor: COLORS.brandLight, alignItems: 'center', justifyContent: 'center' },
+    paddingTop: TOP + 8, paddingBottom: SPACE.lg, paddingHorizontal: SPACE.xl },
+  backBtn:  { width: 44, height: 44, borderRadius: 14, backgroundColor: COLORS.brandLight, alignItems: 'center', justifyContent: 'center' },
   title:    { fontSize: 22, fontWeight: '900', color: COLORS.brand, letterSpacing: -0.3 },
   sub:      { fontSize: FONT.xs, color: COLORS.textTer, marginTop: 2 },
   container:{ paddingHorizontal: SPACE.xl },

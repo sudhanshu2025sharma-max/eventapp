@@ -7,7 +7,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as Haptics from 'expo-haptics';
-import { COLORS, FONT, SPACE, RADIUS, API_URL, API_HEADERS } from '../../theme';
+import { COLORS, FONT, SPACE, RADIUS, API_URL, API_HEADERS, TOP, BOTTOM } from '../../theme';
 
 function authHeaders(tokens) {
   return { ...API_HEADERS, Authorization: `Bearer ${tokens.access}` };
@@ -58,10 +58,10 @@ function QRScannerModal({ visible, onScan, onClose }) {
 
   if (!visible) return null;
   return (
-    <Modal visible={visible} animationType="slide" onRequestClose={onClose}>
+    <Modal visible={visible} animationType="slide" onRequestClose={onClose} presentationStyle="fullScreen">
       <View style={{ flex: 1, backgroundColor: '#000' }}>
         <View style={qr.header}>
-          <TouchableOpacity onPress={onClose} style={qr.closeBtn}>
+          <TouchableOpacity onPress={onClose} style={qr.closeBtn} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
             <Ionicons name="close" size={24} color="#fff" />
           </TouchableOpacity>
           <Text style={qr.headerTxt}>Scan QR</Text>
@@ -89,7 +89,7 @@ function QRScannerModal({ visible, onScan, onClose }) {
   );
 }
 const qr = StyleSheet.create({
-  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingTop: Platform.OS === 'ios' ? 54 : 44, paddingHorizontal: SPACE.xl, paddingBottom: SPACE.md, backgroundColor: 'rgba(0,0,0,0.6)' },
+  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingTop: TOP + 8, paddingHorizontal: SPACE.xl, paddingBottom: SPACE.md, backgroundColor: 'rgba(0,0,0,0.6)' },
   closeBtn: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
   headerTxt: { color: '#fff', fontSize: FONT.md, fontWeight: FONT.w8 },
   permWrap: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: SPACE.xxl, gap: SPACE.lg },
@@ -109,7 +109,7 @@ function ManageKitModal({ visible, onClose, onSave, participant }) {
   if (!visible) return null;
 
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose} presentationStyle="overFullScreen">
       <KeyboardAvoidingView style={mk.overlay} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <View style={mk.card}>
           <Text style={mk.title}>Manage Conference Kit</Text>
@@ -136,7 +136,7 @@ function ManageKitModal({ visible, onClose, onSave, participant }) {
             </TouchableOpacity>
           </View>
           
-          <TouchableOpacity onPress={onClose} style={mk.cancelBtn}>
+          <TouchableOpacity onPress={onClose} style={mk.cancelBtn} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
             <Text style={mk.cancelTxt}>Cancel</Text>
           </TouchableOpacity>
         </View>
@@ -195,7 +195,7 @@ function HistoryTab({ tokens, onSelectParticipant }) {
         <FlatList
           data={items}
           keyExtractor={(item) => String(item.id)}
-          contentContainerStyle={{ paddingBottom: 120 }}
+          contentContainerStyle={{ paddingBottom: 120 + BOTTOM }}
           renderItem={({ item }) => {
             const isKitReceived = item.goodies_status === 'received';
             const isKitSkipped = item.goodies_status === 'skipped';
@@ -378,7 +378,7 @@ export default function CheckInScreen({ tokens, onBack }) {
   return (
     <View style={{ flex: 1, backgroundColor: COLORS.bg }}>
       <View style={s.header}>
-        <TouchableOpacity onPress={onBack} style={s.backBtn}><Ionicons name="arrow-back" size={22} color={COLORS.text} /></TouchableOpacity>
+        <TouchableOpacity onPress={onBack} style={s.backBtn} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}><Ionicons name="arrow-back" size={22} color={COLORS.text} /></TouchableOpacity>
         <View style={{ flex: 1 }}><Text style={s.title}>Scanner</Text><Text style={s.sub}>Check-in & Meal</Text></View>
       </View>
 
@@ -407,7 +407,7 @@ export default function CheckInScreen({ tokens, onBack }) {
             }}
           />
         ) : (
-          <ScrollView contentContainerStyle={{ paddingBottom: 140 }} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+          <ScrollView contentContainerStyle={{ paddingBottom: 140 + BOTTOM }} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
             {tab === 'meal' && (
               <View style={s.mealCard}>
                 <View style={s.mealTopRow}>
@@ -534,7 +534,7 @@ const pk = StyleSheet.create({
 });
 
 const s = StyleSheet.create({
-  header: { flexDirection: 'row', alignItems: 'center', paddingTop: Platform.OS === 'ios' ? 54 : 44, paddingBottom: SPACE.md, paddingHorizontal: SPACE.xl, backgroundColor: COLORS.bg, gap: SPACE.md },
+  header: { flexDirection: 'row', alignItems: 'center', paddingTop: TOP + 8, paddingBottom: SPACE.md, paddingHorizontal: SPACE.xl, backgroundColor: COLORS.bg, gap: SPACE.md },
   backBtn: { width: 40, height: 40, borderRadius: RADIUS.md, backgroundColor: COLORS.surface, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: COLORS.border },
   title: { fontSize: FONT.lg, fontWeight: FONT.w9, color: COLORS.text },
   sub: { fontSize: FONT.xs, color: COLORS.textTer, marginTop: 2 },

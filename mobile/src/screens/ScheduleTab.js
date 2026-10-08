@@ -565,7 +565,7 @@ function FeedbackModal({ visible, session, tokens, onClose }) {
   };
 
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={() => onClose(false)}>
+    <Modal visible={visible} transparent animationType="slide" presentationStyle="overFullScreen" onRequestClose={() => onClose(false)}>
       <View style={f.overlay}>
         <TouchableOpacity style={{ flex: 1 }} onPress={() => onClose(false)} />
         <View style={[f.modal, kbHeight > 0 && { height: '85%' }]}>
@@ -689,7 +689,7 @@ function ReminderModal({ visible, item, itemType, tokens, onClose }) {
   };
 
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={() => onClose(false)}>
+    <Modal visible={visible} transparent animationType="fade" presentationStyle="overFullScreen" onRequestClose={() => onClose(false)}>
       <View style={f.overlay}>
         <TouchableOpacity style={{ flex: 1 }} onPress={() => onClose(false)} activeOpacity={1} />
         <View style={[f.modal, { maxHeight: 420 }]}>
@@ -1255,7 +1255,7 @@ const t = StyleSheet.create({
     paddingVertical: 3.5,
     borderRadius: 8,
   },
-  liveBadgeText: { fontSize: 8.5, fontWeight: FONT.w9, color: '#fff', letterSpacing: 0.5 },
+  liveBadgeText: { fontSize: 9.5, fontWeight: FONT.w9, color: '#fff', letterSpacing: 0.5 },
 
   pastBadge: {
     flexDirection: 'row',
@@ -1266,7 +1266,7 @@ const t = StyleSheet.create({
     paddingVertical: 3.5,
     borderRadius: 8,
   },
-  pastBadgeText: { fontSize: 8.5, fontWeight: FONT.w8, color: COLORS.textSec, letterSpacing: 0.5 },
+  pastBadgeText: { fontSize: 9.5, fontWeight: FONT.w8, color: COLORS.textSec, letterSpacing: 0.5 },
 
   sessionTitle: {
     fontSize: 16,
@@ -1304,7 +1304,7 @@ const t = StyleSheet.create({
     borderRadius: 8,
   },
   parallelText: {
-    fontSize: 8.5,
+    fontSize: 9.5,
     fontWeight: FONT.w9,
     color: COLORS.accent,
     letterSpacing: 0.6,

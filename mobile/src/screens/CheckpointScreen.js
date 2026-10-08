@@ -10,15 +10,15 @@ import { Ionicons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
 import * as ImagePicker from 'expo-image-picker';
 import * as Haptics from 'expo-haptics';
-import { COLORS, FONT, RADIUS, SHADOW, fixMediaUrl } from '../theme';
+import { COLORS, FONT, RADIUS, SHADOW, fixMediaUrl, TOP, BOTTOM } from '../theme';
 import { apiFetch } from '../api';
 import { getHaversineDistanceMeters, formatDistance } from '../utils/geo';
 import { LEAFLET_CSS, LEAFLET_JS } from '../utils/leafletAssets';
 import SponsorDetailScreen from './SponsorDetailScreen';
 
 const { width: W, height: H } = Dimensions.get('window');
-const TOP_INSET = Platform.OS === 'ios' ? 54 : 44;
-const BOTTOM_INSET = Platform.OS === 'ios' ? 34 : 16;
+const TOP_INSET = TOP;
+const BOTTOM_INSET = BOTTOM;
 const SNAP_COLLAPSED = 140;
 const SNAP_HALF = H * 0.48;
 const SNAP_FULL = H - TOP_INSET - 10;
@@ -71,7 +71,7 @@ function GpsPulse({status}){
 
 function GlassBtn({onPress,children,size=42,style}){
   const sc=useRef(new Animated.Value(1)).current;
-  return <TouchableOpacity activeOpacity={1} onPressIn={()=>Animated.spring(sc,{toValue:0.88,friction:5,useNativeDriver:true}).start()} onPressOut={()=>Animated.spring(sc,{toValue:1,friction:4,useNativeDriver:true}).start()} onPress={()=>{Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(()=>{});onPress?.()}}><Animated.View style={[$.glassBtn,{width:size,height:size,borderRadius:size/2,transform:[{scale:sc}]},style]}>{children}</Animated.View></TouchableOpacity>;
+  return <TouchableOpacity hitSlop={{top:8,bottom:8,left:8,right:8}} activeOpacity={1} onPressIn={()=>Animated.spring(sc,{toValue:0.88,friction:5,useNativeDriver:true}).start()} onPressOut={()=>Animated.spring(sc,{toValue:1,friction:4,useNativeDriver:true}).start()} onPress={()=>{Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(()=>{});onPress?.()}}><Animated.View style={[$.glassBtn,{width:size,height:size,borderRadius:size/2,transform:[{scale:sc}]},style]}>{children}</Animated.View></TouchableOpacity>;
 }
 
 function QuestHUD({done,total,selfieOpen,opacity}){
@@ -134,7 +134,7 @@ function ImageZoomModal({images,initialIndex,onClose}){
   })).current;
 
   return(
-    <Modal transparent animationType="fade" visible onRequestClose={onClose}>
+    <Modal transparent animationType="fade" visible onRequestClose={onClose} presentationStyle="overFullScreen">
       <View style={$.pvBg}>
         <TouchableOpacity style={StyleSheet.absoluteFill} activeOpacity={1} onPress={onClose}/>
         <View style={$.pvCard}>
@@ -777,7 +777,7 @@ try {
 
       {/* FULL IN-APP GOOGLE MAPS DIRECTIONS */}
       {directionsUrl&&(
-        <Modal animationType="slide" visible onRequestClose={()=>setDirectionsUrl(null)}>
+        <Modal animationType="slide" visible onRequestClose={()=>setDirectionsUrl(null)} presentationStyle="fullScreen">
           <View style={{flex:1,backgroundColor:COLORS.bg}}>
             <View style={$.dirBar}>
               <TouchableOpacity onPress={()=>setDirectionsUrl(null)} hitSlop={{top:12,bottom:12,left:12,right:12}}><Ionicons name="arrow-back" size={22} color={COLORS.text}/></TouchableOpacity>
@@ -788,6 +788,8 @@ try {
               </TouchableOpacity>
             </View>
             <WebView
+              originWhitelist={['*']}
+              allowsInlineMediaPlayback={true}
               source={{uri:directionsUrl}}
               injectedJavaScript={INJECT_HIDE_PROMO}
               startInLoadingState
@@ -867,7 +869,7 @@ const $=StyleSheet.create({
   phBox:{width:90,height:90,borderRadius:RADIUS.md,overflow:'hidden',borderWidth:1.5,borderColor:COLORS.border,backgroundColor:'#fff'},
   phImg:{width:'100%',height:'100%'},
   phLbl:{position:'absolute',bottom:0,left:0,right:0,paddingVertical:3,alignItems:'center'},
-  phLblT:{fontSize:8,fontWeight:FONT.w8,color:'#fff'},
+  phLblT:{fontSize:9.5,fontWeight:FONT.w8,color:'#fff'},
 
   stSec:{marginTop:18},
   stSecT:{fontSize:FONT.base,fontWeight:FONT.w9,color:COLORS.text,marginBottom:10},
@@ -877,7 +879,7 @@ const $=StyleSheet.create({
   stGridLogoFB:{width:72,height:72,borderRadius:RADIUS.md,alignItems:'center',justifyContent:'center'},
   stGridFBT:{fontWeight:FONT.w9,color:'#fff',fontSize:22},
   stGridName:{fontSize:FONT.xs,fontWeight:FONT.w8,color:COLORS.text,marginTop:6,textAlign:'center'},
-  stGridStall:{fontSize:8,fontWeight:FONT.w7,color:COLORS.brand,marginTop:2,textAlign:'center'},
+  stGridStall:{fontSize:9.5,fontWeight:FONT.w7,color:COLORS.brand,marginTop:2,textAlign:'center'},
 
   spActs:{flexDirection:'row',gap:10,marginTop:18},
   spDirBtn:{flexDirection:'row',alignItems:'center',gap:5,paddingVertical:12,paddingHorizontal:14,borderRadius:RADIUS.md,backgroundColor:COLORS.brandLight},
@@ -918,7 +920,7 @@ const $=StyleSheet.create({
   gPtsT:{fontSize:FONT.micro,fontWeight:FONT.w9,color:'#fff'},
   gStatusRow:{position:'absolute',top:8,left:8,flexDirection:'row',gap:4,flexWrap:'wrap',maxWidth:'65%'},
   gStatusPill:{flexDirection:'row',alignItems:'center',gap:3,paddingHorizontal:6,paddingVertical:3,borderRadius:RADIUS.full},
-  gStatusT:{fontSize:8,fontWeight:FONT.w9,color:'#fff'},
+  gStatusT:{fontSize:9.5,fontWeight:FONT.w9,color:'#fff'},
   gBottom:{position:'absolute',left:0,right:0,bottom:0,padding:10},
   gName:{fontSize:FONT.sm,fontWeight:FONT.w9,color:'#fff',textShadowColor:'rgba(0,0,0,0.4)',textShadowOffset:{width:0,height:1},textShadowRadius:3},
   gDistRow:{flexDirection:'row',alignItems:'center',gap:3,marginTop:3},
@@ -945,7 +947,7 @@ const $=StyleSheet.create({
   pvDot:{width:6,height:6,borderRadius:3,backgroundColor:'rgba(255,255,255,0.3)'},
   pvDotA:{backgroundColor:'#fff',width:18,borderRadius:3},
 
-  dirBar:{paddingTop:TOP_INSET,paddingBottom:12,paddingHorizontal:16,flexDirection:'row',alignItems:'center',justifyContent:'space-between',borderBottomWidth:1,borderBottomColor:COLORS.border,backgroundColor:COLORS.surface},
+  dirBar:{paddingTop:TOP_INSET+8,paddingBottom:12,paddingHorizontal:16,flexDirection:'row',alignItems:'center',justifyContent:'space-between',borderBottomWidth:1,borderBottomColor:COLORS.border,backgroundColor:COLORS.surface},
   dirTitle:{fontSize:FONT.md,fontWeight:FONT.w8,color:COLORS.text},
   dirAppBtn:{flexDirection:'row',alignItems:'center',gap:4,borderWidth:1,borderColor:COLORS.brand,borderRadius:14,paddingVertical:4,paddingHorizontal:8},
   dirAppTxt:{fontSize:11,fontWeight:FONT.w8,color:COLORS.brand},

@@ -4,7 +4,7 @@ import {
   StyleSheet, Platform, ActivityIndicator, Alert, KeyboardAvoidingView,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { COLORS, FONT, SPACE, RADIUS, API_URL, API_HEADERS } from '../theme';
+import { COLORS, FONT, SPACE, RADIUS, API_URL, API_HEADERS, TOP, BOTTOM } from '../theme';
 
 // ── helpers ────────────────────────────────────────────────────────────────
 function timeAgo(iso) {
@@ -194,7 +194,7 @@ export default function AdminScreen({ tokens, onBack }) {
     >
       {/* header */}
       <View style={s.header}>
-        <TouchableOpacity onPress={onBack} style={s.backBtn}>
+        <TouchableOpacity onPress={onBack} style={s.backBtn} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
           <Ionicons name="arrow-back" size={22} color={COLORS.text} />
         </TouchableOpacity>
         <View>
@@ -204,7 +204,7 @@ export default function AdminScreen({ tokens, onBack }) {
       </View>
 
       <ScrollView
-        contentContainerStyle={{ padding: SPACE.xl, paddingBottom: 120 }}
+        contentContainerStyle={{ padding: SPACE.xl, paddingBottom: 120 + BOTTOM }}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
       >
@@ -222,14 +222,14 @@ const s = StyleSheet.create({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingTop: Platform.OS === 'ios' ? 54 : 44,
+    paddingTop: TOP + 8,
     paddingBottom: SPACE.lg,
     paddingHorizontal: SPACE.xl,
     backgroundColor: COLORS.bg,
     gap: SPACE.md,
   },
   backBtn: {
-    width: 40, height: 40, borderRadius: RADIUS.md,
+    width: 44, height: 44, borderRadius: RADIUS.md,
     backgroundColor: 'rgba(255,255,255,0.9)',
     alignItems: 'center', justifyContent: 'center',
     borderWidth: 1, borderColor: '#fff',
@@ -292,6 +292,6 @@ const s = StyleSheet.create({
     borderRadius: RADIUS.full, backgroundColor: COLORS.borderLight,
   },
   statusSent:    { backgroundColor: COLORS.successLight },
-  statusTxt:     { fontSize: 9, fontWeight: FONT.w7, color: COLORS.textTer, textTransform: 'uppercase' },
+  statusTxt:     { fontSize: 9.5, fontWeight: FONT.w7, color: COLORS.textTer, textTransform: 'uppercase' },
   statusSentTxt: { color: COLORS.success },
 });

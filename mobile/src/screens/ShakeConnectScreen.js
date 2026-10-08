@@ -7,7 +7,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Accelerometer } from 'expo-sensors';
 import * as Haptics from 'expo-haptics';
-import { COLORS, SPACE, API_URL, API_HEADERS, fixMediaUrl } from '../theme';
+import { COLORS, SPACE, TOP, BOTTOM, API_URL, API_HEADERS, fixMediaUrl } from '../theme';
 import { GradientAvatar } from '../components';
 
 const { width: W, height: H } = Dimensions.get('window');
@@ -644,7 +644,7 @@ const _s = StyleSheet.create({
   root: { flex: 1 },
   bg: { flex: 1, overflow: 'hidden' },
 
-  header: { paddingTop: 50, paddingHorizontal: SPACE.xl, paddingBottom: 8 },
+  header: { paddingTop: TOP + 8, paddingHorizontal: SPACE.xl, paddingBottom: 8 },
   headerGlass: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     backgroundColor: 'rgba(255,255,255,0.06)',
@@ -652,7 +652,7 @@ const _s = StyleSheet.create({
     borderRadius: 18, padding: 8, paddingHorizontal: 12,
   },
   backBtn: {
-    width: 38, height: 38, borderRadius: 12,
+    width: 44, height: 44, borderRadius: 14,
     backgroundColor: 'rgba(255,255,255,0.08)',
     alignItems: 'center', justifyContent: 'center',
   },
@@ -743,7 +743,7 @@ const _s = StyleSheet.create({
   errorTitle: { fontSize: 26, fontWeight: '900', color: '#fff', marginTop: 12 },
   errorSub: { fontSize: 14, fontWeight: '500', color: 'rgba(255,255,255,0.5)', textAlign: 'center', marginTop: 8, lineHeight: 22 },
 
-  tipRow: { paddingHorizontal: SPACE.xl, paddingBottom: 32 },
+  tipRow: { paddingHorizontal: SPACE.xl, paddingBottom: BOTTOM + 12 },
   tipGlass: {
     flexDirection: 'row', alignItems: 'center', gap: 8,
     backgroundColor: 'rgba(255,255,255,0.05)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)',

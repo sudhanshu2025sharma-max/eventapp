@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, ScrollView, FlatList,
-  StyleSheet, Platform, Image, Alert, ActivityIndicator, Dimensions, Modal
+  StyleSheet, Platform, Image, Alert, ActivityIndicator, Dimensions, Modal,
+  KeyboardAvoidingView,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
-import { COLORS, FONT, SPACE, RADIUS, SHADOW } from '../theme';
+import { COLORS, FONT, SPACE, RADIUS, SHADOW, TOP, BOTTOM } from '../theme';
 import { apiFetch } from '../api';
 import { FadeIn } from '../components';
 
@@ -229,7 +230,7 @@ export default function ReportErrorScreen({ tokens, user, onBack }) {
   return (
     <View style={s.container}>
       {/* Image Zoom Modal */}
-      <Modal visible={!!selectedImage} transparent animationType="fade" onRequestClose={() => setSelectedImage(null)}>
+      <Modal visible={!!selectedImage} transparent animationType="fade" presentationStyle="overFullScreen" onRequestClose={() => setSelectedImage(null)}>
         <View style={s.imageModalBg}>
           <TouchableOpacity onPress={() => setSelectedImage(null)} style={s.closeModalBtn}>
             <Ionicons name="close" size={24} color="#fff" />
@@ -272,7 +273,8 @@ export default function ReportErrorScreen({ tokens, user, onBack }) {
 
       {activeTab === 'submit' ? (
         /* TAB 1: Submission Form */
-        <ScrollView contentContainerStyle={s.content} showsVerticalScrollIndicator={false}>
+        <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+          <ScrollView contentContainerStyle={s.content} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
           <FadeIn>
             <View style={s.infoBanner}>
               <Ionicons name="shield-checkmark" size={22} color={COLORS.brand} style={{ marginRight: 10 }} />
@@ -372,6 +374,7 @@ export default function ReportErrorScreen({ tokens, user, onBack }) {
             )}
           </TouchableOpacity>
         </ScrollView>
+      </KeyboardAvoidingView>
       ) : (
         /* TAB 2: My Reported Errors List */
         <View style={{ flex: 1 }}>
@@ -411,11 +414,11 @@ const s = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#f0f4f9' },
   header: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingTop: Platform.OS === 'ios' ? 54 : 24, paddingBottom: 14,
+    paddingTop: TOP, paddingBottom: 14,
     paddingHorizontal: SPACE.lg, backgroundColor: '#fff',
     borderBottomWidth: 1, borderBottomColor: COLORS.border,
   },
-  backBtn: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center', backgroundColor: '#f1f5f9' },
+  backBtn: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center', backgroundColor: '#f1f5f9' },
   headerTitle: { fontSize: FONT.md, fontWeight: FONT.w8, color: COLORS.text },
 
   tabBar: { flexDirection: 'row', backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: COLORS.border },
@@ -424,7 +427,7 @@ const s = StyleSheet.create({
   tabText: { fontSize: 12, fontWeight: FONT.w6, color: COLORS.textSec },
   tabTextActive: { color: COLORS.brand, fontWeight: FONT.w8 },
 
-  content: { padding: SPACE.lg, paddingBottom: 60 },
+  content: { padding: SPACE.lg, paddingBottom: 60 + BOTTOM },
 
   infoBanner: {
     flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.brandLight,

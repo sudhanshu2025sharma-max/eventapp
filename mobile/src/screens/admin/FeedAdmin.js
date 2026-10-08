@@ -6,7 +6,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
-import { COLORS, FONT, SPACE, RADIUS, SHADOW } from '../../theme';
+import { COLORS, FONT, SPACE, RADIUS, SHADOW, TOP, BOTTOM } from '../../theme';
 import { apiFetch } from '../../api';
 
 export default function FeedAdmin({ onBack }) {
@@ -232,7 +232,7 @@ export default function FeedAdmin({ onBack }) {
         <FlatList
           data={posts}
           keyExtractor={(item) => String(item.id)}
-          contentContainerStyle={{ padding: SPACE.lg, paddingBottom: 40 }}
+          contentContainerStyle={{ padding: SPACE.lg, paddingBottom: 60 + BOTTOM }}
           renderItem={({ item }) => {
             const isVideo = item.image_url && /\.(mp4|mov|m4v)$/i.test(item.image_url);
             return (
@@ -240,10 +240,10 @@ export default function FeedAdmin({ onBack }) {
                 <View style={s.cardHeader}>
                   <Text style={s.cardTitle} numberOfLines={2}>{item.title}</Text>
                   <View style={{ flexDirection: 'row', gap: 14 }}>
-                    <TouchableOpacity onPress={() => openEditForm(item)} hitSlop={8}>
+                    <TouchableOpacity onPress={() => openEditForm(item)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
                       <Ionicons name="pencil" size={18} color={COLORS.textSec} />
                     </TouchableOpacity>
-                    <TouchableOpacity onPress={() => handleDelete(item.id)} hitSlop={8}>
+                    <TouchableOpacity onPress={() => handleDelete(item.id)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
                       <Ionicons name="trash" size={18} color={COLORS.error} />
                     </TouchableOpacity>
                   </View>
@@ -308,7 +308,7 @@ export default function FeedAdmin({ onBack }) {
 
           <ScrollView
             style={{ flex: 1 }}
-            contentContainerStyle={{ padding: SPACE.lg, paddingBottom: 40 }}
+            contentContainerStyle={{ padding: SPACE.lg, paddingBottom: 40 + BOTTOM }}
             keyboardShouldPersistTaps="handled"
             showsVerticalScrollIndicator={false}
           >
@@ -456,7 +456,7 @@ export default function FeedAdmin({ onBack }) {
             <FlatList
               data={comments}
               keyExtractor={(item) => String(item.id)}
-              contentContainerStyle={{ padding: SPACE.lg }}
+              contentContainerStyle={{ padding: SPACE.lg, paddingBottom: 40 + BOTTOM }}
               renderItem={({ item }) => (
                 <View style={s.commentModCard}>
                   <View style={{ flex: 1, paddingRight: 8 }}>
@@ -491,7 +491,7 @@ export default function FeedAdmin({ onBack }) {
 const s = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.bg },
   header: {
-    paddingTop: Platform.OS === 'ios' ? 54 : 36,
+    paddingTop: TOP + 8,
     paddingBottom: 14,
     paddingHorizontal: 16,
     flexDirection: 'row',
@@ -541,7 +541,7 @@ const s = StyleSheet.create({
   emptyText: { textAlign: 'center', marginTop: 40, color: COLORS.textTer },
 
   formHeader: {
-    paddingTop: Platform.OS === 'ios' ? 54 : 36,
+    paddingTop: TOP + 8,
     paddingBottom: 14,
     paddingHorizontal: 16,
     flexDirection: 'row',

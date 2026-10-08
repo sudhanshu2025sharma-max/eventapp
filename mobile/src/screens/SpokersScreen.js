@@ -6,7 +6,7 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import {
-  COLORS, FONT, SPACE, RADIUS, SHADOW, API_URL, API_HEADERS, TOP, fixMediaUrl,
+  COLORS, FONT, SPACE, RADIUS, SHADOW, API_URL, API_HEADERS, TOP, BOTTOM, fixMediaUrl,
 } from '../theme';
 import SpeakerDetailScreen from './SpeakerDetailScreen';
 
@@ -760,7 +760,7 @@ export default function SpeakersScreen({ tokens, onBack, onOpenChatRoom }) {
       {/* Main Standard ScrollView - No sticky nav */}
       <ScrollView
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ paddingBottom: SPACE.huge * 2 }}
+        contentContainerStyle={{ paddingBottom: SPACE.huge * 2 + BOTTOM }}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={COLORS.brand} />
         }
@@ -932,9 +932,9 @@ const st = StyleSheet.create({
     zIndex: 10,
   },
   backBtn: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     backgroundColor: 'rgba(15,23,42,0.42)',
     borderWidth: 1,
     borderColor: COLORS.glassBorder,
@@ -1107,7 +1107,7 @@ const st = StyleSheet.create({
     borderRadius: RADIUS.full,
   },
   stageKeynoteTagTxt: {
-    fontSize: 8,
+    fontSize: 9.5,
     fontWeight: FONT.w9,
     color: COLORS.accentDark,
     letterSpacing: 0.4,
@@ -1122,7 +1122,7 @@ const st = StyleSheet.create({
     borderRadius: RADIUS.full,
   },
   stageInvitedTagTxt: {
-    fontSize: 8,
+    fontSize: 9.5,
     fontWeight: FONT.w8,
     color: COLORS.brandLight,
     letterSpacing: 0.4,
@@ -1311,7 +1311,7 @@ const st = StyleSheet.create({
     ...SHADOW.sm,
   },
   vipCrownText: {
-    fontSize: 8,
+    fontSize: 9.5,
     fontWeight: FONT.w9,
     color: COLORS.accentDark,
     letterSpacing: 0.5,

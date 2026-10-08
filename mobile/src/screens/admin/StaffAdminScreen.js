@@ -5,7 +5,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
-import { COLORS, SPACE, RADIUS, SHADOW, fixMediaUrl } from '../../theme';
+import { COLORS, SPACE, RADIUS, SHADOW, fixMediaUrl, TOP, BOTTOM } from '../../theme';
 import { apiFetch } from '../../api';
 
 const TIERS = [
@@ -220,10 +220,10 @@ export default function StaffAdminScreen({ onBack }) {
 
       {/* Create/Edit Modal */}
       {showForm && (
-      <Modal visible={showForm} animationType="slide" transparent={false}>
+      <Modal visible={showForm} animationType="slide" transparent={false} presentationStyle="fullScreen">
         <View style={styles.modalContainer}>
           <View style={styles.modalHeader}>
-            <TouchableOpacity onPress={resetForm}>
+            <TouchableOpacity onPress={resetForm} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
               <Ionicons name="close" size={28} color="#1e293b" />
             </TouchableOpacity>
             <Text style={styles.modalTitle}>{editId ? 'Edit Staff' : 'Add Staff'}</Text>
@@ -313,7 +313,7 @@ export default function StaffAdminScreen({ onBack }) {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#f8fafc' },
   header: {
-    backgroundColor: '#0f172a', paddingTop: 48, paddingBottom: 16,
+    backgroundColor: '#0f172a', paddingTop: TOP + 8, paddingBottom: 16,
     paddingHorizontal: SPACE.lg, flexDirection: 'row', alignItems: 'center', gap: 12,
   },
   headerTitle: { flex: 1, fontSize: 18, fontWeight: '700', color: '#fff' },
@@ -336,11 +336,11 @@ const styles = StyleSheet.create({
   modalContainer: { flex: 1, backgroundColor: '#f8fafc' },
   modalHeader: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingTop: 48, paddingBottom: 12, paddingHorizontal: SPACE.lg,
+    paddingTop: TOP + 8, paddingBottom: 12, paddingHorizontal: SPACE.lg,
     backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: '#e2e8f0',
   },
   modalTitle: { fontSize: 18, fontWeight: '700', color: '#1e293b' },
-  formContent: { padding: SPACE.lg, paddingBottom: 40 },
+  formContent: { padding: SPACE.lg, paddingBottom: 40 + BOTTOM },
   label: { fontSize: 13, fontWeight: '600', color: '#475569', marginTop: 12, marginBottom: 4 },
   input: {
     backgroundColor: '#fff', borderWidth: 1, borderColor: '#e2e8f0',

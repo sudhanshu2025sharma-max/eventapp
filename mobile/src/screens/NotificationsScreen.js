@@ -4,7 +4,7 @@ import {
   StyleSheet, Platform, ActivityIndicator, Image, Linking,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { COLORS, FONT, SPACE, RADIUS, API_URL, API_HEADERS } from '../theme';
+import { COLORS, FONT, SPACE, RADIUS, API_URL, API_HEADERS, TOP, BOTTOM } from '../theme';
 
 function timeAgo(dateStr) {
   if (!dateStr) return '';
@@ -19,14 +19,14 @@ function NotificationDetail({ notif, onBack }) {
   return (
     <View style={{ flex: 1, backgroundColor: '#f0f4f9' }}>
       <View style={s.header}>
-        <TouchableOpacity onPress={onBack} style={s.backBtn}>
+        <TouchableOpacity onPress={onBack} style={s.backBtn} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
           <Ionicons name="arrow-back" size={22} color={COLORS.text} />
         </TouchableOpacity>
         <Text style={s.headerTitle}>Details</Text>
       </View>
 
       <ScrollView
-        contentContainerStyle={{ padding: SPACE.xl, paddingBottom: 100 }}
+        contentContainerStyle={{ padding: SPACE.xl, paddingBottom: 100 + BOTTOM }}
         showsVerticalScrollIndicator={false}
       >
         {notif.cover_image_url ? (
@@ -232,7 +232,7 @@ export default function NotificationsScreen({ tokens, onBack }) {
               </View>
             </TouchableOpacity>
           ))}
-          <View style={{ height: 100 }} />
+          <View style={{ height: 100 + BOTTOM }} />
         </ScrollView>
       )}
     </View>
@@ -243,15 +243,15 @@ const s = StyleSheet.create({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingTop: Platform.OS === 'ios' ? 54 : 44,
+    paddingTop: TOP + 8,
     paddingBottom: 16,
     paddingHorizontal: 16,
     backgroundColor: '#f0f4f9',
   },
   backBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
+    width: 44,
+    height: 44,
+    borderRadius: 14,
     backgroundColor: 'rgba(255,255,255,0.9)',
     alignItems: 'center',
     justifyContent: 'center',

@@ -5,7 +5,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { COLORS, FONT, SPACE, RADIUS, SHADOW } from '../../theme';
+import { COLORS, FONT, SPACE, RADIUS, SHADOW, TOP, BOTTOM } from '../../theme';
 import { apiFetch } from '../../api';
 
 const PAD = SPACE.xl;
@@ -216,7 +216,7 @@ function PollResults({ poll, onBack }) {
   return (
     <View style={{ flex: 1, backgroundColor: COLORS.bg }}>
       <LinearGradient colors={[COLORS.brandDeep, COLORS.brand]} style={rv.header}>
-        <TouchableOpacity onPress={onBack} style={rv.backBtn}>
+        <TouchableOpacity onPress={onBack} style={rv.backBtn} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
           <Ionicons name="arrow-back" size={22} color="#fff" />
         </TouchableOpacity>
         <View style={{ flex: 1, marginLeft: SPACE.md }}>
@@ -242,7 +242,7 @@ function PollResults({ poll, onBack }) {
           <ActivityIndicator color={COLORS.brand} size="large" />
         </View>
       ) : (
-        <ScrollView contentContainerStyle={{ padding: PAD, paddingBottom: 80 }}>
+        <ScrollView contentContainerStyle={{ padding: PAD, paddingBottom: 80 + BOTTOM }}>
 
           {tab === 'results' && (
             <View>
@@ -334,7 +334,7 @@ function PollResults({ poll, onBack }) {
 }
 
 const rv = StyleSheet.create({
-  header: { paddingTop: Platform.OS === 'ios' ? 54 : 44, paddingBottom: SPACE.xl, paddingHorizontal: PAD, flexDirection: 'row', alignItems: 'center', gap: SPACE.md },
+  header: { paddingTop: TOP + 8, paddingBottom: SPACE.xl, paddingHorizontal: PAD, flexDirection: 'row', alignItems: 'center', gap: SPACE.md },
   backBtn: { width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.15)', alignItems: 'center', justifyContent: 'center' },
   title: { fontSize: FONT.md, fontWeight: FONT.w8, color: '#fff' },
   liveDot: { width: 22, height: 22, borderRadius: 11, backgroundColor: COLORS.error, alignItems: 'center', justifyContent: 'center' },
@@ -432,7 +432,7 @@ function CreatePollForm({ onCreated, onCancel }) {
   const hideOptions = type === 'yesno' || type === 'rating';
 
   return (
-    <ScrollView contentContainerStyle={{ padding: PAD, paddingBottom: 80 }} keyboardShouldPersistTaps="handled">
+    <ScrollView contentContainerStyle={{ padding: PAD, paddingBottom: 80 + BOTTOM }} keyboardShouldPersistTaps="handled">
       <Text style={cf.sectionLabel}>POLL DETAILS</Text>
 
       <View style={cf.card}>
@@ -607,7 +607,7 @@ export default function PollsAdmin({ tokens, onBack }) {
     return (
       <View style={{ flex: 1, backgroundColor: COLORS.bg }}>
         <LinearGradient colors={[COLORS.brandDeep, COLORS.brand]} style={s.header}>
-          <TouchableOpacity onPress={() => setView('list')} style={s.backBtn}>
+          <TouchableOpacity onPress={() => setView('list')} style={s.backBtn} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
             <Ionicons name="arrow-back" size={22} color="#fff" />
           </TouchableOpacity>
           <Text style={s.headerTitle}>Create Poll</Text>
@@ -645,7 +645,7 @@ export default function PollsAdmin({ tokens, onBack }) {
     <View style={{ flex: 1, backgroundColor: COLORS.bg }}>
       {/* Header */}
       <LinearGradient colors={[COLORS.brandDeep, COLORS.brand]} style={s.header}>
-        <TouchableOpacity onPress={onBack} style={s.backBtn}>
+        <TouchableOpacity onPress={onBack} style={s.backBtn} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
           <Ionicons name="arrow-back" size={22} color="#fff" />
         </TouchableOpacity>
         <View style={{ flex: 1, marginLeft: SPACE.md }}>
@@ -654,7 +654,7 @@ export default function PollsAdmin({ tokens, onBack }) {
             {liveCount > 0 ? `${liveCount} poll${liveCount > 1 ? 's' : ''} live now` : 'Manage conference polls'}
           </Text>
         </View>
-        <TouchableOpacity style={s.createBtn} onPress={() => setView('create')}>
+        <TouchableOpacity style={s.createBtn} onPress={() => setView('create')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
           <Ionicons name="add" size={20} color={COLORS.brand} />
         </TouchableOpacity>
       </LinearGradient>
@@ -680,7 +680,7 @@ export default function PollsAdmin({ tokens, onBack }) {
         </View>
       ) : (
         <ScrollView
-          contentContainerStyle={{ padding: PAD, paddingBottom: 80 }}
+          contentContainerStyle={{ padding: PAD, paddingBottom: 80 + BOTTOM }}
           showsVerticalScrollIndicator={false}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); fetchPolls(); }} tintColor={COLORS.brand} />}
         >
@@ -710,7 +710,7 @@ export default function PollsAdmin({ tokens, onBack }) {
 }
 
 const s = StyleSheet.create({
-  header: { paddingTop: Platform.OS === 'ios' ? 54 : 44, paddingBottom: SPACE.xl, paddingHorizontal: PAD, flexDirection: 'row', alignItems: 'center' },
+  header: { paddingTop: TOP + 8, paddingBottom: SPACE.xl, paddingHorizontal: PAD, flexDirection: 'row', alignItems: 'center' },
   backBtn: { width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.15)', alignItems: 'center', justifyContent: 'center' },
   headerTitle: { fontSize: FONT.xl, fontWeight: FONT.w9, color: '#fff', letterSpacing: -0.3 },
   headerSub: { fontSize: FONT.xs, color: 'rgba(255,255,255,0.65)', marginTop: 2 },

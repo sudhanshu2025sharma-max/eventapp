@@ -6,7 +6,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { COLORS, FONT, SPACE, RADIUS } from '../../theme';
+import { COLORS, FONT, SPACE, RADIUS, TOP, BOTTOM } from '../../theme';
 import { FadeIn } from '../../components';
 
 import CheckInScreen from './CheckInScreen';
@@ -186,7 +186,7 @@ export default function AdminTab({ user, tokens, onLogout }) {
         </View>
       </LinearGradient>
 
-      <ScrollView contentContainerStyle={{ padding: SPACE.xl, paddingBottom: 120 }} showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerStyle={{ padding: SPACE.xl, paddingBottom: 120 + BOTTOM }} showsVerticalScrollIndicator={false}>
         {visibleFeatures.length === 0 ? (
           <View style={a.emptyContainer}>
             <Ionicons name="shield-outline" size={48} color={COLORS.textTer} />
@@ -231,7 +231,7 @@ const g = StyleSheet.create({
 });
 
 const a = StyleSheet.create({
-  hero:     { paddingTop: Platform.OS === 'ios' ? 58 : 46, paddingBottom: SPACE.xxl, paddingHorizontal: SPACE.xl, alignItems: 'center', overflow: 'hidden' },
+  hero:     { paddingTop: TOP + 8, paddingBottom: SPACE.xxl, paddingHorizontal: SPACE.xl, alignItems: 'center', overflow: 'hidden' },
   blob:     { position: 'absolute', width: 220, height: 220, borderRadius: 110, backgroundColor: 'rgba(255,255,255,0.05)', top: -80, right: -60 },
   iconWrap: { width: 72, height: 72, borderRadius: 24, backgroundColor: 'rgba(255,255,255,0.15)', alignItems: 'center', justifyContent: 'center', marginBottom: SPACE.md, borderWidth: 1, borderColor: 'rgba(255,255,255,0.2)' },
   heroTitle:{ fontSize: FONT.xl, fontWeight: FONT.w9, color: '#fff', letterSpacing: -0.3 },
@@ -241,7 +241,7 @@ const a = StyleSheet.create({
   secLabel: { fontSize: 10, fontWeight: FONT.w8, color: COLORS.textTer, letterSpacing: 1.5, marginBottom: SPACE.sm, marginLeft: 4 },
   infoCard: { flexDirection: 'row', alignItems: 'center', gap: SPACE.sm, backgroundColor: COLORS.surface, borderRadius: RADIUS.lg, padding: SPACE.md, borderWidth: 1, borderColor: COLORS.border, marginBottom: SPACE.xl },
   infoTxt:  { flex: 1, fontSize: FONT.xs, color: COLORS.textTer, lineHeight: 18 },
-  logoutBtn:{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: SPACE.sm, paddingVertical: SPACE.md, borderRadius: RADIUS.lg, borderWidth: 1.5, borderColor: COLORS.error, backgroundColor:COLORS.errorLight },
+  logoutBtn:{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', minHeight: 46, gap: SPACE.sm, paddingVertical: SPACE.md, borderRadius: RADIUS.lg, borderWidth: 1.5, borderColor: COLORS.error, backgroundColor:COLORS.errorLight },
   logoutTxt:{ fontSize: FONT.sm, fontWeight: FONT.w7, color: COLORS.error },
   emptyContainer: { alignItems: 'center', paddingVertical: 40 },
   emptyTitle: { fontSize: 16, fontWeight: '700', color: COLORS.textSec, marginTop: 12 },

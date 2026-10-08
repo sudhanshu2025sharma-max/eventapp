@@ -18,12 +18,14 @@
       "bundleIdentifier": "com.etd2026.app",
       "buildNumber": "2",
       "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false,
         "NSCameraUsageDescription": "ETD 2026 uses the camera to scan QR codes and take photos.",
         "NSPhotoLibraryUsageDescription": "ETD 2026 needs photo library access to upload photos.",
-        "NSPhotoLibraryAddUsageDescription": "ETD 2026 saves photos to your gallery.",
         "NSLocationWhenInUseUsageDescription": "ETD 2026 uses your location to tag selfie point photos.",
         "NSMotionUsageDescription": "ETD 2026 uses motion sensors for shake-to-share contact cards.",
-        "NSFaceIDUsageDescription": "ETD 2026 uses Face ID to protect admin actions."
+        "NSAppTransportSecurity": {
+          "NSAllowsArbitraryLoadsInWebContent": true
+        }
       }
     },
     "android": {
@@ -50,6 +52,13 @@
     "plugins": [
       "./plugins/withNetworkSecurity.js",
       "expo-video",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "ETD 2026 uses the camera to scan QR codes and take photos.",
+          "microphonePermission": false
+        }
+      ],
       [
         "expo-splash-screen",
         {

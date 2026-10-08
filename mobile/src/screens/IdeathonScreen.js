@@ -6,7 +6,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
-import { COLORS, FONT, SPACE, RADIUS, SHADOW, fixMediaUrl } from '../theme';
+import { COLORS, FONT, SPACE, RADIUS, SHADOW, fixMediaUrl, TOP, BOTTOM } from '../theme';
 import { apiFetch } from '../api';
 import { GradientAvatar } from '../components';
 
@@ -749,7 +749,7 @@ export default function IdeathonScreen({ onBack, onOpenPolls }) {
       </LinearGradient>
 
       <ScrollView
-        contentContainerStyle={{ padding: PAD, paddingBottom: 140, gap: SPACE.lg }}
+        contentContainerStyle={{ padding: PAD, paddingBottom: 140 + BOTTOM, gap: SPACE.lg }}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); fetch_(); }} tintColor={COLORS.brand} />}
@@ -1201,11 +1201,11 @@ export default function IdeathonScreen({ onBack, onOpenPolls }) {
 
 const sc = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.bg },
-  header: { paddingTop: Platform.OS === 'ios' ? 54 : 44, paddingBottom: SPACE.md, overflow: 'hidden' },
+  header: { paddingTop: TOP + 8, paddingBottom: SPACE.md, overflow: 'hidden' },
   blob1: { position: 'absolute', top: -50, right: -20, width: 180, height: 180, borderRadius: 90, backgroundColor: 'rgba(255,255,255,0.06)' },
   blob2: { position: 'absolute', bottom: -30, left: -30, width: 120, height: 120, borderRadius: 60, backgroundColor: 'rgba(245,158,11,0.08)' },
   topbar: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: PAD, marginBottom: SPACE.sm },
-  backBtn: { width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.12)', alignItems: 'center', justifyContent: 'center' },
+  backBtn: { width: 44, height: 44, borderRadius: 22, backgroundColor: 'rgba(255,255,255,0.12)', alignItems: 'center', justifyContent: 'center' },
   headerTitle: { fontSize: FONT.xl, fontWeight: FONT.w9, color: '#fff', letterSpacing: -0.3 },
   headerSub: { fontSize: FONT.xs, color: 'rgba(255,255,255,0.7)', marginTop: 2 },
   openPill: { flexDirection: 'row', alignItems: 'center', gap: SPACE.xs, backgroundColor: COLORS.success, paddingHorizontal: SPACE.md, paddingVertical: 6, borderRadius: RADIUS.full },

@@ -425,7 +425,7 @@ export default function ContactCardModal({ visible, onClose, onSent, sender, rec
 
   return (
     <>
-      <Modal visible={visible} transparent animationType="none" onRequestClose={animateClose}>
+      <Modal visible={visible} transparent animationType="none" presentationStyle="overFullScreen" onRequestClose={animateClose}>
         <View style={_s.root}>
           {/* Backdrop */}
           <Animated.View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(5,4,18,0.85)', opacity: backdrop }]}>
@@ -447,7 +447,7 @@ export default function ContactCardModal({ visible, onClose, onSent, sender, rec
                     <Text style={_s.sendingTo}>Sending your card to</Text>
                     <Text style={_s.receiverName}>{receiverName}</Text>
                   </View>
-                  <TouchableOpacity style={_s.closeBtn} onPress={animateClose}>
+                  <TouchableOpacity style={_s.closeBtn} onPress={animateClose} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
                     <Ionicons name="close" size={20} color="#64748b" />
                   </TouchableOpacity>
                 </View>

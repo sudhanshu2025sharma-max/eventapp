@@ -4,7 +4,7 @@ import {
   Platform, Image, ActivityIndicator, Alert, Modal, TextInput, ScrollView
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { COLORS, FONT, SPACE, RADIUS, SHADOW } from '../../theme';
+import { COLORS, FONT, SPACE, RADIUS, SHADOW, TOP, BOTTOM } from '../../theme';
 import { apiFetch } from '../../api';
 
 export default function ErrorReportsAdmin({ tokens, onBack }) {
@@ -275,12 +275,12 @@ export default function ErrorReportsAdmin({ tokens, onBack }) {
 
       {/* Action buttons */}
       <View style={s.actionRow}>
-        <TouchableOpacity onPress={() => openEditModal(item)} style={s.editBtn} activeOpacity={0.8}>
+        <TouchableOpacity onPress={() => openEditModal(item)} style={s.editBtn} activeOpacity={0.8} hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}>
           <Ionicons name="create-outline" size={14} color={COLORS.brand} style={{ marginRight: 4 }} />
           <Text style={s.editBtnText}>Edit / Resolve</Text>
         </TouchableOpacity>
 
-        <TouchableOpacity onPress={() => handleDelete(item.id)} style={s.deleteBtn} activeOpacity={0.75}>
+        <TouchableOpacity onPress={() => handleDelete(item.id)} style={s.deleteBtn} activeOpacity={0.75} hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}>
           <Ionicons name="trash-outline" size={15} color={COLORS.error} />
         </TouchableOpacity>
       </View>
@@ -290,9 +290,9 @@ export default function ErrorReportsAdmin({ tokens, onBack }) {
   return (
     <View style={s.container}>
       {/* Full Image Modal */}
-      <Modal visible={!!selectedImage} transparent animationType="fade" onRequestClose={() => setSelectedImage(null)}>
+      <Modal visible={!!selectedImage} transparent animationType="fade" onRequestClose={() => setSelectedImage(null)} presentationStyle="overFullScreen">
         <View style={s.imageModalBg}>
-          <TouchableOpacity onPress={() => setSelectedImage(null)} style={s.closeModalBtn}>
+          <TouchableOpacity onPress={() => setSelectedImage(null)} style={s.closeModalBtn} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
             <Ionicons name="close" size={24} color="#fff" />
           </TouchableOpacity>
           {selectedImage && <Image source={{ uri: selectedImage }} style={s.fullModalImage} resizeMode="contain" />}
@@ -300,12 +300,12 @@ export default function ErrorReportsAdmin({ tokens, onBack }) {
       </Modal>
 
       {/* Edit Ticket Modal */}
-      <Modal visible={!!editItem} transparent animationType="slide" onRequestClose={() => setEditItem(null)}>
+      <Modal visible={!!editItem} transparent animationType="slide" onRequestClose={() => setEditItem(null)} presentationStyle="overFullScreen">
         <View style={s.editModalBg}>
           <View style={s.editModalCard}>
             <View style={s.editModalHeader}>
               <Text style={s.editModalTitle}>Edit &amp; Manage Ticket</Text>
-              <TouchableOpacity onPress={() => setEditItem(null)}>
+              <TouchableOpacity onPress={() => setEditItem(null)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
                 <Ionicons name="close" size={22} color={COLORS.text} />
               </TouchableOpacity>
             </View>
@@ -373,12 +373,12 @@ export default function ErrorReportsAdmin({ tokens, onBack }) {
       </Modal>
 
       {/* Admin Create Ticket Modal */}
-      <Modal visible={showCreateModal} transparent animationType="slide" onRequestClose={() => setShowCreateModal(false)}>
+      <Modal visible={showCreateModal} transparent animationType="slide" onRequestClose={() => setShowCreateModal(false)} presentationStyle="overFullScreen">
         <View style={s.editModalBg}>
           <View style={s.editModalCard}>
             <View style={s.editModalHeader}>
               <Text style={s.editModalTitle}>Create New Bug Ticket</Text>
-              <TouchableOpacity onPress={() => setShowCreateModal(false)}>
+              <TouchableOpacity onPress={() => setShowCreateModal(false)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
                 <Ionicons name="close" size={22} color={COLORS.text} />
               </TouchableOpacity>
             </View>
@@ -403,13 +403,13 @@ export default function ErrorReportsAdmin({ tokens, onBack }) {
 
       {/* Top Header */}
       <View style={s.header}>
-        <TouchableOpacity onPress={onBack} style={s.backBtn}>
+        <TouchableOpacity onPress={onBack} style={s.backBtn} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
           <Ionicons name="arrow-back" size={22} color={COLORS.text} />
         </TouchableOpacity>
         <Text style={s.headerTitle}>Error Logs &amp; Diagnostics</Text>
         <View style={{ flexDirection: 'row', gap: 6 }}>
           {tab === 'tickets' && (
-            <TouchableOpacity onPress={() => setShowCreateModal(true)} style={s.addBtn}>
+            <TouchableOpacity onPress={() => setShowCreateModal(true)} style={s.addBtn} hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}>
               <Ionicons name="add" size={20} color="#fff" />
             </TouchableOpacity>
           )}
@@ -417,7 +417,7 @@ export default function ErrorReportsAdmin({ tokens, onBack }) {
             if (tab === 'tickets') fetchReports();
             else if (tab === 'system_logs') fetchSystemLogs();
             else fetchServerLogsAndHealth();
-          }} style={s.refreshBtn}>
+          }} style={s.refreshBtn} hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}>
             <Ionicons name="refresh" size={18} color={COLORS.brand} />
           </TouchableOpacity>
         </View>
@@ -465,7 +465,7 @@ export default function ErrorReportsAdmin({ tokens, onBack }) {
               data={reports}
               keyExtractor={item => item.id}
               renderItem={renderTicketItem}
-              contentContainerStyle={{ padding: SPACE.md, paddingBottom: 60 }}
+              contentContainerStyle={{ padding: SPACE.md, paddingBottom: 60 + BOTTOM }}
               ListEmptyComponent={
                 <View style={{ alignItems: 'center', paddingVertical: 40 }}>
                   <Ionicons name="checkmark-done-circle-outline" size={48} color={COLORS.success} style={{ opacity: 0.5, marginBottom: 8 }} />
@@ -495,7 +495,7 @@ export default function ErrorReportsAdmin({ tokens, onBack }) {
           <FlatList
             data={systemLogs}
             keyExtractor={item => item.id}
-            contentContainerStyle={{ padding: SPACE.md, paddingBottom: 60 }}
+            contentContainerStyle={{ padding: SPACE.md, paddingBottom: 60 + BOTTOM }}
             renderItem={({ item }) => (
               <View style={s.sysLogCard}>
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
@@ -527,7 +527,7 @@ export default function ErrorReportsAdmin({ tokens, onBack }) {
 
       {/* TAB 3: Live Server Stream & Health */}
       {tab === 'server_stream' && (
-        <ScrollView style={{ flex: 1, padding: SPACE.md }} contentContainerStyle={{ paddingBottom: 60 }}>
+        <ScrollView style={{ flex: 1, padding: SPACE.md }} contentContainerStyle={{ paddingBottom: 60 + BOTTOM }}>
           {health && (
             <View style={s.healthGrid}>
               <View style={s.healthCard}>
@@ -580,13 +580,13 @@ const s = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#f0f4f9' },
   header: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingTop: Platform.OS === 'ios' ? 54 : 44, paddingBottom: 12,
+    paddingTop: TOP + 8, paddingBottom: 12,
     paddingHorizontal: SPACE.lg, backgroundColor: '#fff',
     borderBottomWidth: 1, borderBottomColor: COLORS.border,
   },
-  backBtn: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center', backgroundColor: '#f1f5f9' },
-  addBtn: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center', backgroundColor: COLORS.brand },
-  refreshBtn: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center', backgroundColor: COLORS.brandLight },
+  backBtn: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center', backgroundColor: '#f1f5f9' },
+  addBtn: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center', backgroundColor: COLORS.brand },
+  refreshBtn: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center', backgroundColor: COLORS.brandLight },
   headerTitle: { fontSize: FONT.md, fontWeight: FONT.w8, color: COLORS.text },
 
   mainTabRow: { flexDirection: 'row', backgroundColor: '#fff', paddingHorizontal: SPACE.md, borderBottomWidth: 1, borderBottomColor: COLORS.border },
@@ -626,11 +626,11 @@ const s = StyleSheet.create({
   deleteBtn: { width: 34, height: 34, borderRadius: 8, backgroundColor: '#fee2e2', alignItems: 'center', justifyContent: 'center' },
 
   imageModalBg: { flex: 1, backgroundColor: 'rgba(0,0,0,0.92)', justifyContent: 'center', alignItems: 'center' },
-  closeModalBtn: { position: 'absolute', top: 50, right: 20, zIndex: 10, width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.2)', alignItems: 'center', justifyContent: 'center' },
+  closeModalBtn: { position: 'absolute', top: TOP + 12, right: 20, zIndex: 10, width: 44, height: 44, borderRadius: 22, backgroundColor: 'rgba(255,255,255,0.2)', alignItems: 'center', justifyContent: 'center' },
   fullModalImage: { width: '90%', height: '80%' },
 
   editModalBg: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
-  editModalCard: { backgroundColor: '#fff', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: SPACE.lg, maxHeight: '85%' },
+  editModalCard: { backgroundColor: '#fff', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: SPACE.lg, paddingBottom: SPACE.lg + BOTTOM, maxHeight: '85%' },
   editModalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 },
   editModalTitle: { fontSize: FONT.md, fontWeight: FONT.w8, color: COLORS.text },
   modalLabel: { fontSize: 10, fontWeight: FONT.w8, color: COLORS.textTer, letterSpacing: 1, marginBottom: 4 },
@@ -646,9 +646,9 @@ const s = StyleSheet.create({
   sysBadge: { paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 },
   sysBadgeText: { fontSize: 9, fontWeight: FONT.w8 },
   sysLogMsg: { fontSize: 12, fontWeight: FONT.w7, color: COLORS.error, marginTop: 4 },
-  sysLogPath: { fontSize: 10, color: COLORS.textTer, marginTop: 2, fontFamily: 'monospace' },
+  sysLogPath: { fontSize: 10, color: COLORS.textTer, marginTop: 2, fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace' },
   sysTraceBox: { maxHeight: 100, backgroundColor: '#1e293b', padding: 6, borderRadius: 6, marginTop: 6 },
-  sysTraceText: { color: '#f8fafc', fontSize: 9, fontFamily: 'monospace' },
+  sysTraceText: { color: '#f8fafc', fontSize: 9, fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace' },
 
   healthGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 14 },
   healthCard: { width: '48%', backgroundColor: '#fff', padding: 12, borderRadius: 12, borderWidth: 1, borderColor: COLORS.border },
@@ -660,5 +660,5 @@ const s = StyleSheet.create({
   consoleTitle: { fontSize: 11, fontWeight: FONT.w7, color: COLORS.textSec },
   pollPill: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6, backgroundColor: '#f1f5f9' },
   terminalBox: { backgroundColor: '#0f172a', borderRadius: 12, padding: 12 },
-  terminalText: { color: '#38bdf8', fontSize: 10, fontFamily: 'monospace', lineHeight: 15 },
+  terminalText: { color: '#38bdf8', fontSize: 10, fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace', lineHeight: 15 },
 });

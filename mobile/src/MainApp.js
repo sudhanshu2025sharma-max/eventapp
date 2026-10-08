@@ -8,7 +8,7 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { View, Text, TouchableOpacity, Pressable, StyleSheet, Platform, Animated, Modal, BackHandler, Keyboard } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
-import { COLORS, FONT, SPACE, RADIUS, SHADOW, API_URL, API_HEADERS, API_ROOT } from './theme';
+import { COLORS, FONT, SPACE, RADIUS, SHADOW, API_URL, API_HEADERS, API_ROOT, BOTTOM } from './theme';
 import { apiFetch, setTokens as setApiTokens } from './api';
 
 // Screen Imports
@@ -196,7 +196,7 @@ function WarningModal({ visible, text, onAcknowledge, loading }) {
   if (!visible) return null;
 
   return (
-    <Modal transparent animationType="fade" visible={visible} onRequestClose={() => {}}>
+    <Modal transparent animationType="fade" presentationStyle="overFullScreen" visible={visible} onRequestClose={() => {}}>
       <View style={wm.overlay}>
         <View style={wm.card}>
           <View style={wm.iconWrap}>
@@ -370,8 +370,10 @@ export default function MainApp({
   }, [fetchBadges]);
 
   useEffect(() => {
-    const s = Keyboard.addListener('keyboardDidShow', () => setKeyboardVisible(true));
-    const h = Keyboard.addListener('keyboardDidHide', () => setKeyboardVisible(false));
+    const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+    const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
+    const s = Keyboard.addListener(showEvent, () => setKeyboardVisible(true));
+    const h = Keyboard.addListener(hideEvent, () => setKeyboardVisible(false));
     return () => { s.remove(); h.remove(); };
   }, []);
 
@@ -421,13 +423,13 @@ export default function MainApp({
 
   useEffect(() => {
     if (!notificationRoute) return;
-    const { type, screen, subscreen, conversationId } = notificationRoute;
+    const { type, conversationId } = notificationRoute;
 
-    if (type === 'chat' && conversationId) {
+    if ((type === 'chat' || type === 'chat_room') && conversationId) {
       openChat(conversationId);
-    } else if (type === 'chat_request') {
+    } else if (type === 'chat_request' || type === 'connection_requests') {
       openSubScreen('connection_requests');
-    } else if (type === 'announcement' || type === 'notification') {
+    } else if (type === 'announcement' || type === 'notification' || type === 'notifications') {
       openSubScreen('notifications');
     } else if (type === 'schedule') { setTab('schedule'); setSubScreen(null); }
     else if (type === 'qr') { setTab('qr'); setSubScreen(null); }
@@ -564,7 +566,7 @@ export default function MainApp({
       {subScreen ? renderSubScreenContent() : (SCREENS[tab] || SCREENS.home)}
 
       {activeCall && (
-        <Modal visible={true} animationType="slide" hardwareAccelerated>
+        <Modal visible={true} animationType="slide" presentationStyle="fullScreen" hardwareAccelerated>
           <VoiceCallScreen
             callMode={activeCall.mode}
             targetUser={activeCall.targetUser}
@@ -583,7 +585,7 @@ export default function MainApp({
         loading={ackLoading}
       />
 
-      {!subScreen && (
+      {!subScreen && !keyboardVisible && (
         <BottomTabBar active={tab} onTab={setTab} tabs={tabs} networkBadge={pendingRequests} />
       )}
 
@@ -601,7 +603,7 @@ export default function MainApp({
 const st = StyleSheet.create({
   barWrapper: {
     position: 'absolute',
-    bottom: Platform.OS === 'ios' ? SPACE.xxl : SPACE.xl,
+    bottom: BOTTOM,
     left: SPACE.lg,
     right: SPACE.lg,
     alignItems: 'center',
@@ -659,8 +661,9 @@ const st = StyleSheet.create({
     right: 2,
     backgroundColor: COLORS.danger,
     borderRadius: RADIUS.full,
-    minWidth: 16,
-    height: 16,
+    minWidth: 18,
+    height: 18,
+    borderRadius: 9,
     paddingHorizontal: 4,
     alignItems: 'center',
     justifyContent: 'center',
@@ -669,7 +672,7 @@ const st = StyleSheet.create({
   },
   badgeText: {
     color: COLORS.surface,
-    fontSize: 8,
+    fontSize: 9.5,
     fontWeight: FONT.w8,
   },
   fabWrapper: {

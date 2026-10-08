@@ -5,7 +5,7 @@ import {
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
-import { COLORS, FONT, SPACE, RADIUS, SHADOW, API_URL, API_HEADERS } from '../theme';
+import { COLORS, FONT, SPACE, RADIUS, SHADOW, TOP, BOTTOM, H, API_URL, API_HEADERS } from '../theme';
 import { PrimaryButton, FadeIn, GlassCard } from '../components';
 
 function Field({ icon, placeholder, value, onChange, error }) {
@@ -116,7 +116,7 @@ export default function ChangePasswordScreen({ navigation, user, tokens, onDone,
           style={st.header}
         >
           {/* Back Button in Header */}
-          <TouchableOpacity onPress={handleReturnHome} style={st.headerBackBtn} activeOpacity={0.8}>
+          <TouchableOpacity onPress={handleReturnHome} style={st.headerBackBtn} activeOpacity={0.8} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
             <Ionicons name="arrow-back" size={20} color={COLORS.textInverse} />
           </TouchableOpacity>
 
@@ -233,15 +233,15 @@ export default function ChangePasswordScreen({ navigation, user, tokens, onDone,
 
 const st = StyleSheet.create({
   header: {
-    paddingTop: Platform.OS === 'ios' ? 72 : 60,
-    paddingBottom: 52,
+    paddingTop: Platform.OS === 'ios' ? (H <= 667 ? 48 : 64) : 50,
+    paddingBottom: H <= 667 ? 32 : 52,
     alignItems: 'center',
     paddingHorizontal: SPACE.xxl,
     overflow: 'hidden',
   },
   headerBackBtn: {
     position: 'absolute',
-    top: Platform.OS === 'ios' ? 54 : 42,
+    top: Platform.OS === 'ios' ? (H <= 667 ? 32 : 54) : 42,
     left: SPACE.lg,
     width: 40,
     height: 40,
@@ -305,7 +305,7 @@ const st = StyleSheet.create({
   body: {
     backgroundColor: COLORS.bg,
     paddingHorizontal: SPACE.xl,
-    paddingBottom: SPACE.xxxl,
+    paddingBottom: SPACE.xxxl + BOTTOM,
     marginTop: -6,
   },
   card: {

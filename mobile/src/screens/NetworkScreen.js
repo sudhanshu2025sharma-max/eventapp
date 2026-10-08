@@ -9,6 +9,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import {
   COLORS, SPACE, SHADOW,
   API_URL, API_HEADERS, fixMediaUrl, W,
+  TOP, BOTTOM,
 } from '../theme';
 import { GradientAvatar } from '../components';
 import { getCached, setCache } from '../cache';
@@ -1176,7 +1177,7 @@ export default function NetworkScreen({
             numColumns={2}
             columnWrapperStyle={{ justifyContent: 'space-between', paddingHorizontal: SPACE.xl }}
             showsVerticalScrollIndicator={false}
-            contentContainerStyle={{ paddingTop: SPACE.xs, paddingBottom: 140 }}
+            contentContainerStyle={{ paddingTop: SPACE.xs, paddingBottom: 140 + BOTTOM }}
             refreshControl={
               <RefreshControl refreshing={refreshing} onRefresh={refreshSpeakers} tintColor="#7c3aed" />
             }
@@ -1240,7 +1241,7 @@ export default function NetworkScreen({
 const _s = StyleSheet.create({
   root: { flex: 1, backgroundColor: '#ffffff' },
   header: {
-    paddingTop: Platform.OS === 'ios' ? 58 : 44,
+    paddingTop: TOP + 8,
     paddingHorizontal: SPACE.xl,
     paddingBottom: SPACE.xxxl,
   },
@@ -1250,8 +1251,8 @@ const _s = StyleSheet.create({
   headerSub: { fontSize: 13, color: '#fff', marginTop: 4, fontWeight: '500' },
   headerBtns: { flexDirection: 'row', gap: 8 },
   hBtn: {
-    width: 42,
-    height: 42,
+    width: 44,
+    height: 44,
     borderRadius: 14,
     backgroundColor: 'rgba(255,255,255,0.1)',
     borderWidth: 1,
@@ -1343,7 +1344,7 @@ const _s = StyleSheet.create({
   chipOn: { backgroundColor: COLORS.brand, borderColor: COLORS.brand },
   chipT: { fontSize: 11, fontWeight: '700', color: '#475569' },
   chipTOn: { color: '#fff' },
-  listContent: { paddingHorizontal: SPACE.xl, paddingTop: SPACE.xs },
+  listContent: { paddingHorizontal: SPACE.xl, paddingTop: SPACE.xs, paddingBottom: 140 + BOTTOM },
   card: {
     backgroundColor: '#fff',
     borderRadius: 20,
@@ -1372,7 +1373,7 @@ const _s = StyleSheet.create({
   nameRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   name: { fontSize: 16, fontWeight: '800', color: '#0f172a' },
   youPill: { paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 },
-  youPillT: { fontSize: 8, fontWeight: '900', color: '#fff' },
+  youPillT: { fontSize: 9.5, fontWeight: '900', color: '#fff' },
   desig: { fontSize: 13, fontWeight: '600', color: '#334155' },
   aff: { fontSize: 12, fontWeight: '600', color: COLORS.brand },
   chevronBtn: { width: 32, height: 32, borderRadius: 10, backgroundColor: '#f1f5f9', alignItems: 'center', justifyContent: 'center' },
@@ -1465,7 +1466,7 @@ const _s = StyleSheet.create({
   sgPhoto: { width: '100%', height: '100%' },
   sgOverlay: { position: 'absolute', bottom: 0, left: 0, right: 0, height: '40%' },
   sgStatusPill: { position: 'absolute', top: 6, left: 6, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 },
-  sgStatusT: { fontSize: 8, fontWeight: '800', color: '#fff' },
+  sgStatusT: { fontSize: 9.5, fontWeight: '800', color: '#fff' },
   sgMicBadge: { position: 'absolute', top: 6, right: 6, width: 22, height: 22, borderRadius: 7, alignItems: 'center', justifyContent: 'center' },
   sgInfo: { padding: 8 },
   sgName: { fontSize: 13, fontWeight: '800', color: '#0f172a' },

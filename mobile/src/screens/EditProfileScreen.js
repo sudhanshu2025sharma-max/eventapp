@@ -5,7 +5,7 @@ import {
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
-import { COLORS, FONT, SPACE, RADIUS, SHADOW, API_URL } from '../theme';
+import { COLORS, FONT, SPACE, RADIUS, SHADOW, TOP, API_URL } from '../theme';
 import { Card, FadeIn, GradientAvatar, PrimaryButton, Divider } from '../components';
 import { useKeyboardHeight } from '../useKeyboard';
 
@@ -152,7 +152,7 @@ function TagInput({ label, value, onChange }) {
 // ── Points modal ──────────────────────────────────────────────────────────────
 function PointsModal({ visible, points, message, onDismiss }) {
   return (
-    <Modal transparent visible={visible} animationType="fade" onRequestClose={onDismiss}>
+    <Modal transparent visible={visible} animationType="fade" presentationStyle="overFullScreen" onRequestClose={onDismiss}>
       <TouchableOpacity style={st.modalOverlay} activeOpacity={1} onPress={onDismiss}>
         <View style={st.modalCard}>
           <LinearGradient colors={[COLORS.brand, '#0448c8']} style={st.modalGlow} />
@@ -563,9 +563,9 @@ export default function EditProfileScreen({ user, tokens, onBack, onProfileUpdat
 }
 
 const st = StyleSheet.create({
-  header:       { paddingTop: Platform.OS === 'ios' ? 58 : 46, paddingBottom: SPACE.xl, paddingHorizontal: SPACE.xl, alignItems: 'center' },
+  header:       { paddingTop: TOP + 8, paddingBottom: SPACE.xl, paddingHorizontal: SPACE.xl, alignItems: 'center' },
   headerRow:    { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', width: '100%', marginBottom: SPACE.lg },
-  backBtn:      { width: 40, height: 40, borderRadius: RADIUS.md, backgroundColor: 'rgba(255,255,255,0.12)', alignItems: 'center', justifyContent: 'center' },
+  backBtn:      { width: 44, height: 44, borderRadius: RADIUS.md, backgroundColor: 'rgba(255,255,255,0.12)', alignItems: 'center', justifyContent: 'center' },
   headerTitle:  { fontSize: FONT.lg, fontWeight: FONT.w7, color: COLORS.textInverse },
   photoWrap:    { position: 'relative', marginBottom: SPACE.xs },
   photo:        { width: 96, height: 96, borderRadius: 30, borderWidth: 3, borderColor: 'rgba(255,255,255,0.25)' },

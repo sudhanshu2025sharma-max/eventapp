@@ -5,20 +5,9 @@ import {
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
-import { COLORS, FONT, SPACE, RADIUS, SHADOW, API_URL, API_HEADERS, fixMediaUrl } from '../theme';
+import { COLORS, FONT, SPACE, RADIUS, SHADOW, TOP, API_URL, API_HEADERS, fixMediaUrl } from '../theme';
 import { apiFetch, setTokens as setApiTokens } from '../api';
 import { PulsingDot, GradientAvatar } from '../components';
-
-// Modern high-performance Reanimated + Gesture Handler imports
-import ReAnimated, {
-  useSharedValue,
-  useAnimatedStyle,
-  withSpring,
-  withTiming,
-  interpolate,
-  runOnJS,
-} from 'react-native-reanimated';
-import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler';
 
 const PAD = SPACE.xl;
 const TIMELINE_WINDOW = 3;
@@ -336,127 +325,18 @@ const ANN_GRADS = [
   [COLORS.success,'#059669'], [COLORS.rose,'#e11d48'],
 ];
 
-// Reanimated Swipe Deck
+// Native iOS/Android buttery-smooth paginated announcement carousel
 function AnnouncementDeck({ notifications, onOpenNotifications }) {
-  const [index, setIndex] = useState(0);
-  const [width, setWidth] = useState(0);
-  const tx = useSharedValue(0);
-  const ty = useSharedValue(0);
+  const [activeIdx, setActiveIdx] = useState(0);
+  const [containerWidth, setContainerWidth] = useState(0);
+  const scrollRef = useRef(null);
 
-  const entryProgress = useSharedValue(1);
+  const total = notifications?.length || 0;
 
-  useEffect(() => {
-    setIndex(0);
-    entryProgress.value = 1;
-  }, [notifications]);
-
-  useEffect(() => {
-    entryProgress.value = 0;
-    entryProgress.value = withSpring(1, { damping: 16, stiffness: 110 });
-  }, [index]);
-
-  const advance = (dir) => {
-    tx.value = 0;
-    ty.value = 0;
-    entryProgress.value = 0;
-    setIndex(prev => prev + 1);
-  };
-
-  const gesture = Gesture.Pan()
-    .enabled(index < notifications.length && width > 0)
-    .activeOffsetX([-10, 10])
-    .failOffsetY([-15, 15])
-    .onUpdate((e) => {
-      tx.value = e.translationX;
-      ty.value = e.translationY;
-    })
-    .onEnd((e) => {
-      const threshold = width * 0.35;
-      if (Math.abs(e.translationX) > threshold || Math.abs(e.velocityX) > 900) {
-        const dir = e.translationX > 0 || (Math.abs(e.translationX) <= threshold && e.velocityX > 0) ? 1 : -1;
-        tx.value = withTiming(dir * width * 1.4, { duration: 220 }, () => runOnJS(advance)(dir));
-        ty.value = withTiming(e.translationY + e.velocityY * 0.05, { duration: 220 });
-      } else {
-        tx.value = withSpring(0);
-        ty.value = withSpring(0);
-      }
-    });
-
-  const topCardStyle = useAnimatedStyle(() => {
-    const scale = interpolate(entryProgress.value, [0, 1], [0.93, 1]);
-    const translateY = interpolate(entryProgress.value, [0, 1], [12, 0]) + ty.value;
-    const opacity = interpolate(entryProgress.value, [0, 1], [0.2, 1]);
-    const rotate = `${interpolate(tx.value, [-width || -1, width || 1], [-12, 12])}deg`;
-
-    return {
-      transform: [
-        { translateX: tx.value },
-        { translateY: translateY },
-        { scale: scale },
-        { rotate: rotate },
-      ],
-      opacity: opacity,
-    };
-  });
-
-  const nextCardStyle = useAnimatedStyle(() => {
-    const progress = Math.min(1, Math.abs(tx.value) / ((width || 1) * 0.5));
-    return {
-      transform: [
-        { scale: 0.95 + 0.05 * progress },
-        { translateY: 8 - 8 * progress }
-      ],
-      opacity: 0.5 + 0.5 * progress,
-    };
-  });
-
-  const usefulBadgeStyle = useAnimatedStyle(() => {
-    const opacity = interpolate(tx.value, [0, width * 0.2], [0, 1]);
-    return { opacity };
-  });
-
-  const okayBadgeStyle = useAnimatedStyle(() => {
-    const opacity = interpolate(tx.value, [-width * 0.2, 0], [1, 0]);
-    return { opacity };
-  });
-
-  const total = notifications.length;
-
-  const renderNotificationCard = (n, idx, isTop = false) => {
-    const grad = ANN_GRADS[idx % ANN_GRADS.length];
-    return (
-      <LinearGradient colors={grad} style={dk.grad} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}>
-        <View style={dk.row}>
-          <View style={dk.iconBox}><Ionicons name="megaphone" size={16} color="rgba(255,255,255,0.9)" /></View>
-          <Text style={dk.time}>{timeAgo(n.delivered_at || n.created_at)}</Text>
-        </View>
-        <Text style={dk.title} numberOfLines={2}>{n.title}</Text>
-        <Text style={dk.body}  numberOfLines={2}>{n.body}</Text>
-        <View style={dk.foot}>
-          <View style={dk.dots}>
-            {notifications.map((_, i) => <View key={i} style={[dk.dot, i === idx && dk.dotOn]} />)}
-          </View>
-          <Text style={dk.hint}>{`${idx + 1}/${total}`}</Text>
-        </View>
-
-        {isTop && (
-          <>
-            <ReAnimated.View style={[dk.badgeContainer, dk.usefulBadge, usefulBadgeStyle]}>
-              <Text style={dk.badgeText}>USEFUL</Text>
-            </ReAnimated.View>
-            <ReAnimated.View style={[dk.badgeContainer, dk.okayBadge, okayBadgeStyle]}>
-              <Text style={dk.badgeText}>OKAY</Text>
-            </ReAnimated.View>
-          </>
-        )}
-      </LinearGradient>
-    );
-  };
-
-  if (index >= total) {
+  if (total === 0) {
     return (
       <TouchableOpacity style={dk.wrap} activeOpacity={0.9} onPress={onOpenNotifications}>
-        <View style={[dk.card, dk.emptyCard]}>
+        <View style={dk.emptyCard}>
           <Ionicons name="checkmark-circle-outline" size={42} color={COLORS.success} />
           <Text style={dk.emptyTitle}>You're all caught up!</Text>
           <Text style={dk.emptySub}>No unread announcements. Tap to view all announcements.</Text>
@@ -465,41 +345,97 @@ function AnnouncementDeck({ notifications, onOpenNotifications }) {
     );
   }
 
-  const top = notifications[index];
-  const next = notifications[index + 1];
+  const handleMomentumScrollEnd = (e) => {
+    const x = e.nativeEvent.contentOffset.x;
+    if (containerWidth > 0) {
+      const idx = Math.round(x / containerWidth);
+      if (idx !== activeIdx && idx >= 0 && idx < total) {
+        setActiveIdx(idx);
+      }
+    }
+  };
 
   return (
-    <GestureHandlerRootView style={dk.wrap}>
-      <View
-        style={{ flex: 1, position: 'relative' }}
-        onLayout={(e) => setWidth(e.nativeEvent.layout.width)}
-      >
-        {next !== undefined && (
-          <ReAnimated.View style={[dk.card, nextCardStyle]} pointerEvents="none">
-            {renderNotificationCard(next, index + 1)}
-          </ReAnimated.View>
-        )}
-        {top !== undefined && (
-          <GestureDetector gesture={gesture}>
-            <ReAnimated.View style={[dk.card, topCardStyle]} accessible={true} accessibilityLabel={`Card ${index + 1} of ${total}`}>
-              {renderNotificationCard(top, index, true)}
-            </ReAnimated.View>
-          </GestureDetector>
-        )}
-      </View>
-    </GestureHandlerRootView>
+    <View
+      style={dk.wrap}
+      onLayout={(e) => {
+        const w = Math.round(e.nativeEvent.layout.width);
+        if (w > 0 && Math.abs(w - containerWidth) > 1) setContainerWidth(w);
+      }}
+    >
+      {containerWidth > 0 && (
+        <ScrollView
+          ref={scrollRef}
+          horizontal
+          pagingEnabled
+          directionalLockEnabled
+          nestedScrollEnabled
+          showsHorizontalScrollIndicator={false}
+          bounces={false}
+          onMomentumScrollEnd={handleMomentumScrollEnd}
+          style={{ flex: 1, borderRadius: 22 }}
+          contentContainerStyle={{ alignItems: 'stretch' }}
+        >
+          {notifications.map((n, idx) => {
+            const grad = ANN_GRADS[idx % ANN_GRADS.length];
+            return (
+              <View
+                key={n.id || `notif-${idx}`}
+                style={[dk.cardWrapper, { width: containerWidth }]}
+              >
+                <TouchableOpacity
+                  activeOpacity={0.92}
+                  onPress={onOpenNotifications}
+                  style={dk.cardInner}
+                >
+                  <LinearGradient colors={grad} style={dk.grad} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}>
+                    <View style={dk.row}>
+                      <View style={dk.iconBox}>
+                        <Ionicons name="megaphone" size={16} color="rgba(255,255,255,0.95)" />
+                      </View>
+                      <Text style={dk.time}>{timeAgo(n.delivered_at || n.created_at)}</Text>
+                    </View>
+                    <Text style={dk.title} numberOfLines={2}>{n.title}</Text>
+                    <Text style={dk.body} numberOfLines={2}>{n.body}</Text>
+                    <View style={dk.foot}>
+                      <View style={dk.dots}>
+                        {notifications.map((_, i) => (
+                          <View key={i} style={[dk.dot, i === activeIdx && dk.dotOn]} />
+                        ))}
+                      </View>
+                      <Text style={dk.hint}>{`${activeIdx + 1}/${total}`}</Text>
+                    </View>
+                  </LinearGradient>
+                </TouchableOpacity>
+              </View>
+            );
+          })}
+        </ScrollView>
+      )}
+    </View>
   );
 }
 
 const dk = StyleSheet.create({
-  wrap: { position: 'relative', height: 168, marginTop: SPACE.sm },
-  card: {
-    position: 'absolute', left: 0, right: 0, top: 0, bottom: 0,
-    borderRadius: 22, overflow: 'hidden',
-    ...Platform.select({ ios: { shadowColor: '#002182', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.18, shadowRadius: 14 }, android: { elevation: 4 }, default: {} }),
+  wrap: { height: 168, marginTop: SPACE.sm, borderRadius: 22 },
+  cardWrapper: {
+    height: 168,
+    borderRadius: 22,
+    ...Platform.select({
+      ios: { shadowColor: '#002182', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.18, shadowRadius: 14 },
+      android: { elevation: 4 },
+      default: {},
+    }),
+  },
+  cardInner: {
+    flex: 1,
+    borderRadius: 22,
+    overflow: 'hidden',
   },
   emptyCard: {
     flex: 1,
+    height: 168,
+    borderRadius: 22,
     backgroundColor: 'rgba(255,255,255,0.85)',
     borderStyle: 'dashed',
     borderWidth: 1.5,
@@ -521,43 +457,17 @@ const dk = StyleSheet.create({
     textAlign: 'center',
     lineHeight: 16,
   },
-  badgeContainer: {
-    position: 'absolute',
-    top: 20,
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    borderRadius: 8,
-    borderWidth: 2.5,
-  },
-  usefulBadge: {
-    right: 20,
-    borderColor: '#4ade80',
-    backgroundColor: 'rgba(74,222,128,0.22)',
-    transform: [{ rotate: '15deg' }],
-  },
-  okayBadge: {
-    left: 20,
-    borderColor: '#60a5fa',
-    backgroundColor: 'rgba(96,165,250,0.22)',
-    transform: [{ rotate: '-15deg' }],
-  },
-  badgeText: {
-    fontSize: 14,
-    fontWeight: '900',
-    color: '#fff',
-    letterSpacing: 1.2,
-  },
-  grad:    { flex: 1, padding: SPACE.lg, gap: SPACE.sm },
+  grad:    { flex: 1, padding: SPACE.lg, justifyContent: 'space-between' },
   row:     { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   iconBox: { width: 30, height: 30, borderRadius: 15, backgroundColor: 'rgba(255,255,255,0.18)', alignItems: 'center', justifyContent: 'center' },
-  time:    { fontSize: 10, color: 'rgba(255,255,255,0.55)', fontWeight: FONT.w6 },
+  time:    { fontSize: 10, color: 'rgba(255,255,255,0.7)', fontWeight: FONT.w6 },
   title:   { fontSize: FONT.md, fontWeight: FONT.w9, color: '#fff', lineHeight: 21 },
-  body:    { flex: 1, fontSize: FONT.xs, color: 'rgba(255,255,255,0.78)', lineHeight: 17 },
-  foot:    { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  dots:    { flexDirection: 'row', gap: 4 },
-  dot:     { width: 5, height: 5, borderRadius: 3, backgroundColor: 'rgba(255,255,255,0.3)' },
-  dotOn:   { width: 14, height: 5, borderRadius: 3, backgroundColor: '#fff' },
-  hint:    { fontSize: 9, color: 'rgba(255,255,255,0.45)', fontWeight: FONT.w6 },
+  body:    { fontSize: FONT.xs, color: 'rgba(255,255,255,0.85)', lineHeight: 17 },
+  foot:    { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 4 },
+  dots:    { flexDirection: 'row', gap: 4, alignItems: 'center' },
+  dot:     { width: 5, height: 5, borderRadius: 3, backgroundColor: 'rgba(255,255,255,0.35)' },
+  dotOn:   { width: 16, height: 5, borderRadius: 3, backgroundColor: '#fff' },
+  hint:    { fontSize: 10, color: 'rgba(255,255,255,0.75)', fontWeight: FONT.w6 },
 });
 
 // Hero card with 3D tilt-on-press feedback
@@ -832,11 +742,11 @@ export default function HomeTab({
       <View style={g.topbar}>
         <Text style={g.topbarBrand}>{conf.name}</Text>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: SPACE.md }}>
-          <TouchableOpacity onPress={onOpenNotifications} style={{ position: 'relative' }}>
+          <TouchableOpacity onPress={onOpenNotifications} style={{ position: 'relative' }} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
             <Ionicons name="notifications-outline" size={26} color={COLORS.text} />
             {unread > 0 && <View style={g.notifBadge}><Text style={g.notifBadgeText}>{unread > 9 ? '9+' : unread}</Text></View>}
           </TouchableOpacity>
-          <TouchableOpacity onPress={onOpenProfile} activeOpacity={0.8}>
+          <TouchableOpacity onPress={onOpenProfile} activeOpacity={0.8} hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}>
             {user.profile_photo_url
               ? <Image source={{ uri: fixMediaUrl(user.profile_photo_url) }} style={g.avatar} />
               : <GradientAvatar name={user.first_name || user.email} size={40} radius={20} />}
@@ -844,7 +754,7 @@ export default function HomeTab({
         </View>
       </View>
 
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingTop: 105, paddingBottom: 120 }}>
+      <ScrollView directionalLockEnabled showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingTop: TOP + 52, paddingBottom: 120 }}>
 
         <View style={{ paddingHorizontal: PAD, marginBottom: SPACE.lg }}>
           <HeroCard cardWidth={heroWidthRef}>
@@ -1133,7 +1043,7 @@ const s = StyleSheet.create({
 });
 
 const g = StyleSheet.create({
-  topbar: { position: 'absolute', top: 0, left: 0, right: 0, zIndex: 50, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingTop: Platform.OS === 'ios' ? 42 : 32, paddingBottom: SPACE.sm, paddingHorizontal: PAD, backgroundColor: 'rgba(240,244,249,0.92)' },
+  topbar: { position: 'absolute', top: 0, left: 0, right: 0, zIndex: 50, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingTop: TOP, paddingBottom: SPACE.sm, paddingHorizontal: PAD, backgroundColor: 'rgba(240,244,249,0.92)' },
   topbarBrand: { fontSize: FONT.xxl, fontWeight: FONT.w8, color: COLORS.brand, letterSpacing: -0.3 },
   notifBadge: { position: 'absolute', top: -3, right: -3, minWidth: 16, height: 16, borderRadius: 8, backgroundColor: COLORS.error, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 3, borderWidth: 2, borderColor: '#f0f4f9' },
   notifBadgeText: { fontSize: 9, fontWeight: FONT.w8, color: '#fff' },
@@ -1148,7 +1058,7 @@ const g = StyleSheet.create({
   heroDayText: { fontSize: FONT.sm, fontWeight: FONT.w7, color: '#fff' },
   venueRow: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: 'rgba(255,255,255,0.12)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.2)', paddingHorizontal: SPACE.sm, paddingVertical: SPACE.xs, borderRadius: RADIUS.full },
   heroVenue: { fontSize: FONT.xs, fontWeight: FONT.w7, color: '#fff', flexShrink: 1, textAlign: 'right' },
-  heroGreeting: { fontSize: 34, fontWeight: FONT.w9, color: '#fff', lineHeight: 40, letterSpacing: -0.5 },
+  heroGreeting: { fontSize: 30, fontWeight: FONT.w9, color: '#fff', lineHeight: 36, letterSpacing: -0.5 },
   progressRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: SPACE.sm },
   progressLbl: { fontSize: 10, fontWeight: FONT.w6, color: '#fff', letterSpacing: 0.5 },
   progressPct: { fontSize: 10, fontWeight: FONT.w8, color: '#fff' },

@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import {
   View, Text, TouchableOpacity, Modal, ScrollView, StyleSheet,
-  Image, ActivityIndicator, Linking, Alert, Dimensions
+  Image, ActivityIndicator, Linking, Alert, Dimensions, Platform
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { COLORS, FONT, SPACE, RADIUS, SHADOW, fixMediaUrl } from '../theme';
+import { COLORS, FONT, SPACE, RADIUS, SHADOW, fixMediaUrl, BOTTOM } from '../theme';
 import { apiFetch } from '../api';
 import { GradientAvatar } from '../components';
 import TopicPickerModal from './TopicPickerModal';
@@ -87,7 +87,7 @@ export default function SupportModal({ visible, onDismiss, onOpenChatRoom }) {
   };
 
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onDismiss}>
+    <Modal visible={visible} transparent animationType="slide" presentationStyle="overFullScreen" onRequestClose={onDismiss}>
       <View style={s.overlay}>
         {/* Topic Picker Modal */}
         <TopicPickerModal
@@ -190,9 +190,9 @@ const s = StyleSheet.create({
   },
   headerTitle: { fontSize: FONT.md, fontWeight: FONT.w8, color: COLORS.text },
   headerSub: { fontSize: 11, color: COLORS.textTer, marginTop: 2 },
-  closeBtn: { width: 34, height: 34, borderRadius: 17, backgroundColor: '#f1f5f9', alignItems: 'center', justifyContent: 'center' },
+  closeBtn: { width: 44, height: 44, borderRadius: 22, backgroundColor: '#f1f5f9', alignItems: 'center', justifyContent: 'center' },
 
-  gridContainer: { flexDirection: 'row', flexWrap: 'wrap', gap: 12, padding: SPACE.lg, paddingBottom: 50 },
+  gridContainer: { flexDirection: 'row', flexWrap: 'wrap', gap: 12, padding: SPACE.lg, paddingBottom: 50 + BOTTOM },
 
   gridCard: {
     width: CARD_WIDTH, backgroundColor: '#fff', borderRadius: 22,

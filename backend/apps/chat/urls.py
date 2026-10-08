@@ -34,6 +34,8 @@ urlpatterns = [
     path('conversations/<uuid:conversation_id>/messages/<uuid:message_id>/delete/', views.delete_message, name='chat_message_delete'),
     path('conversations/<uuid:conversation_id>/messages/<uuid:message_id>/react/', views.toggle_reaction, name='chat_message_react'),
     path('conversations/<uuid:conversation_id>/messages/<uuid:message_id>/report/', views.report_message, name='chat_message_report'),
+    path('report-user/', views.report_user, name='chat_report_user'),
+    path('report/', views.report_user, name='chat_report_user_alias'),
     path('disconnect/', views.disconnect_user, name='chat_disconnect'),
 
     # Block / Unblock / Checks

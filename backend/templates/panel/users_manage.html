@@ -9,13 +9,20 @@
 {% endfor %}
 
 <!-- stats -->
-<div class="stats-grid" style="grid-template-columns:repeat(3,1fr);margin-bottom:24px;">
+<div class="stats-grid" style="grid-template-columns:repeat(4,1fr);margin-bottom:24px;">
   <div class="stat-card">
     <div class="stat-card-header">
       <div class="stat-icon" style="background:var(--primary-light);color:var(--primary);"><i class="fas fa-users"></i></div>
     </div>
     <div class="stat-value">{{ total }}</div>
     <div class="stat-label">Total Users</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-card-header">
+      <div class="stat-icon" style="background:#fee2e2;color:#ef4444;"><i class="fas fa-flag"></i></div>
+    </div>
+    <div class="stat-value">{{ reported_count }}</div>
+    <div class="stat-label">Reported Users (UGC)</div>
   </div>
   <div class="stat-card">
     <div class="stat-card-header">
@@ -44,8 +51,14 @@
           <option value="{{ val }}" {% if role_filter == val %}selected{% endif %}>{{ label }}</option>
         {% endfor %}
       </select>
+      <select class="form-control" name="status" style="max-width:190px;">
+        <option value="">All Statuses</option>
+        <option value="reported" {% if status_filter == 'reported' %}selected{% endif %}>Reported Only (UGC)</option>
+        <option value="suspended" {% if status_filter == 'suspended' %}selected{% endif %}>Suspended Only</option>
+        <option value="warned" {% if status_filter == 'warned' %}selected{% endif %}>Warned Only</option>
+      </select>
       <button type="submit" class="btn btn-primary btn-sm"><i class="fas fa-search"></i> Filter</button>
-      {% if search or role_filter %}
+      {% if search or role_filter or status_filter %}
         <a href="{% url 'users_manage' %}" class="btn btn-secondary btn-sm"><i class="fas fa-times"></i> Clear</a>
       {% endif %}
     </form>
@@ -66,14 +79,15 @@
             <th>Email</th>
             <th>Role</th>
             <th>Status</th>
+            <th>UGC Reports</th>
             <th>Warning & Acknowledgment</th>
             <th>Joined</th>
-            <th style="width:220px;">Actions</th>
+            <th style="width:250px;">Actions</th>
           </tr>
         </thead>
         <tbody>
           {% for u in users %}
-          <tr style="{% if not u.is_active %}background:rgba(239,68,68,0.04);{% elif u.warning_note %}background:rgba(245,158,11,0.04);{% endif %}">
+          <tr style="{% if not u.is_active %}background:rgba(239,68,68,0.04);{% elif u.pending_reports_count %}background:rgba(239,68,68,0.02);{% elif u.warning_note %}background:rgba(245,158,11,0.04);{% endif %}">
             <td>
               <div style="font-weight:600;color:var(--text);">{{ u.get_full_name|default:u.email }}</div>
               {% if u.registration_id %}<div style="font-size:11px;color:var(--primary);margin-top:2px;">{{ u.registration_id }}</div>{% endif %}
@@ -93,6 +107,19 @@
                 {% if u.suspended_reason %}<div style="font-size:11px;color:var(--danger);margin-top:4px;max-width:160px;">{{ u.suspended_reason|truncatechars:60 }}</div>{% endif %}
               {% else %}
                 <span class="badge badge-success">Active</span>
+              {% endif %}
+            </td>
+            <td>
+              {% if u.pending_reports_count > 0 %}
+                <button type="button" class="btn btn-sm" style="padding:4px 9px;background:#fee2e2;color:#b91c1c;border:1px solid #fca5a5;border-radius:12px;font-size:11px;font-weight:700;cursor:pointer;" onclick="openReportsModal('{{ u.pk }}')">
+                  <i class="fas fa-flag"></i> {{ u.pending_reports_count }} Active {% if u.pending_reports_count >= 5 %}<span style="color:#7f1d1d;display:block;font-size:9px;">(Auto-Suspended 5+)</span>{% endif %}
+                </button>
+              {% elif u.total_reports_count > 0 %}
+                <button type="button" class="btn btn-sm" style="padding:4px 8px;background:#f1f5f9;color:#64748b;border:1px solid #cbd5e1;border-radius:12px;font-size:11px;cursor:pointer;" onclick="openReportsModal('{{ u.pk }}')">
+                  <i class="fas fa-history"></i> {{ u.total_reports_count }} Past
+                </button>
+              {% else %}
+                <span style="color:var(--text-tertiary);font-size:12px;">0 reports</span>
               {% endif %}
             </td>
             <td>
@@ -128,18 +155,29 @@
             <td style="font-size:12px;color:var(--text-tertiary);white-space:nowrap;">{{ u.created_at|date:"d M Y" }}</td>
             <td>
               {% if u.role not in 'super_admin,mgmt_admin' %}
-              <div style="display:flex;gap:6px;flex-wrap:wrap;">
-                <button type="button" class="btn btn-sm" style="padding:5px 10px;background:var(--warning-light);color:var(--warning);border:1px solid var(--warning);border-radius:8px;cursor:pointer;font-size:12px;" onclick="openModal('warn','{{ u.pk }}','{{ u.get_full_name|escapejs }}','{{ u.warning_note|escapejs }}')">
+              <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;">
+                {% if u.pending_reports_count > 0 %}
+                <button type="button" class="btn btn-sm" style="padding:5px 8px;background:#fee2e2;color:#b91c1c;border:1px solid #f87171;border-radius:8px;cursor:pointer;font-size:11px;font-weight:600;" onclick="openReportsModal('{{ u.pk }}')">
+                  <i class="fas fa-flag"></i> Reports ({{ u.pending_reports_count }})
+                </button>
+                <form method="post" action="{% url 'user_dismiss_reports' u.pk %}" style="margin:0;">
+                  {% csrf_token %}
+                  <button type="submit" class="btn btn-sm" style="padding:5px 8px;background:none;border:1px solid #cbd5e1;color:#475569;border-radius:8px;cursor:pointer;font-size:11px;" title="Dismiss all reports" onclick="return confirm('Dismiss pending reports for {{ u.get_full_name|escapejs }}?')">
+                    <i class="fas fa-check"></i> Dismiss
+                  </button>
+                </form>
+                {% endif %}
+                <button type="button" class="btn btn-sm" style="padding:5px 9px;background:var(--warning-light);color:var(--warning);border:1px solid var(--warning);border-radius:8px;cursor:pointer;font-size:12px;" onclick="openModal('warn','{{ u.pk }}','{{ u.get_full_name|escapejs }}','{{ u.warning_note|escapejs }}')">
                   <i class="fas fa-exclamation-triangle"></i> Warn
                 </button>
                 {% if u.is_active %}
-                <button type="button" class="btn btn-sm" style="padding:5px 10px;background:none;border:1px solid var(--danger);color:var(--danger);border-radius:8px;cursor:pointer;font-size:12px;" onclick="openModal('suspend','{{ u.pk }}','{{ u.get_full_name|escapejs }}','')">
+                <button type="button" class="btn btn-sm" style="padding:5px 9px;background:none;border:1px solid var(--danger);color:var(--danger);border-radius:8px;cursor:pointer;font-size:12px;" onclick="openModal('suspend','{{ u.pk }}','{{ u.get_full_name|escapejs }}','')">
                   <i class="fas fa-ban"></i> Suspend
                 </button>
                 {% else %}
                 <form method="post" action="{% url 'user_unsuspend' u.pk %}" style="margin:0;">
                   {% csrf_token %}
-                  <button type="submit" class="btn btn-sm" style="padding:5px 10px;background:var(--success-light);color:var(--success);border:1px solid var(--success);border-radius:8px;cursor:pointer;font-size:12px;" onclick="return confirm('Restore {{ u.get_full_name|escapejs }}?')">
+                  <button type="submit" class="btn btn-sm" style="padding:5px 9px;background:var(--success-light);color:var(--success);border:1px solid var(--success);border-radius:8px;cursor:pointer;font-size:12px;" onclick="return confirm('Restore {{ u.get_full_name|escapejs }}?')">
                     <i class="fas fa-check-circle"></i> Restore
                   </button>
                 </form>
@@ -147,7 +185,7 @@
                 {% if u.warning_note %}
                 <form method="post" action="{% url 'user_clear_warning' u.pk %}" style="margin:0;">
                   {% csrf_token %}
-                  <button type="submit" class="btn btn-sm" style="padding:5px 10px;background:none;border:1px solid var(--text-tertiary);color:var(--text-tertiary);border-radius:8px;cursor:pointer;font-size:12px;" title="Remove warning completely" onclick="return confirm('Clear warning for {{ u.get_full_name|escapejs }}?')">
+                  <button type="submit" class="btn btn-sm" style="padding:5px 9px;background:none;border:1px solid var(--text-tertiary);color:var(--text-tertiary);border-radius:8px;cursor:pointer;font-size:12px;" title="Remove warning completely" onclick="return confirm('Clear warning for {{ u.get_full_name|escapejs }}?')">
                     <i class="fas fa-times"></i> Clear
                   </button>
                 </form>
@@ -160,7 +198,7 @@
           </tr>
           {% empty %}
           <tr>
-            <td colspan="7">
+            <td colspan="8">
               <div class="empty-state">
                 <i class="fas fa-users"></i>
                 <h3>No users found</h3>
@@ -174,7 +212,7 @@
   </div>
 </div>
 
-<!-- Modal -->
+<!-- Modal Warn/Suspend -->
 <div id="actionModal" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);z-index:1000;align-items:center;justify-content:center;">
   <div style="background:#fff;border-radius:16px;padding:28px;max-width:460px;width:90%;box-shadow:0 20px 60px rgba(0,0,0,0.2);">
     <h3 id="modalTitle" style="margin:0 0 8px;font-size:18px;"></h3>
@@ -195,11 +233,48 @@
     </form>
   </div>
 </div>
+
+<!-- UGC Reports Review Modal -->
+<div id="reportsModal" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);z-index:1001;align-items:center;justify-content:center;">
+  <div style="background:#fff;border-radius:16px;padding:26px;max-width:680px;width:92%;max-height:85vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,0.25);">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:16px;">
+      <div>
+        <h3 id="repModalUserName" style="margin:0;font-size:18px;color:var(--text);">User UGC Reports</h3>
+        <p id="repModalUserEmail" style="margin:2px 0 0;font-size:13px;color:var(--text-sec);"></p>
+      </div>
+      <button type="button" onclick="closeReportsModal()" style="background:none;border:none;font-size:24px;color:#94a3b8;cursor:pointer;line-height:1;">&times;</button>
+    </div>
+    
+    <div id="repModalSuspendedNotice" style="display:none;background:#fee2e2;border:1px solid #fca5a5;color:#991b1b;padding:10px 14px;border-radius:8px;font-size:13px;margin-bottom:16px;">
+      <i class="fas fa-ban"></i> <strong>User Suspended:</strong> <span id="repModalSuspendedReason"></span>
+    </div>
+
+    <div id="reportsListContainer" style="margin-bottom:20px;">
+      <div style="text-align:center;padding:20px;color:#94a3b8;"><i class="fas fa-spinner fa-spin"></i> Loading reports…</div>
+    </div>
+
+    <div style="display:flex;gap:10px;justify-content:flex-end;border-top:1px solid #f1f5f9;padding-top:16px;flex-wrap:wrap;">
+      <form id="repDismissForm" method="POST" style="margin:0;">
+        <input type="hidden" name="csrfmiddlewaretoken" value="">
+        <button type="submit" class="btn btn-sm" style="background:#f1f5f9;color:#475569;border:1px solid #cbd5e1;border-radius:8px;padding:8px 14px;cursor:pointer;font-weight:600;">
+          <i class="fas fa-check-circle"></i> Dismiss All Reports
+        </button>
+      </form>
+      <button type="button" id="repModalSuspendBtn" class="btn btn-sm" style="background:var(--danger);color:#fff;border:none;border-radius:8px;padding:8px 14px;cursor:pointer;font-weight:600;">
+        <i class="fas fa-ban"></i> Suspend Account
+      </button>
+      <button type="button" class="btn btn-secondary btn-sm" onclick="closeReportsModal()" style="border-radius:8px;padding:8px 14px;">Close</button>
+    </div>
+  </div>
+</div>
 {% endblock %}
 
 {% block scripts %}
 <script>
 const csrf = '{{ csrf_token }}';
+let activeUserPk = null;
+let activeUserName = '';
+
 function openModal(action, pk, name, existing) {
   const modal = document.getElementById('actionModal');
   const form = document.getElementById('modalForm');
@@ -242,7 +317,96 @@ function openModal(action, pk, name, existing) {
   modal.style.display = 'flex';
   input.focus();
 }
+
 function closeModal() { document.getElementById('actionModal').style.display = 'none'; }
 document.getElementById('actionModal').addEventListener('click', function(e) { if (e.target === this) closeModal(); });
+
+async function openReportsModal(pk) {
+  activeUserPk = pk;
+  const modal = document.getElementById('reportsModal');
+  const listContainer = document.getElementById('reportsListContainer');
+  const nameEl = document.getElementById('repModalUserName');
+  const emailEl = document.getElementById('repModalUserEmail');
+  const noticeEl = document.getElementById('repModalSuspendedNotice');
+  const reasonEl = document.getElementById('repModalSuspendedReason');
+  const dismissForm = document.getElementById('repDismissForm');
+  dismissForm.querySelector('[name=csrfmiddlewaretoken]').value = csrf;
+  dismissForm.action = '/panel/users/' + pk + '/dismiss-reports/';
+
+  modal.style.display = 'flex';
+  listContainer.innerHTML = '<div style="text-align:center;padding:24px;color:#94a3b8;"><i class="fas fa-spinner fa-spin"></i> Loading reports…</div>';
+
+  try {
+    const res = await fetch('/panel/users/' + pk + '/reports-data/');
+    const data = await res.json();
+    activeUserName = data.user_name;
+    nameEl.textContent = data.user_name + ' — UGC Reports';
+    emailEl.textContent = data.user_email;
+
+    if (!data.is_active) {
+      noticeEl.style.display = 'block';
+      reasonEl.textContent = data.suspended_reason || 'Account suspended.';
+    } else {
+      noticeEl.style.display = 'none';
+    }
+
+    const suspendBtn = document.getElementById('repModalSuspendBtn');
+    if (!data.is_active) {
+      suspendBtn.style.display = 'none';
+    } else {
+      suspendBtn.style.display = 'inline-block';
+      suspendBtn.onclick = () => {
+        closeReportsModal();
+        openModal('suspend', pk, data.user_name, '');
+      };
+    }
+
+    if (!data.reports || data.reports.length === 0) {
+      listContainer.innerHTML = '<div style="text-align:center;padding:24px;color:#94a3b8;">No reports filed for this user.</div>';
+      return;
+    }
+
+    let html = '<div style="display:flex;flex-direction:column;gap:12px;">';
+    data.reports.forEach((r, idx) => {
+      const isPending = r.status === 'pending';
+      const statusBadge = isPending
+        ? '<span class="badge badge-danger" style="background:#fee2e2;color:#dc2626;">Pending</span>'
+        : (r.status === 'actioned'
+            ? '<span class="badge badge-success" style="background:#d1fae5;color:#059669;">Actioned</span>'
+            : '<span class="badge badge-secondary" style="background:#f1f5f9;color:#64748b;">Dismissed</span>');
+
+      html += `
+        <div style="border:1px solid #e2e8f0;border-radius:10px;padding:14px;background:#f8fafc;">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+            <div style="font-weight:600;font-size:13px;color:var(--text);">
+              <i class="fas fa-user-shield" style="color:var(--primary);margin-right:4px;"></i> Reported by: ${r.reporter_name} <span style="font-weight:400;color:var(--text-sec);font-size:12px;">(${r.reporter_email})</span>
+            </div>
+            <div>${statusBadge}</div>
+          </div>
+          <div style="font-size:13px;color:#b45309;font-weight:600;margin-bottom:4px;">
+            Reason: <span style="color:var(--text);font-weight:500;">${r.reason}</span>
+          </div>
+          ${r.detail ? `<div style="font-size:12px;color:var(--text-sec);background:#fff;padding:8px;border-radius:6px;border:1px solid #e2e8f0;margin-bottom:6px;"><em>"${r.detail}"</em></div>` : ''}
+          <div style="font-size:11px;color:var(--text-tertiary);display:flex;justify-content:space-between;">
+            <span>Reported at: ${r.created_at}</span>
+            ${r.action_taken ? `<span>Action: ${r.action_taken}</span>` : ''}
+          </div>
+        </div>
+      `;
+    });
+    html += '</div>';
+    listContainer.innerHTML = html;
+  } catch (err) {
+    listContainer.innerHTML = '<div style="color:var(--danger);padding:16px;">Failed to load reports.</div>';
+  }
+}
+
+function closeReportsModal() {
+  document.getElementById('reportsModal').style.display = 'none';
+}
+document.getElementById('reportsModal').addEventListener('click', function(e) {
+  if (e.target === this) closeReportsModal();
+});
 </script>
 {% endblock %}
+

@@ -19,10 +19,10 @@
       "buildNumber": "2",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
-        "NSCameraUsageDescription": "ETD 2026 uses the camera to scan QR codes and take photos.",
-        "NSPhotoLibraryUsageDescription": "ETD 2026 needs photo library access to upload photos.",
-        "NSLocationWhenInUseUsageDescription": "ETD 2026 uses your location to tag selfie point photos.",
-        "NSMotionUsageDescription": "ETD 2026 uses motion sensors for shake-to-share contact cards.",
+        "NSCameraUsageDescription": "ETD 2026 requires camera access to scan attendee QR codes for event check-in and capture photos for your profile and conference feed.",
+        "NSPhotoLibraryUsageDescription": "ETD 2026 requires photo library access to select and upload your profile picture, session presentations, and conference gallery photos.",
+        "NSLocationWhenInUseUsageDescription": "ETD 2026 uses your location during the symposium to verify campus checkpoint attendance and navigate interactive selfie spots.",
+        "NSMotionUsageDescription": "ETD 2026 uses motion sensors for the shake-to-connect networking feature with nearby attendees.",
         "NSAppTransportSecurity": {
           "NSAllowsArbitraryLoadsInWebContent": true
         }
@@ -55,7 +55,7 @@
       [
         "expo-camera",
         {
-          "cameraPermission": "ETD 2026 uses the camera to scan QR codes and take photos.",
+          "cameraPermission": "ETD 2026 requires camera access to scan attendee QR codes for event check-in and capture photos for your profile and conference feed.",
           "microphonePermission": false
         }
       ],

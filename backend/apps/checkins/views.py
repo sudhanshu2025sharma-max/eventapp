@@ -371,6 +371,12 @@ def network_list(request):
 
     if getattr(request.user, 'is_authenticated', False):
         users = users.exclude(id=request.user.id)
+        from apps.chat.models import BlockedUser
+        blocked_ids = set(BlockedUser.objects.filter(blocker=request.user).values_list('blocked_id', flat=True))
+        blocked_by_ids = set(BlockedUser.objects.filter(blocked=request.user).values_list('blocker_id', flat=True))
+        all_blocked = blocked_ids | blocked_by_ids
+        if all_blocked:
+            users = users.exclude(id__in=all_blocked)
 
     if search:
         users = users.filter(

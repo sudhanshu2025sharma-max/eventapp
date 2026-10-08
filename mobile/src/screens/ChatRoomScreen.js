@@ -11,6 +11,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, FONT, SPACE, RADIUS, TOP, BOTTOM, API_URL, API_HEADERS, fixMediaUrl } from '../theme';
 import { GradientAvatar } from '../components';
 import { useKeyboardHeight } from '../useKeyboard';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const POLL_MS = 3000;
 const { width: SW, height: SH } = Dimensions.get('window');
@@ -23,6 +24,14 @@ const REACTIONS = [
 ];
 
 const REPORT_REASONS = ['spam', 'harassment', 'offensive', 'other'];
+
+const USER_REPORT_REASONS = [
+  { key: 'harassment',    label: 'Harassment or Bullying' },
+  { key: 'inappropriate', label: 'Inappropriate or Offensive Content' },
+  { key: 'spam',          label: 'Spam or Scam' },
+  { key: 'impersonation', label: 'Impersonation' },
+  { key: 'other',         label: 'Other Policy Violation' },
+];
 
 function Tick({ delivered, read }) {
   if (!delivered) return null;
@@ -71,6 +80,11 @@ export default function ChatRoomScreen({ tokens, conversationId, onBack, onDisco
   const [reactionTarget, setReactionTarget] = useState(null); // message for reaction picker
   const [reportTarget,   setReportTarget]  = useState(null);  // message for report modal
   const [reportReason,   setReportReason]  = useState('spam');
+  const [reportUserOpen, setReportUserOpen] = useState(false);
+  const [reportUserReason, setReportUserReason] = useState('harassment');
+  const [reportUserDetail, setReportUserDetail] = useState('');
+  const [submittingUserReport, setSubmittingUserReport] = useState(false);
+  const [blocking,     setBlocking]       = useState(false);
   const [isMuted,      setIsMuted]        = useState(false);
   const kbHeight = useKeyboardHeight();
 
@@ -372,6 +386,82 @@ export default function ChatRoomScreen({ tokens, conversationId, onBack, onDisco
     );
   };
 
+  const handleBlockUser = () => {
+    if (!other?.id || blocking) return;
+    setMenuOpen(false);
+    Alert.alert(
+      `Block ${other.name || 'User'}?`,
+      'They will no longer be able to message you or see your connection. This chat will be closed.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Block User',
+          style: 'destructive',
+          onPress: async () => {
+            setBlocking(true);
+            try {
+              const r = await fetch(`${API_URL}/chat/block/`, {
+                method: 'POST',
+                headers: { ...API_HEADERS, Authorization: `Bearer ${tokens?.access}` },
+                body: JSON.stringify({ user_id: other.id }),
+              });
+              let d = {};
+              try { d = await r.json(); } catch {}
+              if (r.ok && d.success) {
+                await AsyncStorage.multiRemove(['net_attendees', 'net_speakers', 'net_discover']).catch(() => {});
+                Alert.alert('User Blocked', `${other.name || 'User'} has been blocked.`);
+                onDisconnected?.() || onBack();
+              } else {
+                Alert.alert('Error', d.error || 'Could not block user.');
+                setBlocking(false);
+              }
+            } catch {
+              Alert.alert('Error', 'Network error while attempting to block user.');
+              setBlocking(false);
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const handleSubmitUserReport = async () => {
+    if (!other?.id || submittingUserReport) return;
+    setSubmittingUserReport(true);
+    try {
+      const res = await fetch(`${API_URL}/chat/report-user/`, {
+        method: 'POST',
+        headers: { ...API_HEADERS, Authorization: `Bearer ${tokens?.access}` },
+        body: JSON.stringify({
+          user_id: other.id,
+          reason: reportUserReason,
+          detail: reportUserDetail,
+          conversation_id: conversationId,
+        }),
+      });
+      const data = await res.json();
+      setReportUserOpen(false);
+      setReportUserDetail('');
+      setSubmittingUserReport(false);
+
+      if (data.success) {
+        Alert.alert(
+          'Report Submitted',
+          'Thank you for reporting this user. Our moderation team will review this report.\n\nWould you also like to block this user?',
+          [
+            { text: 'No', style: 'cancel' },
+            { text: 'Block User', style: 'destructive', onPress: handleBlockUser },
+          ]
+        );
+      } else {
+        Alert.alert('Error', data.error || 'Failed to submit report.');
+      }
+    } catch {
+      setSubmittingUserReport(false);
+      Alert.alert('Error', 'Network error while submitting report.');
+    }
+  };
+
   const handleDisconnect = () => {
     if (!other?.id || disconnecting) return;
     setMenuOpen(false);
@@ -391,15 +481,18 @@ export default function ChatRoomScreen({ tokens, conversationId, onBack, onDisco
                 headers: { ...API_HEADERS, Authorization: `Bearer ${tokens?.access}` },
                 body: JSON.stringify({ user_id: other.id }),
               });
-              const d = await r.json();
-              if (d.success) {
-                onDisconnected?.();
+              let d = {};
+              try { d = await r.json(); } catch {}
+              if (r.ok && d.success) {
+                await AsyncStorage.multiRemove(['net_attendees', 'net_speakers', 'net_discover']).catch(() => {});
+                Alert.alert('Connection Removed', `You are no longer connected with ${other.name}.`);
+                onDisconnected?.() || onBack();
               } else {
                 Alert.alert('Error', d.error || 'Could not disconnect.');
                 setDisconnecting(false);
               }
             } catch {
-              Alert.alert('Error', 'Network error.');
+              Alert.alert('Error', 'Network error while removing connection.');
               setDisconnecting(false);
             }
           },
@@ -443,13 +536,42 @@ export default function ChatRoomScreen({ tokens, conversationId, onBack, onDisco
         </TouchableOpacity>
       </LinearGradient>
 
-      {/* Disconnect menu modal */}
+      {/* Disconnect & Moderation menu modal */}
       <Modal visible={menuOpen} transparent animationType="fade" presentationStyle="overFullScreen" onRequestClose={() => setMenuOpen(false)}>
         <TouchableOpacity style={s.menuOverlay} activeOpacity={1} onPress={() => setMenuOpen(false)}>
           <View style={s.menuCard}>
             <View style={s.menuHeader}>
               <Text style={s.menuHeaderT}>Conversation Options</Text>
             </View>
+
+            <TouchableOpacity
+              style={s.menuRow}
+              onPress={() => { setMenuOpen(false); setReportUserOpen(true); }}
+              activeOpacity={0.7}
+            >
+              <View style={[s.menuIconWrap, { backgroundColor: '#fef3c7' }]}>
+                <Ionicons name="flag" size={18} color="#d97706" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={s.menuRowT}>Report User</Text>
+                <Text style={s.menuRowSub}>Report harassment, spam, or objectionable content</Text>
+              </View>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={s.menuRow}
+              onPress={handleBlockUser}
+              activeOpacity={0.7}
+            >
+              <View style={[s.menuIconWrap, { backgroundColor: '#fee2e2' }]}>
+                <Ionicons name="ban" size={18} color="#dc2626" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={[s.menuRowT, { color: '#dc2626' }]}>Block User</Text>
+                <Text style={s.menuRowSub}>Block messages and disconnect from this person</Text>
+              </View>
+            </TouchableOpacity>
+
             <TouchableOpacity style={s.menuRow} onPress={handleDisconnect} activeOpacity={0.7}>
               <View style={s.menuIconWrap}>
                 <Ionicons name="person-remove" size={18} color="#dc2626" />
@@ -459,6 +581,7 @@ export default function ChatRoomScreen({ tokens, conversationId, onBack, onDisco
                 <Text style={s.menuRowSub}>Delete chat and disconnect from this person</Text>
               </View>
             </TouchableOpacity>
+
             <TouchableOpacity style={[s.menuRow, { borderBottomWidth: 0 }]} onPress={() => setMenuOpen(false)} activeOpacity={0.7}>
               <View style={[s.menuIconWrap, { backgroundColor: '#f1f5f9' }]}>
                 <Ionicons name="close" size={18} color="#64748b" />
@@ -606,6 +729,48 @@ export default function ChatRoomScreen({ tokens, conversationId, onBack, onDisco
               <Text style={s.reportBtnText}>Submit Report</Text>
             </TouchableOpacity>
             <TouchableOpacity onPress={() => setReportTarget(null)} style={{ alignItems: 'center', paddingVertical: SPACE.md }}>
+              <Text style={{ fontSize: FONT.sm, color: COLORS.textTer }}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* ── Report User Modal (UGC Moderation) ── */}
+      <Modal visible={reportUserOpen} transparent animationType="slide" presentationStyle="overFullScreen" onRequestClose={() => setReportUserOpen(false)}>
+        <View style={s.reportOverlay}>
+          <TouchableOpacity style={StyleSheet.absoluteFill} activeOpacity={1} onPress={() => setReportUserOpen(false)} />
+          <View style={s.reportSheet}>
+            <View style={s.reportHandle} />
+            <Text style={s.reportTitle}>Report {other?.name || 'User'}</Text>
+            <Text style={s.reportSubtitle}>Why are you reporting this attendee? All reports are confidential and reviewed promptly.</Text>
+            {USER_REPORT_REASONS.map(r => (
+              <TouchableOpacity
+                key={r.key}
+                style={[s.reportOption, reportUserReason === r.key && s.reportOptionActive]}
+                onPress={() => setReportUserReason(r.key)}
+                activeOpacity={0.75}
+              >
+                <View style={[s.reportRadio, reportUserReason === r.key && s.reportRadioActive]}>
+                  {reportUserReason === r.key && <View style={s.reportRadioDot} />}
+                </View>
+                <Text style={[s.reportOptionText, reportUserReason === r.key && { color: COLORS.brand, fontWeight: FONT.w7 }]}>
+                  {r.label}
+                </Text>
+              </TouchableOpacity>
+            ))}
+            <TextInput
+              style={s.reportInput}
+              placeholder="Additional details (optional)..."
+              placeholderTextColor={COLORS.textTer}
+              value={reportUserDetail}
+              onChangeText={setReportUserDetail}
+              multiline
+              numberOfLines={3}
+            />
+            <TouchableOpacity style={s.reportBtn} onPress={handleSubmitUserReport} disabled={submittingUserReport} activeOpacity={0.85}>
+              <Text style={s.reportBtnText}>{submittingUserReport ? 'Submitting…' : 'Submit User Report'}</Text>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={() => setReportUserOpen(false)} style={{ alignItems: 'center', paddingVertical: SPACE.md }}>
               <Text style={{ fontSize: FONT.sm, color: COLORS.textTer }}>Cancel</Text>
             </TouchableOpacity>
           </View>
@@ -837,6 +1002,18 @@ const s = StyleSheet.create({
     paddingVertical: SPACE.lg, alignItems: 'center', marginTop: SPACE.lg,
   },
   reportBtnText: { fontSize: FONT.md, fontWeight: FONT.w7, color: '#fff' },
+  reportInput: {
+    backgroundColor: '#f8fafc',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    borderRadius: RADIUS.md,
+    padding: SPACE.md,
+    fontSize: FONT.sm,
+    color: COLORS.text,
+    minHeight: 64,
+    marginTop: SPACE.xs,
+    textAlignVertical: 'top',
+  },
 
   // Image viewer
   imageViewer: {

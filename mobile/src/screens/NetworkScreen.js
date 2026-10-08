@@ -694,8 +694,19 @@ export default function NetworkScreen({
   const [cardTarget, setCardTarget] = useState(null);
   const [speakerTarget, setSpeakerTarget] = useState(null);
   const [searchVisible, setSearchVisible] = useState(false);
+  const [blockedUserIds, setBlockedUserIds] = useState(new Set());
 
   const searchTimer = useRef(null);
+
+  const fetchBlockedIds = useCallback(async () => {
+    try {
+      const r = await fetch(`${API_URL}/chat/blocked/`, { headers: authH(tokens) });
+      const d = await r.json();
+      if (Array.isArray(d?.blocked)) {
+        setBlockedUserIds(new Set(d.blocked.map(b => String(b.id))));
+      }
+    } catch {}
+  }, [tokens]);
 
   const loadStatuses = useCallback(async (ids) => {
     if (!ids?.length) return;
@@ -713,6 +724,10 @@ export default function NetworkScreen({
       if (d.statuses) {
         setConnStatus(p => ({ ...p, ...d.statuses }));
         setCache(cacheKey, d.statuses);
+        const newlyBlocked = Object.keys(d.statuses).filter(uid => d.statuses[uid]?.status === 'blocked');
+        if (newlyBlocked.length > 0) {
+          setBlockedUserIds(prev => new Set([...prev, ...newlyBlocked]));
+        }
       }
     } catch {}
   }, [tokens]);
@@ -836,6 +851,7 @@ export default function NetworkScreen({
 
       setLoading(true);
       await Promise.all([
+        fetchBlockedIds(),
         fetchAttendeesList('', '', false),
         fetchDiscoverData(),
         fetchSpeakersList('', false),
@@ -846,12 +862,14 @@ export default function NetworkScreen({
 
   const refreshAttendees = async () => {
     setRefreshing(true);
+    fetchBlockedIds();
     await fetchAttendeesList(search, activeTag, false);
     setRefreshing(false);
   };
 
   const refreshSpeakers = async () => {
     setRefreshing(true);
+    fetchBlockedIds();
     await fetchSpeakersList(search, false);
     setRefreshing(false);
   };
@@ -937,13 +955,21 @@ export default function NetworkScreen({
     }
   };
 
+  const isBlocked = useCallback((id) => {
+    return blockedUserIds.has(String(id)) || connStatus[id]?.status === 'blocked';
+  }, [blockedUserIds, connStatus]);
+
+  const visibleAttendees = useMemo(() => attendees.filter(a => !isBlocked(a.id)), [attendees, isBlocked]);
+  const visibleSpeakers = useMemo(() => speakers.filter(s => !isBlocked(s.id)), [speakers, isBlocked]);
+  const visibleMatches = useMemo(() => (discover?.matches || []).filter(m => !isBlocked(m.id)), [discover?.matches, isBlocked]);
+
   const universeParticipants = useMemo(() => {
     const map = new Map();
-    [...attendees, ...speakers].forEach(p => {
+    [...visibleAttendees, ...visibleSpeakers].forEach(p => {
       if (p?.id && !map.has(p.id)) map.set(p.id, p);
     });
     return Array.from(map.values());
-  }, [attendees, speakers]);
+  }, [visibleAttendees, visibleSpeakers]);
 
   if (!isCheckedIn) {
     return (
@@ -1094,7 +1120,7 @@ export default function NetworkScreen({
               <SkeletonList />
             ) : (
               <FlatList
-                data={attendees}
+                data={visibleAttendees}
                 keyExtractor={(p, idx) => p?.id ? String(p.id) : `att-${idx}`}
                 showsVerticalScrollIndicator={false}
                 contentContainerStyle={_s.listContent}
@@ -1136,18 +1162,18 @@ export default function NetworkScreen({
         {/* TAB 3: FOR YOU */}
         {activeTab === 'For You' && (
           <FlatList
-            data={discover?.matches || []}
+            data={visibleMatches}
             keyExtractor={(p, idx) => p?.id ? String(p.id) : `disc-${idx}`}
             showsVerticalScrollIndicator={false}
             contentContainerStyle={_s.listContent}
             ListHeaderComponent={
               <View>
-                {discover?.matches?.[spotIdx] && (
+                {visibleMatches?.[spotIdx % (visibleMatches.length || 1)] && (
                   <DiscoverySpotlight
-                    person={discover.matches[spotIdx]}
-                    cs={connStatus[discover.matches[spotIdx].id]}
+                    person={visibleMatches[spotIdx % (visibleMatches.length || 1)]}
+                    cs={connStatus[visibleMatches[spotIdx % (visibleMatches.length || 1)].id]}
                     onAction={handlePersonPress}
-                    onShuffle={() => setSpotIdx(i => (i + 1) % (discover.matches.length || 1))}
+                    onShuffle={() => setSpotIdx(i => (i + 1) % (visibleMatches.length || 1))}
                   />
                 )}
                 <ConferenceCloud
@@ -1172,7 +1198,7 @@ export default function NetworkScreen({
         {/* TAB 4: SPEAKERS */}
         {activeTab === 'Speakers' && (
           <FlatList
-            data={speakers}
+            data={visibleSpeakers}
             keyExtractor={(p, idx) => p?.id ? String(p.id) : `spk-${idx}`}
             numColumns={2}
             columnWrapperStyle={{ justifyContent: 'space-between', paddingHorizontal: SPACE.xl }}

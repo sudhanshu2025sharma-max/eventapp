@@ -909,14 +909,22 @@ def password_reset_confirm(request, uidb64, token):
     })
 
 
-# ── user management (warn / suspend / unsuspend) ──────────────────────────
+# ── user management (warn / suspend / unsuspend / UGC reports) ────────────
 
 @login_required(login_url='/panel/login/')
 def users_manage(request):
-    search = request.GET.get('search', '').strip()
-    role   = request.GET.get('role', '').strip()
+    search        = request.GET.get('search', '').strip()
+    role          = request.GET.get('role', '').strip()
+    status_filter = request.GET.get('status', '').strip()
 
-    qs = User.objects.all().order_by('role', 'first_name', 'last_name')
+    from .models import UserReport
+    from django.db.models import Count, Q
+
+    qs = User.objects.all().annotate(
+        pending_reports_count=Count('reports_received', filter=Q(reports_received__status='pending')),
+        total_reports_count=Count('reports_received'),
+    ).order_by('-pending_reports_count', 'role', 'first_name', 'last_name')
+
     if search:
         qs = qs.filter(
             Q(first_name__icontains=search) | Q(last_name__icontains=search) |
@@ -925,15 +933,28 @@ def users_manage(request):
     if role:
         qs = qs.filter(role=role)
 
+    if status_filter == 'reported':
+        qs = qs.filter(pending_reports_count__gt=0)
+    elif status_filter == 'suspended':
+        qs = qs.filter(is_active=False)
+    elif status_filter == 'warned':
+        qs = qs.exclude(warning_note='')
+
     roles = User.Role.choices
+
+    total_reported_users = User.objects.annotate(
+        pr_count=Count('reports_received', filter=Q(reports_received__status='pending'))
+    ).filter(pr_count__gt=0).count()
 
     return render(request, 'panel/users_manage.html', {
         'users': qs,
-        'total': qs.count(),
-        'suspended_count': qs.filter(is_active=False).count(),
-        'warned_count': qs.exclude(warning_note='').count(),
+        'total': User.objects.count(),
+        'suspended_count': User.objects.filter(is_active=False).count(),
+        'warned_count': User.objects.exclude(warning_note='').count(),
+        'reported_count': total_reported_users,
         'search': search,
         'role_filter': role,
+        'status_filter': status_filter,
         'roles': roles,
     })
 
@@ -961,7 +982,7 @@ def user_warn(request, pk):
             from apps.notifications.models import Notification as Notif
             from apps.notifications import fcm
             notif = Notif.objects.create(
-                title='\u26a0\ufe0f Warning from Admin',
+                title='⚠️ Warning from Admin',
                 body=note,
                 target_type='user', target_user=user_target,
                 sent_by=request.user, status='pending',
@@ -989,6 +1010,15 @@ def user_suspend(request, pk):
         user_target.is_active = False
         user_target.suspended_reason = reason
         user_target.save(update_fields=['is_active', 'suspended_reason'])
+
+        # Update pending reports to actioned
+        from .models import UserReport
+        UserReport.objects.filter(reported_user=user_target, status='pending').update(
+            status='actioned',
+            action_taken=f'Suspended by {request.user.get_full_name() or request.user.email}',
+            reviewed_by=request.user,
+            reviewed_at=timezone.now(),
+        )
 
         try:
             from apps.notifications.models import DeviceToken
@@ -1040,6 +1070,49 @@ def user_clear_warning(request, pk):
         user_target.save(update_fields=['warning_note', 'warning_acknowledged', 'warning_acknowledged_at', 'warning_response'])
         messages.success(request, f'Warning cleared for {user_target.get_full_name()}.')
     return redirect('users_manage')
+
+
+@login_required(login_url='/panel/login/')
+def user_dismiss_reports(request, pk):
+    user_target = get_object_or_404(User, pk=pk)
+    if request.method == 'POST':
+        from .models import UserReport
+        updated = UserReport.objects.filter(reported_user=user_target, status='pending').update(
+            status='dismissed',
+            action_taken=f'Dismissed by {request.user.get_full_name() or request.user.email}',
+            reviewed_by=request.user,
+            reviewed_at=timezone.now(),
+        )
+        messages.success(request, f'{updated} pending report(s) for {user_target.get_full_name()} dismissed.')
+    return redirect('users_manage')
+
+
+@login_required(login_url='/panel/login/')
+def user_reports_modal_data(request, pk):
+    from django.http import JsonResponse
+    user_target = get_object_or_404(User, pk=pk)
+    from .models import UserReport
+    reports = UserReport.objects.filter(reported_user=user_target).select_related('reporter').order_by('-created_at')
+    data = []
+    for r in reports:
+        data.append({
+            'id': str(r.id),
+            'reporter_name': r.reporter.get_full_name() or r.reporter.email,
+            'reporter_email': r.reporter.email,
+            'reason': r.get_reason_display(),
+            'detail': r.detail,
+            'status': r.status,
+            'action_taken': r.action_taken,
+            'created_at': r.created_at.strftime('%d %b %Y, %H:%M'),
+        })
+    return JsonResponse({
+        'user_name': user_target.get_full_name() or user_target.email,
+        'user_email': user_target.email,
+        'is_active': user_target.is_active,
+        'suspended_reason': user_target.suspended_reason,
+        'reports': data
+    })
+
 
 
 # ── admin_required decorator ───────────────────────────────────────────────

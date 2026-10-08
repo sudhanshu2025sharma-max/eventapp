@@ -2,12 +2,13 @@ import SupportModal from './SupportModal';
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   View, Text, TouchableOpacity, ScrollView, StyleSheet,
-  Platform, Image, Modal, Share, Linking, Alert
+  Platform, Image, Modal, Share, Linking, Alert, ActivityIndicator
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS, FONT, SPACE, RADIUS, SHADOW, TOP, API_URL, API_HEADERS, fixMediaUrl } from '../theme';
 import { GradientAvatar, FadeIn, IconBox, Divider } from '../components';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // ── Interactive Certificate Modal ─────────────────────────────────────────────
 function CertificateModal({ visible, user, onDismiss }) {
@@ -137,6 +138,298 @@ const cert = StyleSheet.create({
   closeBtnText: { fontSize: FONT.xs, fontWeight: FONT.w6, color: COLORS.textTer },
 });
 
+// ── Blocked Accounts Modal ────────────────────────────────────────────────────
+function BlockedUsersModal({ visible, tokens, onDismiss }) {
+  const [blockedList, setBlockedList] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [unblockingId, setUnblockingId] = useState(null);
+
+  const fetchBlocked = useCallback(async () => {
+    if (!tokens?.access) return;
+    setLoading(true);
+    try {
+      const res = await fetch(`${API_URL}/chat/blocked/`, {
+        headers: { ...API_HEADERS, Authorization: `Bearer ${tokens.access}` },
+      });
+      const data = await res.json();
+      setBlockedList(data.blocked || []);
+    } catch {
+      // silent
+    } finally {
+      setLoading(false);
+    }
+  }, [tokens]);
+
+  useEffect(() => {
+    if (visible) {
+      fetchBlocked();
+    }
+  }, [visible, fetchBlocked]);
+
+  const handleUnblock = (person) => {
+    Alert.alert(
+      'Unblock Attendee',
+      `Are you sure you want to unblock ${person.name || person.email}? They will be visible again in attendee directories and will be able to send you messages and connection requests.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Unblock',
+          style: 'default',
+          onPress: async () => {
+            setUnblockingId(person.id);
+            try {
+              const res = await fetch(`${API_URL}/chat/unblock/`, {
+                method: 'POST',
+                headers: { ...API_HEADERS, Authorization: `Bearer ${tokens.access}` },
+                body: JSON.stringify({ user_id: person.id }),
+              });
+              const data = await res.json();
+              if (data.success) {
+                setBlockedList(prev => prev.filter(b => b.id !== person.id));
+                await AsyncStorage.multiRemove(['net_attendees', 'net_speakers', 'net_discover']).catch(() => {});
+                Alert.alert('Attendee Unblocked', `${person.name || 'User'} has been unblocked.`);
+              } else {
+                Alert.alert('Error', data.error || 'Failed to unblock attendee.');
+              }
+            } catch {
+              Alert.alert('Error', 'Network error while attempting to unblock.');
+            } finally {
+              setUnblockingId(null);
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  return (
+    <Modal visible={visible} transparent animationType="slide" presentationStyle="overFullScreen" onRequestClose={onDismiss}>
+      <View style={blk.overlay}>
+        <View style={blk.card}>
+          {/* Header */}
+          <View style={blk.header}>
+            <View style={{ flex: 1 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <View style={blk.iconRing}>
+                  <Ionicons name="ban" size={17} color="#dc2626" />
+                </View>
+                <Text style={blk.title}>Blocked Accounts</Text>
+              </View>
+              <Text style={blk.subtitle}>
+                Blocked accounts cannot send you messages or appear in attendee lists.
+              </Text>
+            </View>
+            <TouchableOpacity onPress={onDismiss} style={blk.closeBtn} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+              <Ionicons name="close" size={22} color={COLORS.textSec} />
+            </TouchableOpacity>
+          </View>
+
+          {/* Body */}
+          <View style={blk.body}>
+            {loading ? (
+              <View style={blk.centerBox}>
+                <ActivityIndicator size="small" color={COLORS.brand} />
+                <Text style={blk.loadingText}>Loading blocked accounts…</Text>
+              </View>
+            ) : blockedList.length === 0 ? (
+              <View style={blk.centerBox}>
+                <View style={blk.emptyIconCircle}>
+                  <Ionicons name="shield-checkmark" size={32} color="#10b981" />
+                </View>
+                <Text style={blk.emptyTitle}>No Blocked Accounts</Text>
+                <Text style={blk.emptySub}>
+                  You haven't blocked any attendees. When you block someone from a conversation, they will appear here so you can unblock them at any time.
+                </Text>
+              </View>
+            ) : (
+              <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: SPACE.md }}>
+                {blockedList.map((person, idx) => (
+                  <View key={person.id || idx} style={blk.row}>
+                    <View style={blk.avatarWrap}>
+                      {person.profile_photo_url ? (
+                        <Image source={{ uri: fixMediaUrl(person.profile_photo_url) }} style={blk.avatar} />
+                      ) : (
+                        <GradientAvatar name={person.name || person.email} size={42} radius={14} />
+                      )}
+                    </View>
+                    <View style={{ flex: 1, marginRight: SPACE.sm }}>
+                      <Text style={blk.personName} numberOfLines={1}>{person.name || person.email}</Text>
+                      {person.affiliation ? (
+                        <Text style={blk.personSub} numberOfLines={1}>{person.affiliation}</Text>
+                      ) : (
+                        <Text style={blk.personSub} numberOfLines={1}>{person.email}</Text>
+                      )}
+                    </View>
+                    <TouchableOpacity
+                      style={blk.unblockBtn}
+                      onPress={() => handleUnblock(person)}
+                      disabled={unblockingId === person.id}
+                      activeOpacity={0.75}
+                    >
+                      <Text style={blk.unblockBtnText}>
+                        {unblockingId === person.id ? 'Unblocking…' : 'Unblock'}
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                ))}
+              </ScrollView>
+            )}
+          </View>
+
+          {/* Footer */}
+          <View style={blk.footer}>
+            <TouchableOpacity onPress={onDismiss} style={blk.doneBtn} activeOpacity={0.85}>
+              <Text style={blk.doneBtnText}>Done</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
+const blk = StyleSheet.create({
+  overlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.65)',
+    justifyContent: 'flex-end',
+  },
+  card: {
+    backgroundColor: '#FFFFFF',
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    maxHeight: '82%',
+    minHeight: '42%',
+    paddingTop: SPACE.md,
+    ...SHADOW.xl,
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    paddingHorizontal: SPACE.xl,
+    paddingBottom: SPACE.md,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f1f5f9',
+  },
+  iconRing: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#fee2e2',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  title: {
+    fontSize: FONT.md,
+    fontWeight: FONT.w8,
+    color: COLORS.text,
+  },
+  subtitle: {
+    fontSize: 11.5,
+    color: COLORS.textTer,
+    marginTop: 4,
+    lineHeight: 16,
+  },
+  closeBtn: {
+    padding: 4,
+    marginLeft: SPACE.sm,
+  },
+  body: {
+    paddingHorizontal: SPACE.xl,
+    paddingTop: SPACE.md,
+    maxHeight: 380,
+  },
+  centerBox: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: SPACE.xxl,
+  },
+  loadingText: {
+    fontSize: FONT.xs,
+    color: COLORS.textTer,
+    marginTop: SPACE.sm,
+  },
+  emptyIconCircle: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: '#ecfdf5',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: SPACE.md,
+  },
+  emptyTitle: {
+    fontSize: FONT.md,
+    fontWeight: FONT.w8,
+    color: COLORS.text,
+  },
+  emptySub: {
+    fontSize: 12,
+    color: COLORS.textTer,
+    textAlign: 'center',
+    marginTop: 6,
+    lineHeight: 18,
+    paddingHorizontal: SPACE.lg,
+  },
+  row: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: SPACE.md,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f8fafc',
+  },
+  avatarWrap: {
+    marginRight: SPACE.md,
+  },
+  avatar: {
+    width: 42,
+    height: 42,
+    borderRadius: 14,
+  },
+  personName: {
+    fontSize: FONT.sm,
+    fontWeight: FONT.w7,
+    color: COLORS.text,
+  },
+  personSub: {
+    fontSize: 11,
+    color: COLORS.textTer,
+    marginTop: 2,
+  },
+  unblockBtn: {
+    paddingHorizontal: SPACE.md,
+    paddingVertical: 7,
+    borderRadius: RADIUS.full,
+    borderWidth: 1.5,
+    borderColor: '#e2e8f0',
+    backgroundColor: '#f8fafc',
+  },
+  unblockBtnText: {
+    fontSize: 11.5,
+    fontWeight: FONT.w7,
+    color: COLORS.brand,
+  },
+  footer: {
+    paddingHorizontal: SPACE.xl,
+    paddingVertical: SPACE.md,
+    borderTopWidth: 1,
+    borderTopColor: '#f1f5f9',
+    backgroundColor: '#f8fafc',
+  },
+  doneBtn: {
+    height: 46,
+    borderRadius: RADIUS.md,
+    backgroundColor: COLORS.brand,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  doneBtnText: {
+    fontSize: FONT.sm,
+    fontWeight: FONT.w7,
+    color: '#FFFFFF',
+  },
+});
+
 // ── Main Profile Tab Component ────────────────────────────────────────────────
 export default function ProfileTab({
   user,
@@ -158,6 +451,7 @@ export default function ProfileTab({
   const [showCert, setShowCert] = useState(false);
   const [showSupportModal, setShowSupportModal] = useState(false);
   const [showMissingModal, setShowMissingModal] = useState(false);
+  const [showBlockedModal, setShowBlockedModal] = useState(false);
 
   const fetchStats = useCallback(async () => {
     if (!tokens?.access) return;
@@ -217,6 +511,40 @@ export default function ProfileTab({
 
   const hasInterestsIncomplete = interests.length < 3;
 
+  const handleDeleteAccount = () => {
+    Alert.alert(
+      'Delete Account',
+      'Are you sure you want to permanently delete your account? All your personal profile information, chat messages, connections, and conference check-in data will be erased. This action cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete My Account',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              const res = await fetch(`${API_URL}/accounts/delete-account/`, {
+                method: 'POST',
+                headers: { ...API_HEADERS, Authorization: `Bearer ${tokens?.access}` },
+              });
+              const data = await res.json();
+              if (data.success) {
+                Alert.alert(
+                  'Account Deleted',
+                  'Your account has been deleted successfully.',
+                  [{ text: 'OK', onPress: onLogout }]
+                );
+              } else {
+                Alert.alert('Error', data.error || 'Failed to delete account.');
+              }
+            } catch {
+              Alert.alert('Error', 'Network error while requesting account deletion.');
+            }
+          },
+        },
+      ]
+    );
+  };
+
   const MENU = [
     {
       section: 'Account & Security',
@@ -224,6 +552,24 @@ export default function ProfileTab({
         { icon: 'person-outline',        label: 'Edit Profile',    sub: 'Update personal & academic info', onPress: onEditProfile },
         { icon: 'notifications-outline', label: 'Notifications',   sub: 'Updates & announcements',         onPress: onOpenNotifications },
         { icon: 'lock-closed-outline',   label: 'Change Password', sub: 'Update your login password',       onPress: onChangePassword },
+        {
+          icon: 'ban-outline',
+          label: 'Blocked Accounts',
+          sub: 'Manage blocked users & unblock',
+          onPress: () => setShowBlockedModal(true),
+        },
+        
+        // Guideline 5.1.1(v): Account deletion only required when user self-registration is enabled in app.
+        // For admin-provisioned symposium accounts, this is commented out so it won't appear on screen.
+        {
+          icon: 'trash-outline',
+          label: 'Delete Account',
+          sub: 'Permanently remove your account & data',
+          color: COLORS.error,
+          bg: '#fee2e2',
+          onPress: handleDeleteAccount
+        },
+        
       ]
     },
     {
@@ -242,7 +588,7 @@ export default function ProfileTab({
         { icon: 'bug-outline',           label: 'Report an Error', sub: 'Submit bug details & screenshots to admin', onPress: onOpenReportError },
         { icon: 'people-outline',        label: 'Support & Help', sub: 'Central Library & Committee Leaders', onPress: () => setShowSupportModal(true) },
         { icon: 'shield-checkmark-outline', label: 'Privacy Policy', sub: 'https://etd2026.iitd.ac.in/app-privacy-policy/', onPress: () => Linking.openURL('https://etd2026.iitd.ac.in/app-privacy-policy/').catch(() => {}) },
-        { icon: 'trash-outline',         label: 'Account Deletion', sub: 'https://etd2026.iitd.ac.in/app-account-deletion/', onPress: () => Linking.openURL('https://etd2026.iitd.ac.in/app-account-deletion/').catch(() => {}) },
+        { icon: 'document-text-outline', label: 'Account Deletion Policy', sub: 'https://etd2026.iitd.ac.in/app-account-deletion/', onPress: () => Linking.openURL('https://etd2026.iitd.ac.in/app-account-deletion/').catch(() => {}) },
         { icon: 'globe-outline',         label: 'Official Conference Portal', sub: 'https://etd2026.iitd.ac.in',     onPress: () => Linking.openURL('https://etd2026.iitd.ac.in/') },
       ]
     },
@@ -252,6 +598,7 @@ export default function ProfileTab({
     <View style={{ flex: 1, backgroundColor: '#f0f4f9' }}>
       <CertificateModal visible={showCert} user={user} onDismiss={() => setShowCert(false)} />
       <SupportModal visible={showSupportModal} onDismiss={() => setShowSupportModal(false)} onOpenChatRoom={onOpenChatRoom} />
+      <BlockedUsersModal visible={showBlockedModal} tokens={tokens} onDismiss={() => setShowBlockedModal(false)} />
 
       <ScrollView showsVerticalScrollIndicator={false}>
 
@@ -427,14 +774,14 @@ export default function ProfileTab({
                       <IconBox
                         name={item.icon}
                         size={17}
-                        color={COLORS.brand}
-                        bg={COLORS.brandLight}
+                        color={item.color || COLORS.brand}
+                        bg={item.bg || COLORS.brandLight}
                         boxSize={38}
                         radius={RADIUS.md}
                         style={{ marginRight: SPACE.md }}
                       />
                       <View style={{ flex: 1 }}>
-                        <Text style={p.menuLabel}>{item.label}</Text>
+                        <Text style={[p.menuLabel, item.color && { color: item.color }]}>{item.label}</Text>
                         <Text style={p.menuSub}>{item.sub}</Text>
                       </View>
                       <Ionicons name="chevron-forward" size={15} color={COLORS.border} />

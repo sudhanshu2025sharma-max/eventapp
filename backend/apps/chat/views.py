@@ -352,13 +352,18 @@ def request_counts(request):
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def conversation_list(request):
+    blocked_ids = set(BlockedUser.objects.filter(blocker=request.user).values_list('blocked_id', flat=True))
+    blocked_by_ids = set(BlockedUser.objects.filter(blocked=request.user).values_list('blocker_id', flat=True))
+    all_blocked = blocked_ids | blocked_by_ids
+
     convs = Conversation.objects.filter(
         Q(participant_a=request.user) | Q(participant_b=request.user)
     ).select_related('participant_a', 'participant_b').prefetch_related('messages').order_by('-last_message_at', '-created_at')
 
-    total_unread = sum(c.unread_count_for(request.user) for c in convs)
+    active_convs = [c for c in convs if c.other_participant(request.user).id not in all_blocked]
+    total_unread = sum(c.unread_count_for(request.user) for c in active_convs)
     return Response({
-        'conversations': [_conversation_data(c, request.user, request) for c in convs],
+        'conversations': [_conversation_data(c, request.user, request) for c in active_convs],
         'total_unread':  total_unread,
     })
 
@@ -372,7 +377,10 @@ def conversation_detail(request, conversation_id):
         )
     except Conversation.DoesNotExist:
         return Response({'error': 'Conversation not found'}, status=404)
-    return Response(_conversation_data(conv, request.user, request))
+    data = _conversation_data(conv, request.user, request)
+    other = conv.other_participant(request.user)
+    data['is_blocked'] = _is_blocked(request.user, other)
+    return Response(data)
 
 
 @api_view(['POST'])
@@ -425,6 +433,12 @@ def send_message(request, conversation_id):
         )
     except Conversation.DoesNotExist:
         return Response({'error': 'Conversation not found'}, status=404)
+
+    other = conv.other_participant(request.user)
+    if not other.is_active:
+        return Response({'error': 'This user account is suspended or no longer active.'}, status=403)
+    if _is_blocked(request.user, other):
+        return Response({'error': 'You cannot send messages to this user because of a user block.'}, status=403)
 
     content    = request.data.get('content', '').strip()
     image      = request.FILES.get('image')
@@ -522,7 +536,7 @@ def toggle_reaction(request, conversation_id, message_id):
         return Response({'success': True, 'action': 'added'})
 
 
-# ── Report ─────────────────────────────────────────────────────────────────
+# ── Report Message ─────────────────────────────────────────────────────────
 
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
@@ -548,6 +562,78 @@ def report_message(request, conversation_id, message_id):
     return Response({'success': True, 'created': created})
 
 
+# ── Report User (UGC Moderation) ───────────────────────────────────────────
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def report_user(request):
+    """
+    UGC Moderation: Report a user for objectionable content, harassment, spam, etc.
+    If a user accumulates 5 continuous reports, they are automatically suspended
+    from the app and will not be able to log in.
+    """
+    user_id    = request.data.get('user_id', '').strip()
+    reason     = request.data.get('reason', 'other').strip()
+    detail     = request.data.get('detail', '').strip()
+    conv_id    = request.data.get('conversation_id', None)
+    also_block = request.data.get('block', False)
+
+    try:
+        target = User.objects.get(id=user_id)
+    except (User.DoesNotExist, ValueError):
+        return Response({'error': 'User not found'}, status=404)
+
+    if target == request.user:
+        return Response({'error': 'Cannot report yourself'}, status=400)
+
+    from apps.accounts.models import UserReport
+    report, created = UserReport.objects.get_or_create(
+        reported_user=target,
+        reporter=request.user,
+        status='pending',
+        defaults={
+            'reason': reason,
+            'detail': detail,
+            'conversation_id': conv_id if conv_id else None,
+        }
+    )
+    if not created:
+        report.reason = reason
+        if detail:
+            report.detail = detail
+        report.save(update_fields=['reason', 'detail'])
+
+    # Count pending/actioned reports against target user
+    active_reports_count = UserReport.objects.filter(
+        reported_user=target,
+        status__in=['pending', 'actioned']
+    ).count()
+
+    auto_suspended = False
+    # Norm: 5 continuous reports auto-suspends user and blocks login
+    if active_reports_count >= 5 and target.role not in ('super_admin', 'mgmt_admin') and target.is_active:
+        target.is_active = False
+        target.suspended_reason = f'Account suspended automatically following {active_reports_count} user reports for guideline violations.'
+        target.save(update_fields=['is_active', 'suspended_reason'])
+        auto_suspended = True
+
+        try:
+            from apps.notifications.models import DeviceToken
+            DeviceToken.objects.filter(user=target).update(is_active=False)
+        except Exception:
+            pass
+
+    if also_block:
+        BlockedUser.objects.get_or_create(blocker=request.user, blocked=target)
+
+    return Response({
+        'success': True,
+        'message': 'Report submitted successfully. Our moderation team will review this user.',
+        'auto_suspended': auto_suspended,
+        'report_count': active_reports_count,
+    })
+
+
 # ── Block ──────────────────────────────────────────────────────────────────
 
 @api_view(['POST'])
@@ -555,7 +641,7 @@ def report_message(request, conversation_id, message_id):
 def block_user(request):
     user_id = request.data.get('user_id', '').strip()
     try:
-        target = User.objects.get(id=user_id, is_active=True)
+        target = User.objects.get(id=user_id)
     except (User.DoesNotExist, ValueError):
         return Response({'error': 'User not found'}, status=404)
 
@@ -563,6 +649,13 @@ def block_user(request):
         return Response({'error': 'Cannot block yourself'}, status=400)
 
     obj, created = BlockedUser.objects.get_or_create(blocker=request.user, blocked=target)
+
+    # Clean up pending requests
+    ConnectionRequest.objects.filter(
+        Q(sender=request.user, receiver=target) | Q(sender=target, receiver=request.user),
+        status='pending'
+    ).update(status='declined')
+
     return Response({'success': True, 'blocked': True, 'created': created})
 
 
@@ -570,17 +663,22 @@ def block_user(request):
 @permission_classes([IsAuthenticated])
 def unblock_user(request):
     user_id = request.data.get('user_id', '').strip()
-    BlockedUser.objects.filter(blocker=request.user, blocked_id=user_id).delete()
-    return Response({'success': True, 'blocked': False})
+    if not user_id:
+        return Response({'error': 'user_id required'}, status=400)
+    deleted, _ = BlockedUser.objects.filter(blocker=request.user, blocked_id=user_id).delete()
+    return Response({'success': True, 'blocked': False, 'unblocked': bool(deleted)})
 
 
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def blocked_list(request):
-    blocks = BlockedUser.objects.filter(blocker=request.user).select_related('blocked')
-    return Response({
-        'blocked': [{'id': str(b.blocked_id), 'name': b.blocked.get_full_name(), 'email': b.blocked.email} for b in blocks]
-    })
+    blocks = BlockedUser.objects.filter(blocker=request.user).select_related('blocked').order_by('-created_at')
+    data = []
+    for b in blocks:
+        item = _user_brief(b.blocked, request)
+        item['blocked_at'] = b.created_at.isoformat() if b.created_at else None
+        data.append(item)
+    return Response({'blocked': data, 'count': len(data)})
 
 
 # ── Check Connection ───────────────────────────────────────────────────────
@@ -675,10 +773,17 @@ def bulk_connection_check(request):
     sent_set     = {str(uid) for uid in sent}
     received_set = {str(uid) for uid in received}
 
+    # Blocked accounts check
+    blocked_ids = set(BlockedUser.objects.filter(blocker=request.user).values_list('blocked_id', flat=True))
+    blocked_by_ids = set(BlockedUser.objects.filter(blocked=request.user).values_list('blocker_id', flat=True))
+    all_blocked = {str(i) for i in (blocked_ids | blocked_by_ids)}
+
     statuses = {}
     for uid in user_ids:
         uid = str(uid)
-        if uid in connected:
+        if uid in all_blocked:
+            statuses[uid] = {'status': 'blocked', 'conversation_id': None}
+        elif uid in connected:
             statuses[uid] = {'status': 'connected', 'conversation_id': connected[uid]}
         elif uid in sent_set:
             statuses[uid] = {'status': 'pending_sent', 'conversation_id': None}
@@ -962,6 +1067,8 @@ def shake_connect(request):
     return Response({'error': 'action must be shake, status or pick'}, status=400)
 
 
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
 def disconnect_user(request):
     """
     POST /api/v1/chat/disconnect/
@@ -974,7 +1081,7 @@ def disconnect_user(request):
         return Response({'error': 'user_id required'}, status=400)
 
     try:
-        other = User.objects.get(id=user_id, is_active=True)
+        other = User.objects.get(id=user_id)
     except (User.DoesNotExist, ValueError):
         return Response({'error': 'User not found'}, status=404)
 
@@ -988,10 +1095,9 @@ def disconnect_user(request):
         Q(participant_a=other, participant_b=me)
     ).delete()
 
-    # Delete the accepted connection request
+    # Delete all connection requests between them
     ConnectionRequest.objects.filter(
-        Q(sender=me, receiver=other) | Q(sender=other, receiver=me),
-        status='accepted',
+        Q(sender=me, receiver=other) | Q(sender=other, receiver=me)
     ).delete()
 
     return Response({'success': True, 'disconnected': True})

@@ -93,6 +93,43 @@ class UserFCMToken(models.Model):
         unique_together = ['user', 'fcm_token']
 
 
+# ── User UGC Reporting Model ───────────────────────────────────────────────
+class UserReport(models.Model):
+    REPORT_REASON_CHOICES = [
+        ('harassment',    'Harassment or Bullying'),
+        ('inappropriate', 'Inappropriate or Offensive Content'),
+        ('spam',          'Spam or Scam'),
+        ('impersonation', 'Impersonation'),
+        ('other',         'Other Policy Violation'),
+    ]
+
+    STATUS_CHOICES = [
+        ('pending',   'Pending Review'),
+        ('actioned',  'Action Taken'),
+        ('dismissed', 'Dismissed'),
+    ]
+
+    id              = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    reported_user   = models.ForeignKey(User, on_delete=models.CASCADE, related_name='reports_received')
+    reporter        = models.ForeignKey(User, on_delete=models.CASCADE, related_name='reports_filed')
+    reason          = models.CharField(max_length=30, choices=REPORT_REASON_CHOICES, default='other')
+    detail          = models.TextField(blank=True)
+    conversation_id = models.UUIDField(null=True, blank=True)
+    status          = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
+    action_taken    = models.CharField(max_length=100, blank=True)
+    reviewed_by     = models.ForeignKey(User, null=True, blank=True, on_delete=models.SET_NULL, related_name='+')
+    reviewed_at     = models.DateTimeField(null=True, blank=True)
+    created_at      = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'user_reports'
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"{self.reporter.email} reported {self.reported_user.email} ({self.reason}) [{self.status}]"
+
+
+
 # ── Participant import staging table ───────────────────────────────────────
 class ParticipantImport(models.Model):
     class Status(models.TextChoices):

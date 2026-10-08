@@ -263,6 +263,49 @@ def logout_view(request):
     })
 
 
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def delete_account_view(request):
+    """
+    App Store Guideline 5.1.1(v) - In-app Account Deletion
+    Allows a user to permanently delete / deactivate their account.
+    """
+    user = request.user
+
+    if user.role == 'super_admin':
+        return Response({'error': 'Super Admin accounts cannot be deleted directly from the app.'}, status=400)
+
+    user.is_active = False
+    user.suspended_reason = 'Account deleted by user request.'
+    user.first_name = 'Deleted'
+    user.last_name = 'User'
+    user.phone = ''
+    user.bio = ''
+    user.linkedin_url = ''
+    user.research_interests = ''
+    user.profile_photo = None
+    user.set_unusable_password()
+    user.save()
+
+    # Clear FCM / push device tokens
+    try:
+        from apps.notifications.models import DeviceToken
+        DeviceToken.objects.filter(user=user).delete()
+    except Exception:
+        pass
+
+    try:
+        from .models import UserFCMToken
+        UserFCMToken.objects.filter(user=user).delete()
+    except Exception:
+        pass
+
+    return Response({
+        'success': True,
+        'message': 'Your account has been deleted successfully.'
+    })
+
+
 ADMIN_ROLES = ('super_admin', 'mgmt_admin', 'team_head', 'staff')
 
 
@@ -494,9 +537,14 @@ def participant_create_view(request):
 @permission_classes([IsAuthenticated])
 def discover_view(request):
     from apps.checkins.models import CheckIn
+    from apps.chat.models import BlockedUser
 
     me = request.user
     my_tags = {t.strip().lower() for t in (me.research_interests or '').split(',') if t.strip()}
+
+    blocked_ids = set(BlockedUser.objects.filter(blocker=me).values_list('blocked_id', flat=True))
+    blocked_by_ids = set(BlockedUser.objects.filter(blocked=me).values_list('blocker_id', flat=True))
+    all_blocked = blocked_ids | blocked_by_ids
 
     checked_in_ids = CheckIn.objects.filter(
         checkin_type='conference'
@@ -509,7 +557,10 @@ def discover_view(request):
         id=me.id
     ).exclude(
         role__in=['super_admin', 'mgmt_admin']
-    ).only(
+    )
+    if all_blocked:
+        qs = qs.exclude(id__in=all_blocked)
+    qs = qs.only(
         'id', 'first_name', 'last_name', 'affiliation',
         'designation', 'profile_photo', 'research_interests', 'role',
     )

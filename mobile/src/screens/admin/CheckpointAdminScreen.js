@@ -9,7 +9,7 @@ import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import * as Location from 'expo-location';
 import * as Haptics from 'expo-haptics';
-import { COLORS, FONT, SPACE, RADIUS, SHADOW, fixMediaUrl, TOP, BOTTOM } from '../../theme';
+import { COLORS, FONT, SPACE, RADIUS, SHADOW, fixMediaUrl } from '../../theme';
 import { apiFetch } from '../../api';
 
 const { width: W, height: H } = Dimensions.get('window');
@@ -142,6 +142,11 @@ export default function CheckpointAdminScreen({ tokens, onBack }) {
 
   // Picker Camera/Gallery
   const handlePickImage = async () => {
+    if (Platform.OS === 'ios') {
+      const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!perm.granted) return Alert.alert('Permission required', 'Please grant library permissions.');
+    }
+
     const res = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
       quality: 0.8,
@@ -413,7 +418,7 @@ window.updateUserLocation=function(lat,lng){
       {/* Admin header */}
       <LinearGradient colors={[COLORS.brandDeep, COLORS.brand]} style={s.header}>
         <View style={s.topbar}>
-          <TouchableOpacity onPress={onBack} style={s.backBtn} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+          <TouchableOpacity onPress={onBack} style={s.backBtn}>
             <Ionicons name="chevron-back" size={22} color="#fff" />
           </TouchableOpacity>
           <Text style={s.headerTitle}>Checkpoints Admin</Text>
@@ -438,7 +443,7 @@ window.updateUserLocation=function(lat,lng){
           <Text style={s.loadingText}>Syncing established checkpoints...</Text>
         </View>
       ) : activeTab === 'list' ? (
-        <ScrollView contentContainerStyle={{ padding: PAD, paddingBottom: 120 + BOTTOM }} showsVerticalScrollIndicator={false}>
+        <ScrollView contentContainerStyle={{ padding: PAD, paddingBottom: 120 }} showsVerticalScrollIndicator={false}>
           
           {/* Global Window Switcher Toggle */}
           <View style={s.settingsCard}>
@@ -505,7 +510,7 @@ window.updateUserLocation=function(lat,lng){
         </ScrollView>
       ) : (
         /* CREATE FORM SCREEN */
-        <ScrollView contentContainerStyle={{ padding: PAD, paddingBottom: 150 + BOTTOM }} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+        <ScrollView contentContainerStyle={{ padding: PAD, paddingBottom: 150 }} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
           
           <Text style={s.sectionHeader}>Create Checkpoint</Text>
 
@@ -550,8 +555,10 @@ window.updateUserLocation=function(lat,lng){
                 <TextInput style={[s.formInput, { flex: 1 }]} placeholder="Latitude" keyboardType="numeric" value={selfieLat} onChangeText={setSelfieLat} />
                 <TextInput style={[s.formInput, { flex: 1 }]} placeholder="Longitude" keyboardType="numeric" value={selfieLng} onChangeText={setSelfieLng} />
               </View>
-              <Text style={s.formLabel} style={{ marginTop: 10 }}>GPS RADIAL RANGE (METERS)</Text>
-              <TextInput style={s.formInput} keyboardType="numeric" value={radiusMeters} onChangeText={setRadiusMeters} />
+                <Text style={[s.formLabel, { marginTop: 10 }]}>
+                  GPS RADIAL RANGE (METERS)
+                </Text>              
+                <TextInput style={s.formInput} keyboardType="numeric" value={radiusMeters} onChangeText={setRadiusMeters} />
             </View>
           ) : (
             <View style={s.formGroup}>
@@ -625,16 +632,16 @@ window.updateUserLocation=function(lat,lng){
       )}
 
       {/* FULL SCREEN MAP MODAL PICKER - FIXES SCROLL CONFLICTS */}
-      <Modal visible={showMapModal} animationType="slide" presentationStyle="fullScreen" onRequestClose={() => setShowMapModal(false)}>
+      <Modal visible={showMapModal} animationType="slide" onRequestClose={() => setShowMapModal(false)}>
         <View style={{ flex: 1, backgroundColor: '#f0f4f9' }}>
           <View style={s.modalHeaderMap}>
-            <TouchableOpacity onPress={() => setShowMapModal(false)} style={s.modalCloseBtn} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+            <TouchableOpacity onPress={() => setShowMapModal(false)} style={s.modalCloseBtn}>
               <Ionicons name="close" size={24} color={COLORS.text} />
             </TouchableOpacity>
             <Text style={s.modalTitleMap}>
               {formType === 'selfie' ? 'Pinpoint Selfie Spot' : 'Pinpoint Corridor A → B'}
             </Text>
-            <TouchableOpacity style={s.gpsBtn} onPress={locateAdminGps} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+            <TouchableOpacity style={s.gpsBtn} onPress={locateAdminGps}>
               <Ionicons name="crosshairs" size={16} color={COLORS.brand} />
             </TouchableOpacity>
           </View>
@@ -646,8 +653,6 @@ window.updateUserLocation=function(lat,lng){
               source={{ html: leafletHTML }}
               onMessage={onMapMessage}
               style={{ flex: 1 }}
-              scrollEnabled={false}
-              bounces={false}
               javaScriptEnabled={true}
               domStorageEnabled={true}
             />
@@ -680,7 +685,7 @@ window.updateUserLocation=function(lat,lng){
 
 const s = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#f0f4f9' },
-  header: { paddingTop: TOP + 8, paddingBottom: SPACE.lg, paddingHorizontal: PAD },
+  header: { paddingTop: Platform.OS === 'ios' ? 54 : 44, paddingBottom: SPACE.lg, paddingHorizontal: PAD },
   topbar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: SPACE.md },
   backBtn: { width: 38, height: 38, borderRadius: 19, backgroundColor: 'rgba(255,255,255,0.15)', alignItems: 'center', justifyContent: 'center' },
   headerTitle: { fontSize: FONT.lg, fontWeight: FONT.w9, color: '#fff' },
@@ -754,12 +759,12 @@ const s = StyleSheet.create({
   saveText: { fontSize: FONT.sm, fontWeight: FONT.w8, color: '#fff' },
 
   /* Modal map */
-  modalHeaderMap: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingTop: TOP + 8, paddingBottom: 12, borderBottomWidth: 1, borderBottomColor: COLORS.border, backgroundColor: '#fff' },
-  modalCloseBtn: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
+  modalHeaderMap: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingTop: Platform.OS === 'ios' ? 50 : 20, paddingBottom: 12, borderBottomWidth: 1, borderBottomColor: COLORS.border, backgroundColor: '#fff' },
+  modalCloseBtn: { padding: 4 },
   modalTitleMap: { fontSize: FONT.base, fontWeight: FONT.w8, color: COLORS.text },
   gpsBtn: { width: 36, height: 36, borderRadius: 18, backgroundColor: COLORS.brandLight, alignItems: 'center', justifyContent: 'center' },
   
-  modalFooterMap: { padding: 16, paddingBottom: 16 + BOTTOM, borderTopWidth: 1, borderTopColor: COLORS.border, backgroundColor: '#fff', gap: 12 },
+  modalFooterMap: { padding: 16, borderTopWidth: 1, borderTopColor: COLORS.border, backgroundColor: '#fff', gap: 12 },
   modalFooterHint: { fontSize: FONT.xs, color: COLORS.textTer, fontWeight: FONT.w6, textAlign: 'center' },
   confirmBtn: { paddingVertical: 12, borderRadius: 12, backgroundColor: COLORS.brand, alignItems: 'center', justifyContent: 'center' },
   confirmBtnDisabled: { backgroundColor: '#cbd5e1' },

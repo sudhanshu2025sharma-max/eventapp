@@ -5,7 +5,8 @@ import {
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
-import { COLORS, FONT, SPACE, RADIUS, SHADOW, TOP, API_URL } from '../theme';
+import { COLORS, FONT, SPACE, RADIUS, SHADOW, TOP, API_URL, fixMediaUrl } from '../theme';
+import { apiFetch } from '../api';
 import { Card, FadeIn, GradientAvatar, PrimaryButton, Divider } from '../components';
 import { useKeyboardHeight } from '../useKeyboard';
 
@@ -186,7 +187,10 @@ export default function EditProfileScreen({ user, tokens, onBack, onProfileUpdat
     show_phone:         user?.show_phone   ?? false,
     show_linkedin:      user?.show_linkedin ?? true,
   });
-  const [photoUri, setPhotoUri]   = useState(user?.profile_photo_url || null);
+  const initialPhoto = user?.profile_photo_url || user?.staff_profile?.photo_url || null;
+  const [photoUri, setPhotoUri] = useState(
+    initialPhoto && typeof fixMediaUrl === 'function' ? fixMediaUrl(initialPhoto) : initialPhoto
+  );
   const [newPhoto, setNewPhoto]   = useState(null);
   const [saving, setSaving]       = useState(false);
   const [success, setSuccess]     = useState(false);
@@ -297,6 +301,7 @@ export default function EditProfileScreen({ user, tokens, onBack, onProfileUpdat
         allowsEditing: true,
         aspect: [1, 1],
         quality: 0.7,
+        base64: true,
       });
       if (!result.canceled && result.assets?.[0]) {
         setPhotoUri(result.assets[0].uri);
@@ -330,30 +335,24 @@ export default function EditProfileScreen({ user, tokens, onBack, onProfileUpdat
     setSaving(true);
     setSuccess(false);
 
-    try {
-      const formData = new FormData();
-      Object.entries(form).forEach(([key, val]) => {
-        formData.append(key, typeof val === 'boolean' ? (val ? 'true' : 'false') : (val || ''));
-      });
-      if (newPhoto) {
-        const uri = newPhoto.uri;
-        const ext = (uri.split('.').pop() || 'jpg').toLowerCase();
-        formData.append('profile_photo', {
-          uri,
-          name: `profile.${ext}`,
-          type: `image/${ext === 'jpg' ? 'jpeg' : ext}`,
-        });
+        try {
+      const payload = {
+        ...form,
+      };
+
+      if (newPhoto && newPhoto.base64) {
+        payload.profile_photo_base64 = `data:image/jpeg;base64,${newPhoto.base64}`;
       }
 
-      const res = await fetch(`${API_URL}/auth/update-profile/`, {
+      const res = await apiFetch('/auth/update-profile/', {
         method: 'POST',
         headers: {
-          Authorization: `Bearer ${tokens.access}`,
+          'Content-Type': 'application/json',
           Accept: 'application/json',
-          'ngrok-skip-browser-warning': 'true',
         },
-        body: formData,
+        body: JSON.stringify(payload),
       });
+
       const data = await res.json();
       if (res.ok && data.success) {
         setSuccess(true);
@@ -365,12 +364,13 @@ export default function EditProfileScreen({ user, tokens, onBack, onProfileUpdat
             message: data.points_message || 'Profile complete! Points added to leaderboard.',
           });
         }
-        if (data.user?.profile_photo_url) setPhotoUri(data.user.profile_photo_url);
+        if (data.user?.profile_photo_url) setPhotoUri(typeof fixMediaUrl === 'function' ? fixMediaUrl(data.user.profile_photo_url) : data.user.profile_photo_url);
         setTimeout(() => setSuccess(false), 3000);
       } else {
         Alert.alert('Error', data.message || 'Failed to update profile.');
       }
-    } catch {
+    } catch (err) {
+      console.log('Update profile error:', err);
       Alert.alert('Error', 'Connection failed. Please try again.');
     }
     setSaving(false);

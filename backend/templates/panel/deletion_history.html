@@ -1,0 +1,132 @@
+{% extends "panel/base.html" %}
+
+{% block title %}Deletion History — ETD 2026 Admin{% endblock %}
+{% block page_title %}Account Deletion History{% endblock %}
+{% block page_subtitle %}All approved and executed account deletions with user-submitted reasons{% endblock %}
+
+{% block content %}
+
+{% if messages %}
+  {% for message in messages %}
+    <div class="alert alert-{{ message.tags }}">{{ message }}</div>
+  {% endfor %}
+{% endif %}
+
+<div class="stats-grid" style="grid-template-columns: repeat(3, 1fr); max-width: 700px; margin-bottom: 28px;">
+    <div class="stat-card">
+        <div class="stat-card-header">
+            <div class="stat-icon" style="background: var(--danger-light); color: var(--danger);">
+                <i class="fas fa-user-minus"></i>
+            </div>
+        </div>
+        <div class="stat-value">{{ total }}</div>
+        <div class="stat-label">Total Deleted Accounts</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-card-header">
+            <div class="stat-icon" style="background: var(--warning-light); color: var(--warning);">
+                <i class="fas fa-clock"></i>
+            </div>
+        </div>
+        <div class="stat-value" style="font-size: 20px; margin-top: 6px;">
+            {% if history %}
+                {{ history.0.deletion_requested_at|date:"d M Y" }}
+            {% else %}
+                —
+            {% endif %}
+        </div>
+        <div class="stat-label">Most Recent Deletion</div>
+    </div>
+    <!-- <div class="stat-card">
+        <div class="stat-card-header">
+            <div class="stat-icon" style="background: var(--success-light); color: var(--success);">
+                <i class="fas fa-database"></i>
+            </div>
+        </div>
+        <div class="stat-value" style="font-size: 16px; margin-top: 8px;">Soft Delete</div>
+        <div class="stat-label">Data Anonymized, Not Purged</div>
+    </div> -->
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <h3><i class="fas fa-history" style="color: var(--text-tertiary); margin-right: 8px;"></i>Approved Deletions</h3>
+        <span class="badge badge-danger">{{ total }} records</span>
+    </div>
+    <div class="card-body" style="padding: 0;">
+        {% if history %}
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>#</th>
+                    <th>Original Email</th>
+                    <th>Registration ID</th>
+                    <th>Role</th>
+                    <th>Deletion Reason</th>
+                    <th>Reason Detail</th>
+                    <th>Requested At</th>
+                    <th>Account Created</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for u in history %}
+                <tr>
+                    <td style="color: var(--text-tertiary); font-size: 12px;">{{ forloop.counter }}</td>
+                    <td>
+                        <span style="font-family: monospace; font-size: 13px;">{{ u.email }}</span>
+                    </td>
+                    <td>
+                        {% if u.registration_id %}
+                            <span class="badge badge-info">{{ u.registration_id }}</span>
+                        {% else %}
+                            <span style="color: var(--text-tertiary);">—</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <span class="badge badge-warning">{{ u.role }}</span>
+                    </td>
+                    <td>
+                        {% if u.deletion_reason %}
+                            <strong style="font-size: 12px; color: var(--danger);">{{ u.deletion_reason }}</strong>
+                        {% else %}
+                            <span style="color: var(--text-tertiary); font-size: 12px;">No reason given</span>
+                        {% endif %}
+                    </td>
+                    <td style="max-width: 240px;">
+                        {% if u.deletion_reason_detail %}
+                            <span style="font-size: 12px; color: var(--text-secondary); line-height: 1.5;">{{ u.deletion_reason_detail|truncatechars:150 }}</span>
+                        {% else %}
+                            <span style="color: var(--text-tertiary); font-size: 12px;">—</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if u.deletion_requested_at %}
+                            <strong style="font-size: 12px;">{{ u.deletion_requested_at|date:"d M Y" }}</strong>
+                            <br><span style="font-size: 11px; color: var(--text-tertiary);">{{ u.deletion_requested_at|time:"H:i" }}</span>
+                        {% else %}
+                            —
+                        {% endif %}
+                    </td>
+                    <td>
+                        <span style="font-size: 12px; color: var(--text-tertiary);">{{ u.created_at|date:"d M Y" }}</span>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <div class="empty-state">
+            <i class="fas fa-check-circle" style="color: var(--success);"></i>
+            <h3>No Deletions Yet</h3>
+            <p>No account deletion requests have been approved so far.</p>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- <div style="margin-top: 20px; padding: 16px 20px; background: var(--primary-light); border-radius: 12px; border: 1px solid #bfdbfe; font-size: 13px; color: var(--primary-dark); line-height: 1.6;">
+    <i class="fas fa-info-circle" style="margin-right: 6px;"></i>
+    <strong>Note:</strong> Deleted accounts are <em>soft-deleted</em> — personal data (name, phone, bio, photo) is anonymized and login is disabled, but the email, registration ID, and deletion reason are preserved for audit purposes. Related conference data (check-ins, chat logs, points) remains intact.
+</div> -->
+
+{% endblock %}

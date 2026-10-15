@@ -21,6 +21,10 @@ tail -f /tmp/session_reminders.log
 Context Gen: Okay its working Now give me the full context to start a new chat with new feature to be build it must cover everything till now and i give you early. 
 Now fundamentally everything is working fine we wont polishing so give me a full detailed context window in which you have to write everything that has done so far form first chat to last so that new chat have context of everything also mention the custom template folder how its link how other files are linked and how everything is working and wired up so give me context window for new chat.
 
+# seed schedule!
+cd /home/baadalvm/eventapp/backend
+python3 manage.py seed_etd2026 --rebase-start today
+
 
 # Watch live while you create a new feed post with Send Push ON
 tail -f /home/baadalvm/eventapp/backend/server.log | grep --line-buffered -iE "FEED PUSH|expo|fcm|push|notification"

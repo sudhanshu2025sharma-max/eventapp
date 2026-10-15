@@ -4,9 +4,7 @@ from django.conf import settings
 from django.conf.urls.static import static
 
 urlpatterns = [
-    path('admin/', admin.site.urls),
-
-    # Web Admin Panel
+    # ── Web Admin Panel ──
     path('panel/', include('apps.accounts.admin_urls')),
     path('panel/', include('apps.notifications.admin_urls')),
     path('panel/', include('apps.checkins.admin_urls')),
@@ -19,8 +17,9 @@ urlpatterns = [
     path('panel/', include('apps.polls.admin_urls')),
     path('panel/', include('apps.posts.admin_urls')),
     path('panel/', include('apps.error_reports.admin_urls')),
+    path('panel/', include('apps.certificates.admin_urls')),
 
-    # API routes
+    # ── Mobile API ──
     path('api/v1/auth/',          include('apps.accounts.urls')),
     path('api/v1/conferences/',   include('apps.conferences.urls')),
     path('api/v1/events/',        include('apps.events.urls')),
@@ -35,4 +34,9 @@ urlpatterns = [
     path('api/v1/schedule/',      include('apps.schedule.urls')),
     path('api/v1/chat/',          include('apps.chat.urls')),
     path('api/v1/error-reports/', include('apps.error_reports.urls')),
-] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+    path('api/v1/certificates/',  include('apps.certificates.urls')),
+]
+
+if settings.DEBUG:
+    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+    urlpatterns += static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)

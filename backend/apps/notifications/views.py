@@ -7,14 +7,17 @@ from .models import UserNotification, Notification, DeviceToken
 from apps.checkins.meal_utils import sync_meal_window
 from . import fcm
 
+from django.core.cache import cache
+
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def unread_count(request):
-    # Continuously evaluate schedule-driven meal windows on global background poll
-    try:
-        sync_meal_window()
-    except Exception:
-        pass
+    # Only evaluate schedule-driven meal windows at most once every 60s across requests
+    if cache.add('meal_window_sync_lock', 1, 60):
+        try:
+            sync_meal_window()
+        except Exception:
+            pass
 
     count = UserNotification.objects.filter(user=request.user, read=False).count()
     return Response({'unread_count': count})

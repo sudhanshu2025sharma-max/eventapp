@@ -6,20 +6,26 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS, FONT, SPACE, RADIUS, SHADOW, API_URL, API_HEADERS, fixMediaUrl, BOTTOM } from '../theme';
 import { GradientAvatar } from '../components';
-import TopicPickerModal from './TopicPickerModal';
+import TopicPickerModal, { TOPICS } from './TopicPickerModal';
+
+
 
 export default function SpeakerRequestModal({ visible, onClose, speaker, tokens, onSent }) {
-  const [step, setStep]         = useState('form');  // form | topic | sending | sent
-  const [message, setMessage]   = useState('');
-  const [topicModal, setTopic]  = useState(false);
-  const [topicData, setTopicData] = useState(null);
-  const [error, setError]       = useState('');
-  const [loading, setLoading]   = useState(false);
+  const [step, setStep]                 = useState('form');  // form | topic | sending | sent
+  const [message, setMessage]           = useState('');
+  const [topicModal, setTopic]          = useState(false);
+  const [topicData, setTopicData]       = useState(null);
+  const [dropdownOpen, setDropdownOpen] = useState(false);
+  const [customTopic, setCustomTopic]   = useState('');
+  const [error, setError]               = useState('');
+  const [loading, setLoading]           = useState(false);
 
   const reset = () => {
     setStep('form');
     setMessage('');
     setTopicData(null);
+    setDropdownOpen(false);
+    setCustomTopic('');
     setError('');
     setLoading(false);
   };
@@ -28,11 +34,20 @@ export default function SpeakerRequestModal({ visible, onClose, speaker, tokens,
 
   const handleTopicConfirmed = (td) => {
     setTopicData(td);
+    if (td.topic === 'other') {
+      setCustomTopic(td.custom_topic || '');
+    }
     setTopic(false);
+    setDropdownOpen(false);
+    setError('');
   };
 
   const handleSend = async () => {
     if (!topicData) { setError('Please select a topic first.'); return; }
+    if (topicData.topic === 'other' && !topicData.custom_topic?.trim()) {
+      setError('Please specify your custom discussion topic.');
+      return;
+    }
     if (!message.trim()) { setError('Please add a short message to the speaker.'); return; }
     setError('');
     setLoading(true);
@@ -149,22 +164,88 @@ export default function SpeakerRequestModal({ visible, onClose, speaker, tokens,
                 {/* Topic selector */}
                 <Text style={s.label}>Discussion Topic *</Text>
                 <TouchableOpacity
-                  style={[s.topicBtn, topicData && s.topicBtnActive]}
-                  onPress={() => setTopic(true)}
+                  style={[s.topicBtn, (topicData || dropdownOpen) && s.topicBtnActive]}
+                  onPress={() => setDropdownOpen(prev => !prev)}
                   activeOpacity={0.75}
                 >
                   <Ionicons
-                    name="chatbubble-ellipses-outline"
+                    name={
+                      topicData
+                        ? (TOPICS.find(t => t.key === topicData.topic)?.icon || 'chatbubble-ellipses-outline')
+                        : 'chatbubble-ellipses-outline'
+                    }
                     size={16}
                     color={topicData ? COLORS.brand : COLORS.textTer}
                   />
                   <Text style={[s.topicBtnText, topicData && s.topicBtnTextActive]}>
                     {topicData
-                      ? (topicData.topic === 'other' ? topicData.custom_topic : topicData.topic.replace(/_/g,' ').replace(/\b\w/g, c => c.toUpperCase()))
+                      ? (topicData.topic === 'other'
+                          ? (topicData.custom_topic ? `Other: ${topicData.custom_topic}` : 'Other')
+                          : (TOPICS.find(t => t.key === topicData.topic)?.label || topicData.topic))
                       : 'Select a topic...'}
                   </Text>
-                  <Ionicons name="chevron-down" size={14} color={COLORS.textTer} />
+                  <Ionicons
+                    name={dropdownOpen ? 'chevron-up' : 'chevron-down'}
+                    size={15}
+                    color={topicData || dropdownOpen ? COLORS.brand : COLORS.textTer}
+                  />
                 </TouchableOpacity>
+
+                {/* Inline Dropdown Options */}
+                {dropdownOpen && (
+                  <View style={s.dropdownCard}>
+                    {(TOPICS || []).map((t) => {
+                      const isSelected = topicData?.topic === t.key;
+                      return (
+                        <TouchableOpacity
+                          key={t.key}
+                          style={[s.dropdownItem, isSelected && s.dropdownItemActive]}
+                          onPress={() => {
+                            if (t.key === 'other') {
+                              setTopicData({ topic: 'other', custom_topic: customTopic.trim() });
+                            } else {
+                              setTopicData({ topic: t.key, custom_topic: '' });
+                              setDropdownOpen(false);
+                            }
+                            setError('');
+                          }}
+                          activeOpacity={0.7}
+                        >
+                          <View style={[s.dropdownItemIcon, isSelected && s.dropdownItemIconActive]}>
+                            <Ionicons name={t.icon} size={15} color={isSelected ? '#fff' : COLORS.brand} />
+                          </View>
+                          <Text style={[s.dropdownItemLabel, isSelected && s.dropdownItemLabelActive]}>
+                            {t.label}
+                          </Text>
+                          {isSelected && (
+                            <View style={s.selectedBadge}>
+                              <Ionicons name="checkmark" size={13} color="#fff" />
+                            </View>
+                          )}
+                        </TouchableOpacity>
+                      );
+                    })}
+
+                    {/* Custom Topic Input if 'other' is selected */}
+                    {topicData?.topic === 'other' && (
+                      <View style={s.customWrap}>
+                        <TextInput
+                          style={s.customInput}
+                          placeholder="Type your discussion topic..."
+                          placeholderTextColor={COLORS.textTer}
+                          value={customTopic}
+                          onChangeText={(text) => {
+                            setCustomTopic(text);
+                            setTopicData({ topic: 'other', custom_topic: text });
+                            setError('');
+                          }}
+                          maxLength={80}
+                          autoFocus
+                        />
+                      </View>
+                    )}
+                  </View>
+                )}
 
                 {/* Message */}
                 <Text style={[s.label, { marginTop: SPACE.lg }]}>Your Message *</Text>
@@ -204,15 +285,20 @@ export default function SpeakerRequestModal({ visible, onClose, speaker, tokens,
               </ScrollView>
             )}
           </View>
+
+          {/* Embedded TopicPickerModal (works inside modal without conflicts) */}
+          {topicModal && (
+            <TopicPickerModal
+              visible={topicModal}
+              useModal={false}
+              onClose={() => setTopic(false)}
+              onConfirm={handleTopicConfirmed}
+              title="Discussion Topic"
+              initialTopic={topicData?.topic || 'networking'}
+            />
+          )}
         </KeyboardAvoidingView>
       </Modal>
-
-      <TopicPickerModal
-        visible={topicModal}
-        onClose={() => setTopic(false)}
-        onConfirm={handleTopicConfirmed}
-        title="Discussion Topic"
-      />
     </>
   );
 }
@@ -278,6 +364,73 @@ const s = StyleSheet.create({
   topicBtnActive:    { borderColor: COLORS.brand, backgroundColor: COLORS.brandLight },
   topicBtnText:      { flex: 1, fontSize: FONT.sm, color: COLORS.textTer },
   topicBtnTextActive:{ color: COLORS.brand, fontWeight: FONT.w6 },
+
+  dropdownCard: {
+    backgroundColor: '#fff',
+    borderRadius: RADIUS.lg,
+    borderWidth: 1.5,
+    borderColor: COLORS.brandLight,
+    marginTop: SPACE.xs,
+    marginBottom: SPACE.sm,
+    padding: SPACE.xs,
+    ...SHADOW.sm,
+  },
+  dropdownItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: SPACE.sm,
+    paddingHorizontal: SPACE.md,
+    borderRadius: RADIUS.md,
+    marginVertical: 1,
+  },
+  dropdownItemActive: {
+    backgroundColor: COLORS.brandLight,
+  },
+  dropdownItemIcon: {
+    width: 28,
+    height: 28,
+    borderRadius: 8,
+    backgroundColor: COLORS.brandLight,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: SPACE.md,
+  },
+  dropdownItemIconActive: {
+    backgroundColor: COLORS.brand,
+  },
+  dropdownItemLabel: {
+    flex: 1,
+    fontSize: FONT.sm,
+    fontWeight: FONT.w5,
+    color: COLORS.text,
+  },
+  dropdownItemLabelActive: {
+    fontWeight: FONT.w7,
+    color: COLORS.brand,
+  },
+  selectedBadge: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: COLORS.brand,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  customWrap: {
+    paddingHorizontal: SPACE.xs,
+    paddingTop: SPACE.xs,
+    paddingBottom: SPACE.xs,
+  },
+  customInput: {
+    borderWidth: 1.5,
+    borderColor: COLORS.brand,
+    borderRadius: RADIUS.md,
+    paddingHorizontal: SPACE.md,
+    paddingVertical: SPACE.sm,
+    fontSize: FONT.sm,
+    color: COLORS.text,
+    backgroundColor: COLORS.brandLight,
+  },
 
   messageInput: {
     borderWidth: 1.5, borderColor: COLORS.border,

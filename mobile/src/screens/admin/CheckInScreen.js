@@ -1,8 +1,8 @@
-import React, { useEffect, useMemo, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity,
   StyleSheet, Platform, ActivityIndicator, Alert,
-  ScrollView, Modal, FlatList, Image, KeyboardAvoidingView
+  ScrollView, Modal, FlatList, KeyboardAvoidingView
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { CameraView, useCameraPermissions } from 'expo-camera';
@@ -36,7 +36,7 @@ function TopTabs({ tab, setTab }) {
   );
 }
 const tt = StyleSheet.create({
-  wrap: { flexDirection: 'row', backgroundColor: COLORS.surface, borderRadius: RADIUS.lg, padding: 4, marginBottom: SPACE.lg, borderWidth: 1, borderColor: COLORS.border },
+  wrap: { flexDirection: 'row', backgroundColor: COLORS.surface, borderRadius: RADIUS.lg,padding: 4, marginBottom: SPACE.lg, borderWidth: 1, borderColor: COLORS.border },
   tab: { flex: 1, flexDirection: 'row', gap: 6, alignItems: 'center', justifyContent: 'center', paddingVertical: SPACE.sm + 2, borderRadius: RADIUS.md },
   tabOn: { backgroundColor: COLORS.brand },
   txt: { fontSize: FONT.xs, fontWeight: FONT.w7, color: COLORS.textSec },
@@ -149,7 +149,7 @@ const mk = StyleSheet.create({
   card: { backgroundColor: '#fff', borderRadius: RADIUS.xl, padding: 24 },
   title: { fontSize: FONT.lg, fontWeight: FONT.w9, color: COLORS.text },
   sub: { fontSize: FONT.sm, color: COLORS.textSec, marginBottom: SPACE.lg },
-  label: { fontSize: FONT.xs, fontWeight: FONT.w7, color: COLORS.textTer, marginBottom: 8 },
+  label: { fontSize: FONT.xs, fontWeight: FONT.w7, color: COLORS.textTer, marginBottom: 8},
   input: { borderWidth: 1, borderColor: COLORS.border, borderRadius: RADIUS.md, padding: SPACE.md, color: COLORS.text, backgroundColor: COLORS.surface, marginBottom: SPACE.lg },
   btnRow: { flexDirection: 'row', gap: 12 },
   btn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 14, borderRadius: RADIUS.lg },
@@ -165,6 +165,31 @@ function HistoryTab({ tokens, onSelectParticipant }) {
   const [subTab, setSubTab] = useState('checkin');
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(false);
+
+  const handleResetScan = (passId) => {
+    Alert.alert("Reset Meal Scan", "Are you sure? This deletes the scan record and allows the user to scan again for this meal.", [
+      { text: "Cancel", style: "cancel" },
+      { text: "Reset", style: "destructive", onPress: async () => {
+          setLoading(true);
+          try {
+            const res = await fetch(`${API_URL}/checkins/meal/reset/`, {
+              method: 'POST',
+              headers: authHeaders(tokens),
+              body: JSON.stringify({ pass_id: passId })
+            });
+            const data = await res.json();
+            if (res.ok && data.success) {
+              try { Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); } catch {}
+              Alert.alert("✅ Reset", data.message || "Reset successfully");
+              load();
+            } else {
+              Alert.alert("Error", data.error || "Reset failed");
+              setLoading(false);
+            }
+          } catch(e) { setLoading(false); }
+      }}
+    ]);
+  };
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -212,7 +237,7 @@ function HistoryTab({ tokens, onSelectParticipant }) {
                   <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
                     <Text style={h.name}>{participantName}</Text>
                     {subTab === 'checkin' ? (
-                      <View style={[h.badge, { backgroundColor: isKitReceived ? '#d1fae5' : isKitSkipped ? '#fef3c7' : COLORS.borderLight }]}>
+                      <View style={[h.badge, { backgroundColor: isKitReceived ? '#d1fae5': isKitSkipped ? '#fef3c7' : COLORS.borderLight }]}>
                         <Text style={{ color: isKitReceived ? '#059669' : isKitSkipped ? '#d97706' : COLORS.textTer, fontWeight: FONT.w8, fontSize: FONT.xs }}>
                           {isKitReceived ? 'Kit Issued 🎁' : isKitSkipped ? 'Kit Skipped ⚠️' : 'Kit Pending'}
                         </Text>
@@ -234,23 +259,28 @@ function HistoryTab({ tokens, onSelectParticipant }) {
                     )}
                   </Text>
 
-                  {/* Scanned By Info for Meal Passes */}
+                  {/* Scanned By Info for Meal Passes + Reset Button */}
                   {subTab === 'meal' && item.used && (
-                    <Text style={[h.sub, { color: COLORS.brand, marginTop: 2, fontWeight: '600' }]}>
-                      Scanned by: {item.scanned_by || 'Admin'}
-                    </Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 4 }}>
+                      <Text style={[h.sub, { color: COLORS.brand, fontWeight:'600', marginTop: 0 }]}>
+                        Scanned by: {item.scanned_by || 'Admin'}
+                      </Text>
+                      <TouchableOpacity onPress={() => handleResetScan(item.id)} style={{ paddingHorizontal: 12, paddingVertical: 4, backgroundColor: '#fee2e2', borderRadius: 6, borderWidth: 1, borderColor: '#fca5a5' }}>
+                        <Text style={{ fontSize: 10, fontWeight: '800', color: '#ef4444' }}>RESET</Text>
+                      </TouchableOpacity>
+                    </View>
                   )}
 
                   {/* Show Remarks/Notes if present */}
                   {Boolean(subTab === 'checkin' && item.goodies_note) && (
                     <View style={h.noteBox}>
-                      <Ionicons name="chatbox-ellipses-outline" size={12} color="#92400e" />
+                      <Ionicons name="chatbox-ellipses-outline" size={12} color="#92400e"/>
                       <Text style={h.noteText}>Note: {item.goodies_note}</Text>
                     </View>
                   )}
                 </View>
                 {subTab === 'checkin' && (
-                  <Ionicons name="create-outline" size={16} color={COLORS.brand} style={{ marginLeft: 8 }} />
+                  <Ionicons name="create-outline" size={16} color={COLORS.brand} style={{marginLeft: 8 }} />
                 )}
               </TouchableOpacity>
             );
@@ -299,6 +329,30 @@ export default function CheckInScreen({ tokens, onBack }) {
     }
   }, [tab, loadMealStatus]);
 
+  const toggleMealWindow = async () => {
+    const action = mealWin?.is_open ? 'close' : 'open';
+    const mt = mealWin?.meal_type || 'Lunch';
+    Alert.alert(
+      action === 'open' ? `Start ${mt} Service?` : `Stop ${mt} Service?`,
+      action === 'open' ? `This will activate attendee QRs for ${mt}.` : `This will deactivate attendee QRs.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Yes, Proceed', style: action === 'open' ? 'default' : 'destructive', onPress: async () => {
+            setLoading(true);
+            try {
+              const res = await fetch(`${API_URL}/checkins/meal/window/`, {
+                  method: 'POST',
+                  headers: authHeaders(tokens),
+                  body: JSON.stringify({ action, meal_type: mt })
+              });
+              if(res.ok) loadMealStatus();
+            } catch(e) {}
+            setLoading(false);
+        }}
+      ]
+    );
+  };
+
   const doCheckin = async (rid) => {
     const reg = (rid || regId).trim();
     if (!reg) return;
@@ -314,6 +368,10 @@ export default function CheckInScreen({ tokens, onBack }) {
           goodies_status: data.goodies_status || 'pending',
           scanned_at: data.scanned_at,
         });
+        // AUTO-PROMPT Kit Modal for fresh check-ins
+        if (data.created && data.goodies_status === 'pending') {
+          setTimeout(() => setManageKitVisible(true), 400);
+        }
       } else {
         Alert.alert('❌ Not Found', data.error || data.message || 'Participant not found');
       }
@@ -340,10 +398,7 @@ export default function CheckInScreen({ tokens, onBack }) {
         setActiveParticipant(p => ({
           ...p,
           goodies_status: action,
-          user: {
-            ...p.user,
-            goodies_note: note
-          }
+          user: { ...p.user, goodies_note: note }
         }));
         Alert.alert('✅ Saved', data.message);
       } else {
@@ -361,7 +416,7 @@ export default function CheckInScreen({ tokens, onBack }) {
     try {
       const res = await fetch(`${API_URL}/checkins/meal/scan/`, { method: 'POST', headers: authHeaders(tokens), body: JSON.stringify({ qr_data: v }) });
       const data = await res.json();
-      Alert.alert(data.success ? '✅ Verified' : '❌ Not Found', data.message || '');
+      Alert.alert(data.success ? '✅ Verified' : '❌ Failed', data.message || data.error || '');
       if (data.success) loadMealStatus();
     } catch (e) {
       Alert.alert('Network Error', e.message || 'Failed');
@@ -413,15 +468,16 @@ export default function CheckInScreen({ tokens, onBack }) {
                 <View style={s.mealTopRow}>
                   <View style={{ flex: 1 }}>
                     <Text style={s.mealTitle}>{mealWin?.meal_type || 'No Active Meal'}</Text>
-                    <Text style={{ fontSize: FONT.xs, color: COLORS.textTer, marginTop: 4 }}>
+                    <Text style={{ fontSize: FONT.xs, color: COLORS.textTer, marginTop: 4}}>
                       {mealWin?.start_time && mealWin?.end_time ? `${mealWin.start_time} - ${mealWin.end_time}` : 'Waiting for schedule sync...'}
                     </Text>
                   </View>
-                  <View style={[s.pill, { backgroundColor: mealWin?.is_open ? COLORS.successLight : COLORS.borderLight }]}>
+                  <TouchableOpacity onPress={toggleMealWindow} style={[s.pill, { backgroundColor: mealWin?.is_open ? COLORS.successLight : COLORS.borderLight, borderWidth: 1, borderColor: mealWin?.is_open ? COLORS.success : COLORS.border }]}>
                     <Text style={{ fontWeight: FONT.w8, color: mealWin?.is_open ? COLORS.success : COLORS.textTer }}>
                       {mealWin?.is_open ? 'OPEN' : 'CLOSED'}
                     </Text>
-                  </View>
+                    <Ionicons name="swap-vertical" size={12} color={mealWin?.is_open ? COLORS.success : COLORS.textTer} style={{ marginLeft: 4 }} />
+                  </TouchableOpacity>
                 </View>
 
                 {/* LIVE SCANNED COUNTER */}
@@ -435,7 +491,7 @@ export default function CheckInScreen({ tokens, onBack }) {
               </View>
             )}
 
-            <Text style={s.sectionLabel}>{tab === 'checkin' ? 'REGISTRATION ID / EMAIL' : 'QR PAYLOAD / UUID / REG ID'}</Text>
+            <Text style={s.sectionLabel}>{tab === 'checkin' ? 'REGISTRATION ID / EMAIL' :'REGISTRATION ID / QR'}</Text>
 
             <View style={s.inputCard}>
               <View style={s.inputRow}>
@@ -444,7 +500,7 @@ export default function CheckInScreen({ tokens, onBack }) {
                   style={s.mainInput}
                   value={regId}
                   onChangeText={setRegId}
-                  placeholder={tab === 'checkin' ? 'ETD-2026-R-001 or email' : 'Paste QR text'}
+                  placeholder={tab === 'checkin' ? 'ETD-2026-R-001 or email' : 'Paste Reg ID / Scan QR'}
                   placeholderTextColor={COLORS.textTer}
                   autoCapitalize="none"
                   autoCorrect={false}
@@ -479,7 +535,7 @@ export default function CheckInScreen({ tokens, onBack }) {
                 <View style={pk.headerRow}>
                   <View style={{ flex: 1 }}>
                     <Text style={pk.name}>{activeParticipant.user.name}</Text>
-                    <Text style={pk.sub}>Reg ID: <Text style={{ fontWeight: '800', color: COLORS.brand }}>{activeParticipant.user.registration_id || 'N/A'}</Text></Text>
+                    <Text style={pk.sub}>Reg ID: <Text style={{ fontWeight: '800', color:COLORS.brand }}>{activeParticipant.user.registration_id || 'N/A'}</Text></Text>
                   </View>
                   <View style={[pk.statusPill, { backgroundColor: '#d1fae5' }]}>
                     <Ionicons name="checkmark-circle" size={14} color="#059669" />
@@ -493,7 +549,7 @@ export default function CheckInScreen({ tokens, onBack }) {
                   <View style={{ flex: 1 }}>
                     <Text style={pk.goodiesLabel}>CONFERENCE KIT STATUS</Text>
                     <Text style={[pk.goodiesValue, activeParticipant.goodies_status === 'skipped' && { color: '#d97706' }]}>
-                      {activeParticipant.goodies_status === 'received' ? '✅ Kit Issued & Verified' : 
+                      {activeParticipant.goodies_status === 'received' ? '✅ Kit Issued &Verified' : 
                        activeParticipant.goodies_status === 'skipped' ? '⚠️ Kit Skipped / Pending' : '🟡 Not Issued'}
                     </Text>
                   </View>
@@ -540,7 +596,7 @@ const s = StyleSheet.create({
   sub: { fontSize: FONT.xs, color: COLORS.textTer, marginTop: 2 },
   sectionLabel: { fontSize: 10, fontWeight: FONT.w9, color: COLORS.textTer, letterSpacing: 1.4, marginBottom: SPACE.sm, marginLeft: 4 },
   inputCard: { backgroundColor: COLORS.surface, borderRadius: RADIUS.xl, padding: SPACE.lg, borderWidth: 1, borderColor: COLORS.border, marginBottom: SPACE.lg, gap: SPACE.md },
-  inputRow: { flexDirection: 'row', alignItems: 'center', gap: SPACE.sm, backgroundColor: COLORS.bg, borderRadius: RADIUS.lg, paddingHorizontal: SPACE.md, paddingVertical: SPACE.sm + 2, borderWidth: 1, borderColor: COLORS.border },
+  inputRow: { flexDirection: 'row', alignItems: 'center', gap: SPACE.sm, backgroundColor:COLORS.bg, borderRadius: RADIUS.lg, paddingHorizontal: SPACE.md, paddingVertical: SPACE.sm + 2, borderWidth: 1, borderColor: COLORS.border },
   mainInput: { flex: 1, fontSize: FONT.md, color: COLORS.text, fontWeight: FONT.w6 },
   camBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: SPACE.sm, paddingVertical: SPACE.md, paddingHorizontal: SPACE.lg, borderRadius: RADIUS.lg, borderWidth: 1.5, borderColor: COLORS.brand, backgroundColor: COLORS.brandLight },
   camBtnTxt: { fontSize: FONT.sm, fontWeight: FONT.w8, color: COLORS.brand },
@@ -548,9 +604,9 @@ const s = StyleSheet.create({
   scanBtnTxt: { color: '#fff', fontSize: FONT.sm, fontWeight: FONT.w9 },
   
   mealCard: { backgroundColor: COLORS.surface, borderRadius: RADIUS.xl, padding: SPACE.lg, borderWidth: 1, borderColor: COLORS.border, marginBottom: SPACE.lg},
-  mealTopRow: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between' },
+  mealTopRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   mealTitle: { fontSize: FONT.xl, fontWeight: FONT.w9, color: COLORS.text },
-  pill: { paddingHorizontal: SPACE.md, paddingVertical: 6, borderRadius: RADIUS.full },
+  pill: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: SPACE.md, paddingVertical: 6, borderRadius: RADIUS.full },
   counterBox: { flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.brandLight, padding: SPACE.lg, borderRadius: RADIUS.lg, marginTop: SPACE.lg, borderWidth: 1, borderColor: 'rgba(3,51,182,0.1)' },
   counterLabel: { fontSize: 10, fontWeight: FONT.w8, color: COLORS.brand, letterSpacing: 1 },
   counterValue: { fontSize: 32, fontWeight: FONT.w9, color: COLORS.brand, marginTop: -4 },

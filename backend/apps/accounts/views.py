@@ -188,9 +188,9 @@ def update_profile_view(request):
     was_complete = user.profile_complete
 
     # Sanitize input fields
-    mutable_data = request.data.copy()
-    for field in ['first_name', 'last_name', 'affiliation', 'bio', 'research_interests', 'designation']:
-        if field in mutable_data:
+    mutable_data = request.data.copy() if hasattr(request.data, 'copy') else dict(request.data)
+    for field in ['first_name', 'last_name', 'affiliation', 'bio', 'research_interests', 'designation', 'phone']:
+        if field in mutable_data and isinstance(mutable_data[field], str):
             mutable_data[field] = sanitize_input(mutable_data[field])
 
     # Enforce research interests bounds if provided
@@ -202,6 +202,52 @@ def update_profile_view(request):
                 'success': False,
                 'message': 'Maximum 5 research interests allowed.'
             }, status=status.HTTP_400_BAD_REQUEST)
+
+    # Base64 photo support (bypasses React Native SDK 57 TurboModule FormData bugs)
+    photo_b64 = mutable_data.pop('profile_photo_base64', None) or mutable_data.pop('photo_base64', None)
+    if photo_b64:
+        import base64, uuid
+        from django.core.files.base import ContentFile
+        try:
+            if 'base64,' in photo_b64:
+                header, data_str = photo_b64.split('base64,', 1)
+                ext = 'png' if 'image/png' in header else 'jpg'
+            else:
+                data_str = photo_b64
+                ext = 'jpg'
+            data_str = data_str.encode('ascii', 'ignore').decode('ascii').strip()
+            missing_padding = len(data_str) % 4
+            if missing_padding:
+                data_str += '=' * (4 - missing_padding)
+            img_data = base64.b64decode(data_str)
+            file_name = f"profile_{user.id.hex[:8]}_{uuid.uuid4().hex[:4]}.{ext}"
+            user.profile_photo.save(file_name, ContentFile(img_data), save=False)
+        except Exception as e:
+            print("Failed to decode base64 profile photo:", e)
+
+    # Synchronize StaffProfile if user is staff/intern/team_head
+    if user.role in ['staff', 'team_head', 'super_admin', 'mgmt_admin'] or hasattr(user, 'staff_profile'):
+        from apps.accounts.models import StaffProfile
+        sp, _ = StaffProfile.objects.get_or_create(user=user, defaults={'tier': 'intern', 'is_public': True})
+        sp_changed = False
+        if 'designation' in mutable_data and mutable_data['designation']:
+            sp.designation = mutable_data['designation']
+            sp_changed = True
+        if 'phone' in mutable_data and mutable_data['phone']:
+            sp.phone = mutable_data['phone']
+            sp_changed = True
+        if 'affiliation' in mutable_data and mutable_data['affiliation']:
+            sp.department = mutable_data['affiliation']
+            sp_changed = True
+        if 'linkedin_url' in mutable_data:
+            sp.linkedin_url = mutable_data['linkedin_url']
+            sp_changed = True
+        # Sync photo to StaffProfile.photo so Event Team screen shows it
+        if user.profile_photo:
+            sp.photo = user.profile_photo
+            sp_changed = True
+        sp.is_public = True
+        sp.save()
 
     serializer = UserSerializer(user, data=mutable_data, partial=True, context={'request': request})
     serializer.is_valid(raise_exception=True)
@@ -267,42 +313,33 @@ def logout_view(request):
 @permission_classes([IsAuthenticated])
 def delete_account_view(request):
     """
-    App Store Guideline 5.1.1(v) - In-app Account Deletion
-    Allows a user to permanently delete / deactivate their account.
+    App Store Guideline 5.1.1(v) - In-app Account Deletion Request
+    User submits a deletion request; admin must approve before account is removed.
     """
     user = request.user
 
     if user.role == 'super_admin':
-        return Response({'error': 'Super Admin accounts cannot be deleted directly from the app.'}, status=400)
+        return Response({'error': 'Super Admin accounts cannot request deletion.'}, status=400)
 
-    user.is_active = False
-    user.suspended_reason = 'Account deleted by user request.'
-    user.first_name = 'Deleted'
-    user.last_name = 'User'
-    user.phone = ''
-    user.bio = ''
-    user.linkedin_url = ''
-    user.research_interests = ''
-    user.profile_photo = None
-    user.set_unusable_password()
-    user.save()
+    if user.is_deletion_pending:
+        return Response({
+            'success': False,
+            'error': 'You already have a pending deletion request awaiting admin review.'
+        }, status=400)
 
-    # Clear FCM / push device tokens
-    try:
-        from apps.notifications.models import DeviceToken
-        DeviceToken.objects.filter(user=user).delete()
-    except Exception:
-        pass
+    from django.utils import timezone
+    reason = (request.data.get('reason') or '').strip()[:50]
+    reason_detail = (request.data.get('reason_detail') or '').strip()[:1000]
 
-    try:
-        from .models import UserFCMToken
-        UserFCMToken.objects.filter(user=user).delete()
-    except Exception:
-        pass
+    user.is_deletion_pending = True
+    user.deletion_requested_at = timezone.now()
+    user.deletion_reason = reason
+    user.deletion_reason_detail = reason_detail
+    user.save(update_fields=['is_deletion_pending', 'deletion_requested_at', 'deletion_reason', 'deletion_reason_detail'])
 
     return Response({
         'success': True,
-        'message': 'Your account has been deleted successfully.'
+        'message': 'Your deletion request has been submitted for admin review.'
     })
 
 
@@ -790,7 +827,7 @@ def admin_staff_permissions_view(request):
 
     elif request.method == 'POST':
         user_id = request.data.get('user_id')
-        modules = request.data.get('modules', [])
+        modules = list(set(request.data.get('modules', [])))
 
         if not user_id:
             return Response({'success': False, 'message': 'user_id is required.'}, status=status.HTTP_400_BAD_REQUEST)
@@ -849,6 +886,13 @@ def admin_staff_create_view(request):
         role=role,
     )
 
+    # is_public: default True unless explicitly false/0/no
+    _pub = request.data.get('is_public', True)
+    if isinstance(_pub, str):
+        is_public = _pub.lower() in ('1', 'true', 'yes', 'on')
+    else:
+        is_public = bool(_pub)
+
     profile = StaffProfile.objects.create(
         user=user,
         tier=tier,
@@ -856,6 +900,7 @@ def admin_staff_create_view(request):
         department=department,
         phone=phone,
         order=StaffProfile.objects.count() + 1,
+        is_public=is_public,
     )
 
     if 'photo' in request.FILES:
@@ -895,6 +940,12 @@ def admin_staff_edit_view(request, pk):
     profile.linkedin_url = request.data.get('linkedin_url', profile.linkedin_url)
     profile.profile_url = request.data.get('profile_url', profile.profile_url)
     profile.scholar_url = request.data.get('scholar_url', profile.scholar_url)
+    if 'is_public' in request.data:
+        _pub = request.data.get('is_public')
+        if isinstance(_pub, str):
+            profile.is_public = _pub.lower() in ('1', 'true', 'yes', 'on')
+        else:
+            profile.is_public = bool(_pub)
     if 'photo' in request.FILES:
         profile.photo = request.FILES['photo']
     profile.save()
@@ -1020,3 +1071,100 @@ def complete_guide(request):
                 pass
                 
     return Response({"success": True})
+
+
+# ── Forgot Password (OTP via IITD SMTP) ──────────────────────
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def forgot_password_view(request):
+    """Send 6-digit OTP to email. Always returns success (no email leak)."""
+    import random
+    from django.core.cache import cache
+    from django.core.mail import send_mail
+    from django.conf import settings
+
+    email = request.data.get('email', '').strip().lower()
+    if not email:
+        return Response({'success': False, 'message': 'Email is required'}, status=400)
+
+    # Rate limit: 1 request per email per 60s
+    rate_key = f'otp_rate_{email}'
+    if cache.get(rate_key):
+        return Response({'success': True, 'message': 'A code was recently sent. Please check your inbox.'})
+
+    user_exists = User.objects.filter(email=email).exists()
+    if user_exists:
+        otp = str(random.randint(100000, 999999))
+        cache.set(f'otp_reset_{email}', otp, timeout=600)
+        cache.set(rate_key, True, timeout=60)
+
+        html = f"""<!DOCTYPE html>
+<html><body style="margin:0;padding:0;background:#f1f5f9;font-family:-apple-system,BlinkMacSystemFont,sans-serif;">
+<table width="100%" cellpadding="0" cellspacing="0" style="padding:24px 16px;">
+<tr><td align="center">
+<table width="440" cellpadding="0" cellspacing="0" style="background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.08);">
+  <tr><td style="background:linear-gradient(135deg,#0333b6,#0245c7);padding:28px 24px;text-align:center;">
+    <h1 style="margin:0;color:#fff;font-size:22px;font-weight:800;letter-spacing:1px;">ETD 2026</h1>
+    <p style="margin:4px 0 0;color:rgba(255,255,255,0.65);font-size:12px;">IIT Delhi &middot; ETDs in the age of AI</p>
+  </td></tr>
+  <tr><td style="padding:32px 28px;text-align:center;">
+    <p style="margin:0 0 8px;color:#475569;font-size:15px;">Your password reset code:</p>
+    <div style="background:#f1f5f9;border-radius:8px;padding:18px;margin:12px 0;">
+      <span style="font-size:34px;font-weight:800;color:#0333b6;letter-spacing:10px;">{otp}</span>
+    </div>
+    <p style="margin:16px 0 0;color:#94a3b8;font-size:13px;">Valid for 10 minutes. Do not share this code.</p>
+    <p style="margin:24px 0 0;color:#cbd5e1;font-size:11px;">Didn&#39;t request this? Please report this issue with ETD 2026 organizers at <a href="mailto:etd2026@iitd.ac.in">etd2026@iitd.ac.in</a></p>
+  </td></tr>
+</table></td></tr></table></body></html>"""
+
+        try:
+            send_mail(
+                subject='ETD 2026 — Password Reset Code',
+                message=f'Your ETD 2026 password reset code is: {otp}\n\nValid for 10 minutes.',
+                from_email=settings.DEFAULT_FROM_EMAIL,
+                recipient_list=[email],
+                html_message=html,
+                fail_silently=False,
+            )
+        except Exception as e:
+            try:
+                from apps.error_reports.models import SystemLogEntry
+                SystemLogEntry.objects.create(
+                    log_type='auth_failure', level='ERROR',
+                    message=f'OTP email failed for {email}: {e}',
+                )
+            except Exception:
+                pass
+
+    return Response({'success': True, 'message': 'If an account exists with this email, a reset code has been sent.'})
+
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def reset_password_view(request):
+    """Verify OTP and set new password."""
+    from django.core.cache import cache
+
+    email = request.data.get('email', '').strip().lower()
+    otp = request.data.get('otp', '').strip()
+    new_password = request.data.get('new_password', '')
+
+    if not all([email, otp, new_password]):
+        return Response({'success': False, 'message': 'All fields are required'}, status=400)
+    if len(new_password) < 8:
+        return Response({'success': False, 'message': 'Password must be at least 8 characters'}, status=400)
+
+    cached_otp = cache.get(f'otp_reset_{email}')
+    if not cached_otp or cached_otp != otp:
+        return Response({'success': False, 'message': 'Invalid or expired code'}, status=400)
+
+    try:
+        user = User.objects.get(email=email)
+        user.set_password(new_password)
+        user.must_change_password = False
+        user.save()
+        cache.delete(f'otp_reset_{email}')
+        cache.delete(f'otp_rate_{email}')
+        return Response({'success': True, 'message': 'Password reset successful. You can now sign in.'})
+    except User.DoesNotExist:
+        return Response({'success': False, 'message': 'Invalid or expired code'}, status=400)

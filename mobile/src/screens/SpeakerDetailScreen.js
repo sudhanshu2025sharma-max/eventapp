@@ -1,3 +1,4 @@
+import { apiFetch } from '../api';
 import React, { useEffect, useState, useRef } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, Image, StyleSheet,
@@ -41,6 +42,44 @@ function BentoCard({ children, delay = 0, style, onPress }) {
   };
 
   const Wrapper = onPress ? TouchableOpacity : View;
+
+  const handleOpenChat = async () => {
+    // 1. If conversation_id is already present on speaker or connection request
+    if (speaker?.conversation_id) {
+      onOpenChatRoom?.(speaker.conversation_id);
+      return;
+    }
+    if (connectionStatus?.conversation_id) {
+      onOpenChatRoom?.(connectionStatus.conversation_id);
+      return;
+    }
+
+    // 2. Fetch or create conversation using speaker's linked user ID
+    const targetUserId = speaker?.user_id || speaker?.user || connectionStatus?.user_id;
+    if (!targetUserId) {
+      alert('This speaker has not linked their participant account yet.');
+      return;
+    }
+
+    try {
+      const res = await apiFetch(`/chat/support/start/${targetUserId}/`, {
+        method: 'POST',
+        body: JSON.stringify({ topic: 'session_discuss', custom_topic: '', message: '' }),
+      });
+      const data = await res.json();
+      if (data.success && data.conversation_id) {
+        onOpenChatRoom?.(data.conversation_id);
+      } else if (data.conversation_id) {
+        onOpenChatRoom?.(data.conversation_id);
+      } else {
+        alert(data.error || 'Unable to open conversation.');
+      }
+    } catch (e) {
+      console.log('Error opening speaker chat:', e);
+      alert('Network error opening chat.');
+    }
+  };
+
 
   return (
     <Animated.View
@@ -145,7 +184,7 @@ const ExpandableBio = ({ text, isLong }) => {
 };
 
 /* ═══════════════════════ MAIN ═══════════════════════ */
-export default function SpeakerDetailScreen({ tokens, speakerId, onBack, onOpenChatRoom }) {
+export default function SpeakerDetailScreen({tokens, speakerId, onBack, onOpenChatRoom}) {
   const [speaker, setSpeaker] = useState(null);
   const [loading, setLoading] = useState(true);
   const [imgOk, setImgOk] = useState(true);
@@ -267,10 +306,29 @@ export default function SpeakerDetailScreen({ tokens, speakerId, onBack, onOpenC
     }
   }
 
-  const handleConnectPress = () => {
+  const handleConnectPress = async () => {
     if (btnDisabled) return;
-    if (connStatus === 'connected' && chatId) {
-      onOpenChatRoom?.(chatId);
+    if (connStatus === 'connected') {
+      if (chatId) {
+        onOpenChatRoom?.(chatId);
+        return;
+      }
+      // If chatId is not yet cached, fetch/create it directly
+      try {
+        const res = await apiFetch(`/chat/support/start/${targetUserId}/`, {
+          method: 'POST',
+          body: JSON.stringify({ topic: 'session_discuss', custom_topic: '', message: '' }),
+        });
+        const data = await res.json();
+        const cid = data.conversation_id || data.id;
+        if (cid) {
+          setChatId(cid);
+          onOpenChatRoom?.(cid);
+          return;
+        }
+      } catch (err) {
+        console.log('Error opening chat for connected speaker:', err);
+      }
       return;
     }
     if (connStatus === 'pending_received') {

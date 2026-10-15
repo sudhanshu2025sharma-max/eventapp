@@ -92,6 +92,7 @@ export default function SupportModal({ visible, onDismiss, onOpenChatRoom }) {
         {/* Topic Picker Modal */}
         <TopicPickerModal
           visible={showTopicPicker}
+          useModal={false}
           onClose={() => {
             setShowTopicPicker(false);
             setTargetMember(null);

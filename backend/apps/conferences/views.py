@@ -7,19 +7,33 @@ from .models import ConferenceSetting
 from apps.events.models import Event
 
 
+from django.core.cache import cache
+from django.db.models.signals import post_save, post_delete
+from django.dispatch import receiver
+
+@receiver([post_save, post_delete], sender=ConferenceSetting)
+def _on_conf_settings_change(sender, **kwargs):
+    cache.delete('conf_settings_payload_v1')
+
+
 # ── public API ────────────────────────────────────────────────────────────
 
 def conference_settings(request):
-    s = ConferenceSetting.get()
-    return JsonResponse({
-        'name':        s.name,
-        'tagline':     s.tagline,
-        'website_url': s.website_url,
-        'logo_url':    request.build_absolute_uri(s.logo.url) if s.logo else None,
-        'start_date':  s.start_date.isoformat() if s.start_date else None,
-        'end_date':    s.end_date.isoformat()   if s.end_date   else None,
-        'venue':       s.venue,
-    })
+    data = cache.get('conf_settings_payload_v1')
+    if data is None:
+        s = ConferenceSetting.get()
+        logo_url = request.build_absolute_uri(s.logo.url) if s.logo else None
+        data = {
+            'name':        s.name,
+            'tagline':     s.tagline,
+            'website_url': s.website_url,
+            'logo_url':    logo_url,
+            'start_date':  s.start_date.isoformat() if s.start_date else None,
+            'end_date':    s.end_date.isoformat()   if s.end_date   else None,
+            'venue':       s.venue,
+        }
+        cache.set('conf_settings_payload_v1', data, 300)
+    return JsonResponse(data)
 
 
 def events_api(request):

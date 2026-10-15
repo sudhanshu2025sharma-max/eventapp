@@ -1,8 +1,9 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { View, StatusBar, Animated, Text, Platform } from 'react-native';
+import { View, Animated, Text, Platform, ImageBackground, Image, StyleSheet } from 'react-native';
+import { StatusBar } from 'expo-status-bar';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { LinearGradient } from 'expo-linear-gradient';
 import LoginScreen          from './src/screens/LoginScreen';
 import ChangePasswordScreen from './src/screens/ChangePasswordScreen';
 import MainApp              from './src/MainApp';
@@ -63,52 +64,239 @@ async function refreshAccessToken(tokens) {
   return null;
 }
 
-function SplashScreen() {
-  const sc = useRef(new Animated.Value(0.75)).current;
-  const op = useRef(new Animated.Value(0)).current;
+// ── Smooth Staggered Character Animation ─────────────────────────────────
+function StaggeredText({ text, style, delay = 0, staggerMs = 50 }) {
+  const chars = text.split('');
+  const anims = useRef(chars.map(() => new Animated.Value(0))).current;
 
   useEffect(() => {
-    Animated.parallel([
-      Animated.spring(sc, { toValue: 1, tension: 55, friction: 8, useNativeDriver: true }),
-      Animated.timing(op, { toValue: 1, duration: 700, useNativeDriver: true }),
-    ]).start();
+    const animations = anims.map((anim) =>
+      Animated.timing(anim, {
+        toValue: 1,
+        duration: 600,
+        useNativeDriver: true,
+      })
+    );
+    const timer = setTimeout(() => {
+      Animated.stagger(staggerMs, animations).start();
+    }, delay);
+    return () => clearTimeout(timer);
   }, []);
 
   return (
-    <LinearGradient
-      colors={['#070614', '#0F172A', '#0333b6']}
-      start={{ x: 0.1, y: 0 }}
-      end={{ x: 0.9, y: 1 }}
-      style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}
-    >
-      <StatusBar barStyle="light-content" />
-      <View style={{
-        position: 'absolute', width: 300, height: 300, borderRadius: 150,
-        borderWidth: 1, borderColor: 'rgba(255,255,255,0.04)', top: -80, right: -80,
-      }} />
-      <Animated.View style={{ alignItems: 'center', transform: [{ scale: sc }], opacity: op }}>
-        <View style={{
-          width: 90, height: 90, borderRadius: 26,
-          backgroundColor: 'rgba(255,255,255,0.10)',
-          borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.18)',
-          alignItems: 'center', justifyContent: 'center', marginBottom: 20,
-        }}>
-          <Text style={{ fontSize: 26, fontWeight: '900', color: '#FFFFFF', letterSpacing: 2 }}>ETD</Text>
-        </View>
-        <Text style={{ fontSize: 38, fontWeight: '900', color: '#FFFFFF', letterSpacing: 0.5 }}>ETD 2026</Text>
-        <Text style={{ fontSize: 13, color: 'rgba(255,255,255,0.50)', marginTop: 6, letterSpacing: 0.3 }}>
-          ETDs in the age of AI
-        </Text>
-        <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 24 }}>
-          <View style={{ width: 32, height: 2, backgroundColor: '#f59e0b', borderRadius: 2 }} />
-          <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: '#f59e0b', marginHorizontal: 6 }} />
-          <View style={{ width: 32, height: 2, backgroundColor: '#f59e0b', borderRadius: 2 }} />
-        </View>
-        <Text style={{ fontSize: 12, color: 'rgba(255,255,255,0.30)', marginTop: 16 }}>IIT Delhi</Text>
-      </Animated.View>
-    </LinearGradient>
+    <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center' }}>
+      {chars.map((char, index) => {
+        const translateY = anims[index].interpolate({
+          inputRange: [0, 1],
+          outputRange: [16, 0],
+        });
+        const scale = anims[index].interpolate({
+          inputRange: [0, 1],
+          outputRange: [0.88, 1],
+        });
+        return (
+          <Animated.Text
+            key={`${char}-${index}`}
+            style={[style, { opacity: anims[index], transform: [{ translateY }, { scale }] }]}
+          >
+            {char === ' ' ? '\u00A0' : char}
+          </Animated.Text>
+        );
+      })}
+    </View>
   );
 }
+
+function SplashScreen() {
+  const badgeAnim  = useRef(new Animated.Value(0)).current;
+  const logoAnim   = useRef(new Animated.Value(0)).current;
+  const lineAnim   = useRef(new Animated.Value(0)).current;
+  const footerAnim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    // Badge  → 0.2s
+    Animated.timing(badgeAnim,  { toValue: 1, duration: 600, delay: 200,  useNativeDriver: true }).start();
+    // Logo   → 0.4s
+    Animated.timing(logoAnim,   { toValue: 1, duration: 800, delay: 400,  useNativeDriver: true }).start();
+    // Line   → 3.4s
+    Animated.timing(lineAnim,   { toValue: 1, duration: 600, delay: 3400, useNativeDriver: true }).start();
+    // Footer → 4.0s
+    Animated.timing(footerAnim, { toValue: 1, duration: 600, delay: 4000, useNativeDriver: true }).start();
+  }, []);
+
+  const logoScale = logoAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0.85, 1],
+  });
+
+  return (
+    <ImageBackground
+      source={require('./assets/ETD_bgImage.png')}
+      style={styles.bg}
+      resizeMode="cover"
+    >
+      <StatusBar style="light" translucent />
+
+      {/* ── ZONE 1: TOP — Symposium badge ── */}
+      <View style={styles.topZone}>
+        <Animated.View style={{ opacity: badgeAnim }}>
+          <View style={styles.badge}>
+            <Text style={styles.badgeText}>26th International Symposium</Text>
+          </View>
+        </Animated.View>
+      </View>
+
+      {/* ── ZONE 2: MIDDLE — Logo + Title + Subtitle + Line (true vertical center of sky) ── */}
+      <View style={styles.midZone}>
+        <Animated.View style={{ opacity: logoAnim, transform: [{ scale: logoScale }], marginBottom: 18 }}>
+          <Image
+            source={require('./assets/etd_Logo-white.png')}
+            style={styles.logo}
+          />
+        </Animated.View>
+
+        <StaggeredText
+          text="ETD 2026"
+          delay={1200}
+          staggerMs={80}
+          style={styles.title}
+        />
+
+        <View style={{ marginTop: 10 }}>
+          <StaggeredText
+            text="ETDs in the age of AI"
+            delay={2200}
+            staggerMs={40}
+            style={styles.subtitle}
+          />
+        </View>
+
+        <Animated.View style={[styles.lineRow, { opacity: lineAnim }]}>
+          <View style={styles.lineBar} />
+          <View style={styles.lineDot} />
+          <View style={styles.lineBar} />
+        </Animated.View>
+      </View>
+
+      {/* ── ZONE 3: BOTTOM — Organizer footer over the dark skyline ── */}
+      <View style={styles.bottomZone}>
+        <Animated.View style={{ opacity: footerAnim, width: '100%' }}>
+          <View style={styles.footerBox}>
+            <Text style={styles.footerText}>Central Library IIT Delhi | NDLTD</Text>
+          </View>
+        </Animated.View>
+      </View>
+    </ImageBackground>
+  );
+}
+
+const styles = StyleSheet.create({
+  bg: {
+    flex: 1,
+    backgroundColor: '#090A27', // instant sky color — no white flash while PNG loads
+    paddingHorizontal: 24,
+  },
+
+  // Three equal vertical zones → full-screen utilization
+  topZone: {
+    flex: 1,
+    justifyContent: 'flex-end',   // badge sits just above mid zone
+    alignItems: 'center',
+    paddingBottom: 8,
+    paddingTop: Platform.OS === 'ios' ? 50 : 36,
+  },
+  midZone: {
+    flex: 2.2,                    // largest share — main branding lives in the sky
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  bottomZone: {
+    flex: 1,
+    justifyContent: 'flex-end',   // footer rests above the skyline hills
+    alignItems: 'center',
+    paddingBottom: Platform.OS === 'ios' ? 40 : 28,
+  },
+
+  badge: {
+    paddingHorizontal: 16,
+    paddingVertical: 6,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.25)',
+  },
+  badgeText: {
+    color: '#F59E0B',
+    fontSize: 11,
+    fontWeight: '800',
+    letterSpacing: 1.5,
+    textTransform: 'uppercase',
+  },
+
+  logo: {
+    width: 220,
+    height: 125,
+    resizeMode: 'contain',
+  },
+
+  title: {
+    fontSize: 48,
+    fontWeight: '900',
+    color: '#FFFFFF',
+    letterSpacing: 2,
+    textAlign: 'center',
+    textShadowColor: 'rgba(0,0,0,0.5)',
+    textShadowOffset: { width: 0, height: 4 },
+    textShadowRadius: 10,
+  },
+  subtitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#F1F5F9',
+    textAlign: 'center',
+    letterSpacing: 0.5,
+    textShadowColor: 'rgba(0,0,0,0.4)',
+    textShadowOffset: { width: 0, height: 2 },
+    textShadowRadius: 6,
+  },
+
+  lineRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 24,
+  },
+  lineBar: {
+    width: 36,
+    height: 2,
+    backgroundColor: '#F59E0B',
+    borderRadius: 2,
+  },
+  lineDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 3.5,
+    backgroundColor: '#FFFFFF',
+    marginHorizontal: 8,
+  },
+
+  footerBox: {
+    backgroundColor: 'rgba(15, 23, 42, 0.65)',
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.18)',
+    alignItems: 'center',
+    width: '100%',
+  },
+  footerText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#FFFFFF',
+    letterSpacing: 0.5,
+    textAlign: 'center',
+  },
+});
 
 export default function App() {
   const [screen, setScreen] = useState('splash');
@@ -117,13 +305,15 @@ export default function App() {
   const [notificationRoute, setNotificationRoute] = useState(null);
   const pushToken = useRef(null);
 
-  // Keep api.js module token in sync with React state
   useEffect(() => {
     if (tokens) setApiTokens(tokens);
   }, [tokens]);
 
   useEffect(() => {
     const restore = async () => {
+      const startTime = Date.now();
+      let nextScreen = 'login';
+
       try {
         const savedUser   = await Storage.get('etd_user');
         const savedTokens = await Storage.get('etd_tokens');
@@ -159,7 +349,7 @@ export default function App() {
                   await Storage.set('etd_tokens', nextTokens);
                 });
                 await Storage.set('etd_tokens', activeTokens);
-                setScreen('app');
+                nextScreen = 'app';
 
                 try {
                   const pt = await registerForPushNotifications(activeTokens.access);
@@ -167,7 +357,6 @@ export default function App() {
                 } catch (pushErr) {
                   console.warn('Push registration warning:', pushErr);
                 }
-                return;
               }
             }
           } catch (netErr) {
@@ -176,8 +365,12 @@ export default function App() {
         }
       } catch (e) {
         console.warn('Restore general error:', e);
+      } finally {
+        // 7-second cold-start minimum
+        const elapsed = Date.now() - startTime;
+        const delay = Math.max(0, 7000 - elapsed);
+        setTimeout(() => setScreen(nextScreen), delay);
       }
-      setTimeout(() => setScreen('login'), 1500);
     };
     restore();
   }, []);
@@ -340,8 +533,10 @@ export default function App() {
   };
 
   return (
-    <GestureHandlerRootView style={{ flex: 1 }}>
-      {renderContent()}
-    </GestureHandlerRootView>
+    <SafeAreaProvider>
+      <GestureHandlerRootView style={{ flex: 1 }}>
+        {renderContent()}
+      </GestureHandlerRootView>
+    </SafeAreaProvider>
   );
 }

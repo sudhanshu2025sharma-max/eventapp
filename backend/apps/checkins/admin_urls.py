@@ -4,6 +4,8 @@ from . import admin_views
 urlpatterns = [
     path('checkins/scanner/', admin_views.scanner_view, name='checkin_scanner'),
     path('checkins/list/', admin_views.checkin_list_view, name='checkin_list'),
+    path('checkins/export/', admin_views.export_checkins_csv, name='export_checkins'),
+    path('checkins/export-excel/', admin_views.export_checkins_excel, name='export_checkins_excel'),
     path('checkins/scan/', admin_views.panel_scan, name='panel_scan'),
     path('checkins/goodies/', admin_views.panel_goodies, name='panel_goodies'),
     path('checkins/stats/', admin_views.panel_stats, name='panel_stats'),

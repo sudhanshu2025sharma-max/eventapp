@@ -305,43 +305,59 @@ panel_meal_schedule = panel_meal_window_schedule
 def panel_meal_scan(request):
     if request.method != 'POST':
         return JsonResponse({"success": False, "message": "POST required"}, status=405)
-    import json, uuid
+    import json
     try:
         data = json.loads(request.body.decode('utf-8'))
     except Exception:
         data = request.POST
+    
     raw_qr = str(data.get('qr_data') or data.get('qr_code') or data.get('registration_id') or '').strip()
-    meal_pass = None
-    try:
-        meal_pass = MealPass.objects.filter(id=uuid.UUID(raw_qr), is_active=True).first()
-    except Exception:
-        pass
+    
+    target_user = User.objects.filter(models.Q(registration_id__iexact=raw_qr) | models.Q(email__iexact=raw_qr)).first()
+    
+    if not target_user:
+        try:
+            import uuid
+            pass_uuid = uuid.UUID(raw_qr)
+            fallback_pass = MealPass.objects.filter(id=pass_uuid).first()
+            if fallback_pass and fallback_pass.user:
+                target_user = fallback_pass.user
+        except Exception:
+            pass
+
+    if not target_user:
+        return JsonResponse({"success": False, "message": "Participant not found. Invalid ID."}, status=404)
+
+    is_checked_in = CheckIn.objects.filter(user=target_user, checkin_type='conference').exists()
+    if not is_checked_in:
+        return JsonResponse({"success": False, "message": "Not Checked-In! User must check into the conference first."}, status=400)
+
+    today = timezone.now().astimezone(IST).date()
+    window = MealWindow.objects.filter(date=today).order_by('-id').first()
+    if not window or not window.is_open:
+        return JsonResponse({"success": False, "message": "No active dining service is currently open."}, status=400)
+
+    active_meal_name = window.meal_type or "Meal"
+
+    existing_scan = MealPass.objects.filter(user=target_user, date=today, meal_type=active_meal_name, used=True).first()
+    if existing_scan:
+        time_str = existing_scan.used_at.astimezone(IST).strftime('%I:%M %p') if existing_scan.used_at else ""
+        return JsonResponse({"success": False, "message": f"Already Redeemed at {time_str}"}, status=400)
+
+    meal_pass = MealPass.objects.filter(user=target_user, date=today, meal_type=active_meal_name, used=False).first()
     if not meal_pass:
-        u = User.objects.filter(models.Q(registration_id=raw_qr) | models.Q(email__iexact=raw_qr)).first()
-        if u:
-            meal_pass = MealPass.objects.filter(user=u, date=_today(), is_active=True).order_by('-created_at').first()
-    if not meal_pass:
-        return JsonResponse({"success": False, "message": "Invalid or expired Meal Pass QR."}, status=404)
-    if meal_pass.used:
-        return JsonResponse({"success": False, "message": f"{meal_pass.meal_type} pass already redeemed."}, status=400)
+        meal_pass = MealPass(user=target_user, date=today, meal_type=active_meal_name, is_active=True)
+    
     meal_pass.used = True
     meal_pass.used_at = timezone.now()
     meal_pass.scanned_by = request.user
     meal_pass.save()
-    if meal_pass.user:
-        try:
-            award_points(meal_pass.user, 'meal_checkin', f"Attended {meal_pass.meal_type} service")
-        except Exception:
-            pass
+
     return JsonResponse({
         "success": True,
-        "message": f"{meal_pass.meal_type} pass verified for {meal_pass.display_name}!",
-        "pass": {
-            "display_name": meal_pass.display_name,
-            "meal_type": meal_pass.meal_type,
-            "used": True,
-        },
+        "message": f"✅ {active_meal_name} approved for {target_user.get_full_name() or target_user.email}!"
     })
+
 
 
 @login_required
@@ -413,3 +429,235 @@ def meal_pass_create_view(request):
         })
     messages.success(request, f"{meal_type} pass created for {guest_name}!")
     return redirect('/panel/checkins/scanner/')
+
+import csv
+from django.http import HttpResponse
+
+@login_required
+@module_required('checkin_scanner')
+def export_checkins_csv(request):
+    import csv
+    from django.http import HttpResponse
+
+    tab = (request.GET.get('tab') or 'checked_in').strip()
+    search = (request.GET.get('search') or '').strip()
+    selected_meal = (request.GET.get('meal_type') or '').strip()
+    date_str = (request.GET.get('date') or '').strip()
+    today = _today()
+
+    # Optional date filter for meal history (YYYY-MM-DD)
+    meal_date = today
+    if date_str:
+        try:
+            from datetime import datetime as _dt
+            meal_date = _dt.strptime(date_str, '%Y-%m-%d').date()
+        except Exception:
+            meal_date = today
+
+    if tab == 'not_checked_in':
+        filename = f"not_checked_in_{today}.csv"
+        response = HttpResponse(content_type='text/csv')
+        response['Content-Disposition'] = f'attachment; filename="{filename}"'
+        writer = csv.writer(response)
+        writer.writerow(['Registration ID', 'First Name', 'Last Name', 'Email', 'Role', 'Affiliation', 'Phone', 'Designation'])
+
+        checked_in_ids = list(CheckIn.objects.filter(checkin_type='conference').values_list('user_id', flat=True))
+        qs = User.objects.filter(
+            models.Q(role='participant') | models.Q(role='attendee') | models.Q(role='speaker'),
+            is_active=True
+        ).exclude(id__in=checked_in_ids).order_by('first_name')
+
+        if search:
+            qs = qs.filter(
+                models.Q(first_name__icontains=search) |
+                models.Q(last_name__icontains=search) |
+                models.Q(email__icontains=search) |
+                models.Q(registration_id__icontains=search)
+            )
+
+        for u in qs:
+            writer.writerow([
+                getattr(u, 'registration_id', '') or '',
+                u.first_name or '',
+                u.last_name or '',
+                u.email or '',
+                getattr(u, 'role', '') or '',
+                getattr(u, 'affiliation', '') or '',
+                getattr(u, 'phone', '') or '',
+                getattr(u, 'designation', '') or '',
+            ])
+        return response
+
+    if tab == 'meal':
+        filename = f"meal_history_{meal_date}.csv"
+        response = HttpResponse(content_type='text/csv')
+        response['Content-Disposition'] = f'attachment; filename="{filename}"'
+        writer = csv.writer(response)
+        writer.writerow([
+            'Date', 'Meal Type', 'Registration ID', 'Name', 'Email',
+            'Status', 'Redeemed At (IST)', 'Scanned By', 'Pass ID', 'Guest Phone'
+        ])
+
+        qs = MealPass.objects.select_related('user', 'scanned_by').filter(date=meal_date).order_by('meal_type', '-used_at', '-created_at')
+        if selected_meal:
+            qs = qs.filter(meal_type__iexact=selected_meal)
+        if search:
+            qs = qs.filter(
+                models.Q(user__first_name__icontains=search) |
+                models.Q(user__last_name__icontains=search) |
+                models.Q(user__email__icontains=search) |
+                models.Q(user__registration_id__icontains=search) |
+                models.Q(guest_name__icontains=search) |
+                models.Q(guest_email__icontains=search)
+            )
+
+        for p in qs:
+            redeemed = ''
+            if p.used_at:
+                redeemed = p.used_at.astimezone(IST).strftime('%Y-%m-%d %H:%M')
+            writer.writerow([
+                str(p.date),
+                p.meal_type or 'Meal',
+                p.display_reg or '',
+                p.display_name or '',
+                p.display_email or '',
+                'Redeemed' if p.used else 'Active/Unused',
+                redeemed,
+                p.scanned_by.get_full_name() if p.scanned_by else '',
+                str(p.id),
+                p.guest_phone or '',
+            ])
+        return response
+
+    # Default: checked_in
+    filename = f"checked_in_{today}.csv"
+    response = HttpResponse(content_type='text/csv')
+    response['Content-Disposition'] = f'attachment; filename="{filename}"'
+    writer = csv.writer(response)
+    writer.writerow([
+        'Registration ID', 'First Name', 'Last Name', 'Email', 'Role',
+        'Affiliation', 'Phone', 'Kit Status', 'Kit Note', 'Scanned By', 'Checked In At (IST)'
+    ])
+
+    qs = CheckIn.objects.select_related('user', 'scanned_by').filter(checkin_type='conference').order_by('-scanned_at')
+    if search:
+        qs = qs.filter(
+            models.Q(user__first_name__icontains=search) |
+            models.Q(user__last_name__icontains=search) |
+            models.Q(user__email__icontains=search) |
+            models.Q(user__registration_id__icontains=search)
+        )
+
+    for c in qs:
+        u = c.user
+        scanned_str = c.scanned_at.astimezone(IST).strftime('%Y-%m-%d %H:%M') if c.scanned_at else ''
+        writer.writerow([
+            getattr(u, 'registration_id', '') or '',
+            u.first_name or '',
+            u.last_name or '',
+            u.email or '',
+            getattr(u, 'role', '') or '',
+            getattr(u, 'affiliation', '') or '',
+            getattr(u, 'phone', '') or '',
+            c.goodies_status or 'pending',
+            c.goodies_note or '',
+            c.scanned_by.get_full_name() if c.scanned_by else '',
+            scanned_str,
+        ])
+    return response
+
+
+@login_required
+@module_required('checkin_scanner')
+def export_checkins_excel(request):
+    import openpyxl
+    from openpyxl.styles import Font, PatternFill, Alignment
+    from openpyxl.utils import get_column_letter
+    from django.http import HttpResponse
+
+    wb = openpyxl.Workbook()
+    
+    # ── SHEET 1: Checked In Attendees ──
+    ws1 = wb.active
+    ws1.title = "Checked In Attendees"
+    ws1.append(['Registration ID', 'First Name', 'Last Name', 'Email', 'Role', 'Affiliation', 'Phone', 'Kit Status', 'Kit Note', 'Scanned By', 'Checked In At (IST)'])
+    
+    checkins = CheckIn.objects.select_related('user', 'scanned_by').filter(checkin_type='conference').order_by('-scanned_at')
+    for c in checkins:
+        u = c.user
+        scanned_str = c.scanned_at.astimezone(IST).strftime('%Y-%m-%d %H:%M') if c.scanned_at else ''
+        ws1.append([
+            getattr(u, 'registration_id', '') or '',
+            u.first_name or '',
+            u.last_name or '',
+            u.email or '',
+            getattr(u, 'role', '') or '',
+            getattr(u, 'affiliation', '') or '',
+            getattr(u, 'phone', '') or '',
+            c.goodies_status or 'pending',
+            c.goodies_note or '',
+            c.scanned_by.get_full_name() if c.scanned_by else '',
+            scanned_str
+        ])
+
+    # ── SHEET 2: Not Checked In ──
+    ws2 = wb.create_sheet(title="Not Checked In")
+    ws2.append(['Registration ID', 'First Name', 'Last Name', 'Email', 'Role', 'Affiliation', 'Phone', 'Designation'])
+    
+    checked_in_ids = list(CheckIn.objects.filter(checkin_type='conference').values_list('user_id', flat=True))
+    not_checked_in = User.objects.filter(
+        models.Q(role='participant') | models.Q(role='attendee') | models.Q(role='speaker'),
+        is_active=True
+    ).exclude(id__in=checked_in_ids).order_by('first_name')
+
+    for u in not_checked_in:
+        ws2.append([
+            getattr(u, 'registration_id', '') or '',
+            u.first_name or '',
+            u.last_name or '',
+            u.email or '',
+            getattr(u, 'role', '') or '',
+            getattr(u, 'affiliation', '') or '',
+            getattr(u, 'phone', '') or '',
+            getattr(u, 'designation', '') or ''
+        ])
+
+    # ── SHEET 3: Meal Pass History ──
+    ws3 = wb.create_sheet(title="Meal Pass History")
+    ws3.append(['Date', 'Meal Type', 'Registration ID', 'Name', 'Email', 'Status', 'Redeemed At (IST)', 'Scanned By', 'Pass ID', 'Guest Phone'])
+    
+    meal_passes = MealPass.objects.select_related('user', 'scanned_by').order_by('-date', 'meal_type', '-used_at')
+    for p in meal_passes:
+        redeemed = p.used_at.astimezone(IST).strftime('%Y-%m-%d %H:%M') if p.used_at else ''
+        ws3.append([
+            str(p.date),
+            p.meal_type or 'Meal',
+            p.display_reg or '',
+            p.display_name or '',
+            p.display_email or '',
+            'Redeemed' if p.used else 'Active/Unused',
+            redeemed,
+            p.scanned_by.get_full_name() if p.scanned_by else '',
+            str(p.id),
+            p.guest_phone or ''
+        ])
+
+    # Styling Headers & Column Widths
+    header_fill = PatternFill(start_color="0333B6", end_color="0333B6", fill_type="solid")
+    header_font = Font(name="Calibri", size=11, bold=True, color="FFFFFF")
+
+    for ws in wb.worksheets:
+        for cell in ws[1]:
+            cell.fill = header_fill
+            cell.font = header_font
+            cell.alignment = Alignment(horizontal="center", vertical="center")
+        
+        for col in ws.columns:
+            max_len = max(len(str(cell.value or '')) for cell in col)
+            col_letter = get_column_letter(col[0].column)
+            ws.column_dimensions[col_letter].width = max(max_len + 3, 12)
+
+    response = HttpResponse(content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+    response['Content-Disposition'] = f'attachment; filename="ETD2026_CheckIn_And_Meal_Report_{_today()}.xlsx"'
+    wb.save(response)
+    return response

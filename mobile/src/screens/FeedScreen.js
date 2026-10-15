@@ -8,7 +8,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useVideoPlayer, VideoView } from 'expo-video';
-import { COLORS, FONT, SPACE, RADIUS, SHADOW, TOP, BOTTOM, W, H } from '../theme';
+import { COLORS, FONT, SPACE, RADIUS, SHADOW, TOP, BOTTOM, W, H, fixMediaUrl } from '../theme';
 import { apiFetch } from '../api';
 import { useKeyboardHeight } from '../useKeyboard';
 
@@ -112,7 +112,8 @@ const PostCard = React.memo(({ item, index, onReact, onOpenComments, onOpenMedia
   }, []);
 
   const meta = TYPE_META[item.post_type] || TYPE_META.general;
-  const isVideo = item.image_url && item.image_url.match(/\.(mp4|mov|m4v)$/i);
+  const imgUrl = fixMediaUrl(item.image_url);
+  const isVideo = imgUrl && imgUrl.match(/\.(mp4|mov|m4v)$/i);
   const totalReactions = useMemo(() => Object.values(item.reaction_summary || {}).reduce((a, b) => a + b, 0), [item.reaction_summary]);
   const topEmojis = useMemo(() => Object.entries(item.reaction_summary || {}).filter(([, v]) => v > 0).sort((a, b) => b[1] - a[1]).slice(0, 3).map(([k]) => REACTIONS.find(r => r.key === k)?.emoji).filter(Boolean), [item.reaction_summary]);
   const visibleReactions = expandedReactions ? REACTIONS : REACTIONS.slice(0, 4);
@@ -145,15 +146,15 @@ const PostCard = React.memo(({ item, index, onReact, onOpenComments, onOpenMedia
 
         <SessionChip session={item.session} />
 
-        {!!item.image_url && (
-          <TouchableOpacity activeOpacity={0.9} style={s.imgWrap} onPress={() => onOpenMedia(item.image_url, isVideo)}>
+        {!!imgUrl && (
+          <TouchableOpacity activeOpacity={0.9} style={s.imgWrap} onPress={() => onOpenMedia(imgUrl, isVideo)}>
             {isVideo ? (
               <View style={s.videoPreviewWrap}>
-                <Image source={{ uri: item.image_url.replace(/\.(mp4|mov|m4v)$/i, ".jpg") }} style={s.img} resizeMode="cover" />
+                <Image source={{ uri: imgUrl.replace(/\.(mp4|mov|m4v)$/i, ".jpg") }} style={s.img} resizeMode="cover" resizeMethod="resize" fadeDuration={0} />
                 <View style={s.playOverlay}><Ionicons name="play-circle" size={48} color="#fff" /></View>
               </View>
             ) : (
-              <Image source={{ uri: item.image_url }} style={s.img} resizeMode="cover" />
+              <Image source={{ uri: imgUrl }} style={s.img} resizeMode="cover" resizeMethod="resize" fadeDuration={0} onError={(e) => console.warn('Feed img fail:', imgUrl, e.nativeEvent?.error)} />
             )}
           </TouchableOpacity>
         )}
@@ -345,7 +346,7 @@ export default function FeedScreen({ onBack }) {
           {fullMedia?.isVideo ? (
             <VideoView player={fullMediaPlayer} style={{ width: '100%', height: '80%' }} contentFit="contain" nativeControls allowsFullscreen />
           ) : (
-            <Image source={{ uri: fullMedia?.url }} style={{ width: '100%', height: '80%' }} resizeMode="contain" />
+            <Image source={{ uri: fixMediaUrl(fullMedia?.url) }} style={{ width: '100%', height: '80%' }} resizeMode="contain" resizeMethod="resize" fadeDuration={0} />
           )}
         </View>
       </Modal>

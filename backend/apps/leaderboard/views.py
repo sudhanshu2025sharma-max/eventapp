@@ -10,9 +10,14 @@ from .models import UserPoints, PointEntry
 
 
 def _checked_in_user_ids():
-    return list(CheckIn.objects.filter(
+    cached = cache.get('checked_in_user_ids_cache')
+    if cached is not None:
+        return cached
+    val = list(CheckIn.objects.filter(
         checkin_type='conference'
     ).values_list('user_id', flat=True))
+    cache.set('checked_in_user_ids_cache', val, 30)
+    return val
 
 
 def _photo_url(user, request):
@@ -33,12 +38,17 @@ def my_points(request):
     eligible = request.user.id in checked_in_ids
 
     total = summary.total_points
-    rank = summary.rank if eligible else 0
+    if eligible:
+        rank = summary.rank
+        rank_label = f'#{rank}'
+    else:
+        rank = 0
+        role_label = request.user.role.replace('_', ' ').title()
+        rank_label = f'{role_label} — Not Checked In'
 
     higher = None
     if eligible:
         higher = UserPoints.objects.select_related('user').filter(
-            user__role='participant',
             user_id__in=checked_in_ids,
         ).filter(
             models.Q(total_points__gt=total) |
@@ -67,6 +77,7 @@ def my_points(request):
         'eligible': eligible,
         'total_points': total,
         'rank': rank,
+        'rank_label': rank_label,
         'next_rank_points': higher.total_points if higher else None,
         'next_rank_name': (higher.user.get_full_name() or higher.user.email.split('@')[0]) if higher else None,
         'next_gap': (higher.total_points - total) if higher else 0,
@@ -90,14 +101,12 @@ def leaderboard(request):
     if cached_data is None:
         # Resolve order: total points, earliest updated_at, stable user_id fallback
         top_qs = UserPoints.objects.select_related('user').filter(
-            user__role='participant',
             user_id__in=checked_in_ids,
         ).order_by('-total_points', 'updated_at', 'user_id')[:50]
 
         # Compute point values that are shared by multiple checked-in users (ties)
         tied_points_list = list(
             UserPoints.objects.filter(
-                user__role='participant',
                 user_id__in=checked_in_ids
             ).values('total_points').annotate(
                 cnt=Count('id')

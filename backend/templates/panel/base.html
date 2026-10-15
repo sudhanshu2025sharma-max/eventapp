@@ -332,6 +332,9 @@
             <a href="/panel/checkins/scanner/" class="menu-item {% if request.resolver_match.url_name == 'checkin_scanner' %}active{% endif %}">
                 <i class="fas fa-qrcode"></i> Scanner
             </a>
+          <a href="/panel/checkins/list/" class="menu-item {% if request.resolver_match.url_name == 'checkin_list' %}active{% endif %}">
+            <i class="fas fa-list-ul"></i> History & Export
+          </a>
 
             <div class="menu-label">Content</div>
             <a href="/panel/schedule/accepted-papers/" class="menu-item {% if '/accepted-papers/' in request.path %}active{% endif %}"><i class="fas fa-file-alt"></i> Accepted Papers</a>
@@ -378,6 +381,14 @@
             <a href="/panel/users/manage/" class="menu-item {% if request.resolver_match.url_name == 'users_manage' %}active{% endif %}">
                 <i class="fas fa-shield-halved"></i> User Management
             </a>
+            {% if is_super_admin or "users_manage" in user_permissions %}
+            <a href="/panel/deletion-requests/" class="menu-item {% if '/deletion-requests/' in request.path %}active{% endif %}">
+                <i class="fas fa-user-minus"></i> Deletion Requests
+            </a>
+            <a href="/panel/deletion-history/" class="menu-item {% if '/deletion-history/' in request.path %}active{% endif %}">
+                <i class="fas fa-history"></i> Deletion History
+            </a>
+            {% endif %}
             <a href="/panel/settings/conference/" class="menu-item {% if request.resolver_match.url_name == 'conference_settings' %}active{% endif %}">
                 <i class="fas fa-cog"></i> Settings
             </a>

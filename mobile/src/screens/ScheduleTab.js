@@ -734,12 +734,18 @@ function ReminderModal({ visible, item, itemType, tokens, onClose }) {
   );
 }
 
+let _memScheduleDays = { 1: null, 2: null, 3: null };
+
 /* ── Main Screen ── */
 export default function ScheduleTab({ tokens, onOpenPaper }) {
   const [activeTab, setActiveTab] = useState(1);
-  const [sessions, setSessions] = useState({ 1: [], 2: [], 3: [] });
+  const [sessions, setSessions] = useState(() => ({
+    1: _memScheduleDays[1] || [],
+    2: _memScheduleDays[2] || [],
+    3: _memScheduleDays[3] || [],
+  }));
   const [bookmarks, setBookmarks] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(() => !(_memScheduleDays[1]?.length || _memScheduleDays[2]?.length || _memScheduleDays[3]?.length));
   const [refreshing, setRefreshing] = useState(false);
   const [feedbackSession, setFeedbackSession] = useState(null);
   const [reminderItem, setReminderItem] = useState(null);
@@ -761,14 +767,17 @@ export default function ScheduleTab({ tokens, onOpenPaper }) {
   const fetchDay = useCallback(async (day) => {
     try {
       const res = await fetch(`${API_URL}/schedule/sessions/?day=${day}`, { headers: auth });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
       const s = data.sessions || [];
-      writeScheduleCache(day, s);
+      if (s.length > 0) {
+        writeScheduleCache(day, s);
+      }
       return { sessions: s, fromCache: false };
     } catch {
       const cached = await readScheduleCache(day);
-      if (cached) return { sessions: cached.data, fromCache: true };
-      return { sessions: [], fromCache: false };
+      if (cached?.data?.length) return { sessions: cached.data, fromCache: true };
+      return { sessions: _memScheduleDays[day] || [], fromCache: true };
     }
   }, [tokens]);
 
@@ -786,8 +795,10 @@ export default function ScheduleTab({ tokens, onOpenPaper }) {
     const [c1, c2, c3] = await Promise.all([
       readScheduleCache(1), readScheduleCache(2), readScheduleCache(3),
     ]);
-    if (c1 || c2 || c3) {
-      setSessions({ 1: c1?.data || [], 2: c2?.data || [], 3: c3?.data || [] });
+    if (c1?.data?.length || c2?.data?.length || c3?.data?.length) {
+      const cachedObj = { 1: c1?.data || [], 2: c2?.data || [], 3: c3?.data || [] };
+      _memScheduleDays = cachedObj;
+      setSessions(cachedObj);
       setLoading(false);
     }
   }, []);
@@ -798,7 +809,9 @@ export default function ScheduleTab({ tokens, onOpenPaper }) {
     const [r1, r2, r3, bm] = await Promise.all([
       fetchDay(1), fetchDay(2), fetchDay(3), fetchBookmarks(),
     ]);
-    setSessions({ 1: r1.sessions, 2: r2.sessions, 3: r3.sessions });
+    const nextSessions = { 1: r1.sessions, 2: r2.sessions, 3: r3.sessions };
+    _memScheduleDays = nextSessions;
+    setSessions(nextSessions);
     setBookmarks(bm);
     setOffline(r1.fromCache || r2.fromCache || r3.fromCache);
     setLoading(false);
@@ -1010,12 +1023,16 @@ export default function ScheduleTab({ tokens, onOpenPaper }) {
 
       {/* Floating Jump to Live Button */}
       {hasLive && (
-        <TouchableOpacity style={t.jumpBtn} activeOpacity={0.88} onPress={scrollToLive}>
+        <TouchableOpacity
+          style={t.jumpBtn}
+          activeOpacity={0.88}
+          onPress={scrollToLive}
+        >
           <PulsingDot color="#fff" size={5} />
           <Text style={t.jumpText}>Jump to Live</Text>
           <Ionicons name="arrow-down" size={14} color="#fff" />
         </TouchableOpacity>
-      )}
+      )}     
 
       <FeedbackModal
         visible={!!feedbackSession}
@@ -1601,19 +1618,20 @@ const t = StyleSheet.create({
   },
 
   /* ── Jump to live ── */
-  jumpBtn: {
-    position: 'absolute',
-    bottom: 90,
-    alignSelf: 'center',
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 7,
-    backgroundColor: COLORS.error,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: RADIUS.full,
-    ...SHADOW.lg,
-  },
+jumpBtn: {
+  position: 'absolute',
+  bottom: Platform.OS === 'ios' ? 140 : 110,
+  alignSelf: 'center',
+  flexDirection: 'row',
+  alignItems: 'center',
+  gap: 7,
+  backgroundColor: COLORS.error,
+  paddingHorizontal: 16,
+  paddingVertical: 10,
+  borderRadius: RADIUS.full,
+  ...SHADOW.lg,
+},
+
   jumpText: { color: '#fff', fontWeight: FONT.w8, fontSize: 12 },
 });
 

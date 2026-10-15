@@ -47,7 +47,8 @@
         "android.permission.READ_MEDIA_VIDEO",
         "android.permission.READ_MEDIA_AUDIO"
       ],
-      "versionCode": 3
+      "versionCode": 3,
+      "edgeToEdgeEnabled": true
     },
     "plugins": [
       "./plugins/withNetworkSecurity.js",

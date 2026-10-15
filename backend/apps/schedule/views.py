@@ -5,7 +5,10 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from rest_framework.response import Response
 from rest_framework import status
-from django.db.models import Q, Avg, Count
+from django.db.models import Q, Avg, Count, Prefetch
+from django.core.cache import cache
+from django.db.models.signals import post_save, post_delete
+from django.dispatch import receiver
 from django.shortcuts import get_object_or_404
 
 from apps.accounts.permissions_helper import api_module_required
@@ -19,6 +22,19 @@ from .utils import (
     IST, _parse_panel_dt, _validate_document,
     _ensure_feedback_form, _combine_iso
 )
+
+
+def invalidate_schedule_cache():
+    keys = ['schedule_base_v1_all'] + [f'schedule_base_v1_day_{d}' for d in range(1, 10)]
+    cache.delete_many(keys)
+
+
+@receiver([post_save, post_delete], sender=ScheduleSession)
+@receiver([post_save, post_delete], sender=AcceptedPaper)
+@receiver([post_save, post_delete], sender=ScheduleSubSession)
+@receiver([post_save, post_delete], sender=FeedbackForm)
+def _on_schedule_data_change(sender, **kwargs):
+    invalidate_schedule_cache()
 
 
 def _serialize_session(s, bookmarked_ids=None, bookmarked_paper_ids=None):
@@ -39,7 +55,9 @@ def _serialize_session(s, bookmarked_ids=None, bookmarked_paper_ids=None):
 
     papers = []
     try:
-        for p in s.papers.filter(is_published=True):
+        for p in s.papers.all():
+            if not getattr(p, 'is_published', True):
+                continue
             papers.append({
                 'id': str(p.id),
                 'paper_id': p.paper_id,
@@ -60,7 +78,7 @@ def _serialize_session(s, bookmarked_ids=None, bookmarked_paper_ids=None):
     feedback_enabled = bool(getattr(s, 'feedback_enabled', False))
     feedback_open = False
     try:
-        form = s.feedback_forms.filter(is_active=True).first()
+        form = next((f for f in s.feedback_forms.all() if getattr(f, 'is_active', False)), None)
         if form and feedback_enabled:
             feedback_open = True
     except Exception:
@@ -100,36 +118,59 @@ def _serialize_session(s, bookmarked_ids=None, bookmarked_paper_ids=None):
 @api_view(['GET'])
 @permission_classes([AllowAny])
 def session_list(request):
-    qs = ScheduleSession.objects.all().prefetch_related('sub_sessions', 'papers', 'feedback_forms')
-
-    if hasattr(ScheduleSession, 'is_published'):
-        qs = qs.filter(is_published=True)
-
     day = request.GET.get('day')
-    if day not in (None, '', 'all'):
-        try:
-            qs = qs.filter(day=int(day))
-        except (TypeError, ValueError):
-            pass
+    cache_key = f'schedule_base_v1_day_{day}' if day not in (None, '', 'all') else 'schedule_base_v1_all'
+
+    base_sessions = cache.get(cache_key)
+    if base_sessions is None:
+        qs = ScheduleSession.objects.filter(is_published=True).prefetch_related(
+            'sub_sessions',
+            Prefetch('papers', queryset=AcceptedPaper.objects.filter(is_published=True)),
+            Prefetch('feedback_forms', queryset=FeedbackForm.objects.filter(is_active=True))
+        )
+
+        if day not in (None, '', 'all'):
+            try:
+                qs = qs.filter(day=int(day))
+            except (TypeError, ValueError):
+                pass
+
+        raw_sessions = [_serialize_session(s) for s in qs.order_by('date', 'start_time', 'display_order')]
+
+        by_day = {}
+        for s in raw_sessions:
+            by_day.setdefault(s['date'], []).append(s)
+        for day_list in by_day.values():
+            for i, a in enumerate(day_list):
+                for b in day_list[i + 1:]:
+                    if a['start_time'] and a['end_time'] and b['start_time'] and b['end_time']:
+                        if a['start_time'] < b['end_time'] and b['start_time'] < a['end_time']:
+                            a['is_parallel'] = True
+                            b['is_parallel'] = True
+
+        base_sessions = raw_sessions
+        cache.set(cache_key, base_sessions, 120)
 
     bookmarked_ids = set()
+    bookmarked_paper_ids = set()
     user = getattr(request, 'user', None)
     if user is not None and getattr(user, 'is_authenticated', False):
         bookmarked_ids = set(str(x) for x in SessionBookmark.objects.filter(user=user).values_list('session_id', flat=True))
         bookmarked_paper_ids = set(str(x) for x in PaperBookmark.objects.filter(user=user).values_list('paper_id', flat=True))
 
-    sessions = [_serialize_session(s, bookmarked_ids, bookmarked_paper_ids) for s in qs.order_by('date', 'start_time', 'display_order')]
+    if not bookmarked_ids and not bookmarked_paper_ids:
+        return Response({'sessions': base_sessions, 'count': len(base_sessions)})
 
-    by_day = {}
-    for s in sessions:
-        by_day.setdefault(s['date'], []).append(s)
-    for day_list in by_day.values():
-        for i, a in enumerate(day_list):
-            for b in day_list[i + 1:]:
-                if a['start_time'] and a['end_time'] and b['start_time'] and b['end_time']:
-                    if a['start_time'] < b['end_time'] and b['start_time'] < a['end_time']:
-                        a['is_parallel'] = True
-                        b['is_parallel'] = True
+    sessions = []
+    for s in base_sessions:
+        s_copy = dict(s)
+        s_copy['is_bookmarked'] = s['id'] in bookmarked_ids
+        if s.get('papers'):
+            s_copy['papers'] = [
+                {**p, 'is_bookmarked': p['id'] in bookmarked_paper_ids}
+                for p in s['papers']
+            ]
+        sessions.append(s_copy)
 
     return Response({'sessions': sessions, 'count': len(sessions)})
 
@@ -137,13 +178,22 @@ def session_list(request):
 @api_view(['GET'])
 @permission_classes([AllowAny])
 def session_detail(request, pk):
-    s = get_object_or_404(ScheduleSession, pk=pk)
+    s = get_object_or_404(
+        ScheduleSession.objects.prefetch_related(
+            'sub_sessions',
+            Prefetch('papers', queryset=AcceptedPaper.objects.filter(is_published=True)),
+            Prefetch('feedback_forms', queryset=FeedbackForm.objects.filter(is_active=True))
+        ),
+        pk=pk
+    )
     bookmarked_ids = set()
+    bookmarked_paper_ids = set()
     user = getattr(request, 'user', None)
     if user is not None and getattr(user, 'is_authenticated', False):
         if SessionBookmark.objects.filter(user=user, session=s).exists():
             bookmarked_ids.add(str(s.id))
-    return Response(_serialize_session(s, bookmarked_ids))
+        bookmarked_paper_ids = set(str(x) for x in PaperBookmark.objects.filter(user=user, paper__session=s).values_list('paper_id', flat=True))
+    return Response(_serialize_session(s, bookmarked_ids, bookmarked_paper_ids))
 
 
 @api_view(['GET'])

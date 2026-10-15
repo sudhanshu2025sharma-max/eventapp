@@ -23,6 +23,7 @@
 .tier-deputy { background: #cffafe; color: #0891b2; }
 .tier-assistant { background: #d1fae5; color: #059669; }
 .tier-staff { background: #fef3c7; color: #d97706; }
+.tier-intern { background: #f3e8ff; color: #7e22ce; }
 .perm-tags { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 8px; }
 .perm-tag { font-size: 0.65rem; padding: 2px 6px; border-radius: 4px; background: #f1f5f9; color: #475569; }
 .modal-overlay { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 1000; align-items: center; justify-content: center; }
@@ -39,7 +40,7 @@
   <span style="color: #64748b; font-size: 0.9rem;">
     <i class="fas fa-users"></i> {{ staff_users|length }} staff members
   </span>
-  <button class="s-btn s-btn-add" onclick="openModal('add')">
+  <button class="s-btn s-btn-add" onclick="openModal('add', '', '', '', '', '', '', '', 'staff', 'staff', '', '', '', '1')">
     <i class="fas fa-plus"></i> Add Staff Member
   </button>
 </div>
@@ -82,7 +83,7 @@
     {% endwith %}
 
     <div class="s-actions">
-      <button class="s-btn s-btn-edit" onclick="openModal('edit', '{{ s.id }}', '{{ s.first_name }}', '{{ s.last_name }}', '{{ s.email }}', '{{ s.staff_profile.phone }}', '{{ s.staff_profile.designation }}', '{{ s.staff_profile.department }}', '{{ s.staff_profile.tier }}', '{{ s.role }}', '{{ s.staff_profile.linkedin_url }}', '{{ s.staff_profile.profile_url }}', '{{ s.staff_profile.scholar_url }}')">
+      <button class="s-btn s-btn-edit" onclick="openModal('edit', '{{ s.id }}', '{{ s.first_name }}', '{{ s.last_name }}', '{{ s.email }}', '{{ s.staff_profile.phone }}', '{{ s.staff_profile.designation }}', '{{ s.staff_profile.department }}', '{{ s.staff_profile.tier }}', '{{ s.role }}', '{{ s.staff_profile.linkedin_url }}', '{{ s.staff_profile.profile_url }}', '{{ s.staff_profile.scholar_url }}', '{{ s.staff_profile.is_public|yesno:"1,0" }}')">
         <i class="fas fa-pen"></i> Edit
       </button>
       <button type="button" class="s-btn s-btn-perm" onclick="openPermsModal('{{ s.id }}', '{{ s.get_full_name }}')">
@@ -151,7 +152,8 @@
             <option value="librarian">Librarian & Head</option>
             <option value="deputy">Deputy Librarian</option>
             <option value="assistant">Assistant Librarian</option>
-            <option value="staff" selected>Staff</option>
+            <option value="staff">Staff</option>
+            <option value="intern">Intern</option>
           </select>
         </div>
         <div class="form-group">
@@ -175,11 +177,23 @@
         <input type="url" name="scholar_url" id="fScholar" placeholder="https://scholar.google.com/...">
       </div>
       <div class="form-group">
+        
+        <div class="form-group" style="grid-column: span 2; margin-top: 8px;">
+          <label style="display: flex; align-items: center; gap: 10px; cursor: pointer; font-weight: 600;">
+            <input type="checkbox" name="is_public" id="fIsPublic" value="1" style="width: 18px; height: 18px; accent-color: var(--primary);">
+            Show on Mobile App
+          </label>
+          <span style="font-size: 11px; color: var(--text-tertiary); margin-left: 28px;">Uncheck to hide this staff member from the mobile app directory.</span>
+        </div>
+
         <label>Photo</label>
+        
         <input type="file" name="photo" accept="image/*">
       </div>
       <div style="display: flex; gap: 8px; margin-top: 16px;">
-        <button type="submit" class="s-btn s-btn-add" style="flex: 1;">Save</button>
+        
+            
+<button type="submit" class="s-btn s-btn-add" style="flex: 1;">Save</button>
         <button type="button" class="s-btn s-btn-del" onclick="closeModal()">Cancel</button>
       </div>
     </form>
@@ -204,7 +218,7 @@
 </div>
 
 <script>
-function openModal(mode, id, fn, ln, em, ph, desig, dept, tier, role, linkedin, profile, scholar) {
+function openModal(mode, id, fn, ln, em, ph, desig, dept, tier, role, linkedin, profile, scholar, isPublic) {
   document.getElementById('modalTitle').textContent = mode === 'edit' ? 'Edit Staff' : 'Add Staff Member';
   document.getElementById('formAction').value = mode === 'edit' ? 'edit' : 'create';
   document.getElementById('formUserId').value = id || '';
@@ -215,6 +229,8 @@ function openModal(mode, id, fn, ln, em, ph, desig, dept, tier, role, linkedin, 
   document.getElementById('fDesignation').value = desig || '';
   document.getElementById('fDepartment').value = dept || '';
   document.getElementById('fTier').value = tier || 'staff';
+  document.getElementById('fIsPublic').checked = (isPublic === '1' || isPublic === 'True' || isPublic === 'true' || isPublic === true);
+  document.getElementById('fIsPublic').checked = (mode === 'add' || isPublic === 'True' || isPublic === 'true' || isPublic === '1' || isPublic === true);
   document.getElementById('fRole').value = role || 'staff';
   document.getElementById('fPassword').value = '';
   document.getElementById('fLinkedin').value = linkedin || '';

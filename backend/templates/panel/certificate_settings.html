@@ -1,0 +1,54 @@
+{% extends "panel/base.html" %}
+{% block title %}Certificate Settings — ETD 2026{% endblock %}
+{% block page_title %}Certificate Settings{% endblock %}
+{% block page_subtitle %}Configure issuing authority and email delivery{% endblock %}
+
+{% block content %}
+{% for m in messages %}
+<div class="alert alert-{{ m.tags|default:'success' }}"><i class="fas fa-check-circle"></i> {{ m }}</div>
+{% endfor %}
+
+<div class="page-header">
+  <h1 style="font-size:18px; font-weight:600; margin:0;"><i class="fas fa-cog" style="color:var(--primary); margin-right:8px;"></i>Certificate Settings</h1>
+  <a href="{% url 'panel_certificates' %}" class="btn btn-secondary"><i class="fas fa-arrow-left"></i> Back</a>
+</div>
+
+<div class="card">
+  <div class="card-header">
+    <h3><i class="fas fa-university" style="color:var(--primary); margin-right:8px;"></i>Issuing Authority</h3>
+  </div>
+  <div class="card-body">
+    <form method="POST">
+      {% csrf_token %}
+
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:20px; margin-bottom:20px;">
+        <div>
+          <label class="form-label">Issuing Authority Name</label>
+          <input type="text" name="authority_name" class="form-control" value="{{ config.authority_name }}" placeholder="Central Library, IIT Delhi">
+          <small style="font-size:12px; color:var(--text-tertiary); margin-top:4px; display:block;">Shown on certificates and emails</small>
+        </div>
+        <div>
+          <label class="form-label">Authority Title</label>
+          <input type="text" name="authority_title" class="form-control" value="{{ config.authority_title }}" placeholder="Head, Central Library">
+        </div>
+        <div>
+          <label class="form-label">Organization</label>
+          <input type="text" name="organization" class="form-control" value="{{ config.organization }}" placeholder="Indian Institute of Technology Delhi">
+        </div>
+        <div>
+          <label class="form-label">Email Subject</label>
+          <input type="text" name="email_subject" class="form-control" value="{{ config.email_subject }}" placeholder="Your ETD 2026 Certificate">
+        </div>
+      </div>
+
+      <div style="margin-bottom:24px;">
+        <label class="form-label">Email Body Template</label>
+        <textarea name="email_body" class="form-control" rows="6" style="resize:vertical;">{{ config.email_body }}</textarea>
+        <small style="font-size:12px; color:var(--text-tertiary); margin-top:4px; display:block;">Use <code>{name}</code> as placeholder for the recipient's name.</small>
+      </div>
+
+      <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> Save Settings</button>
+    </form>
+  </div>
+</div>
+{% endblock %}

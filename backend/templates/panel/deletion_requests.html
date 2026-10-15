@@ -1,0 +1,116 @@
+{% extends "panel/base.html" %}
+
+{% block title %}Deletion Requests — ETD 2026 Admin{% endblock %}
+{% block page_title %}Account Deletion Requests{% endblock %}
+{% block page_subtitle %}Review and approve or deny user-submitted deletion requests{% endblock %}
+
+{% block content %}
+
+{% if messages %}
+  {% for message in messages %}
+    <div class="alert alert-{{ message.tags }}">{{ message }}</div>
+  {% endfor %}
+{% endif %}
+
+<div class="stats-grid" style="grid-template-columns: repeat(2, 1fr); max-width: 500px; margin-bottom: 28px;">
+    <div class="stat-card">
+        <div class="stat-card-header">
+            <div class="stat-icon" style="background: var(--warning-light); color: var(--warning);">
+                <i class="fas fa-clock"></i>
+            </div>
+        </div>
+        <div class="stat-value">{{ total }}</div>
+        <div class="stat-label">Pending Requests</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-card-header">
+            <div class="stat-icon" style="background: var(--primary-light); color: var(--primary);">
+                <i class="fas fa-shield-halved"></i>
+            </div>
+        </div>
+        <div class="stat-value" style="font-size: 18px; margin-top: 8px;">48 hrs</div>
+        <div class="stat-label">Target Resolution SLA</div>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <h3><i class="fas fa-user-minus" style="color: var(--danger); margin-right: 8px;"></i>Pending Deletion Requests</h3>
+        <span class="badge badge-warning">{{ total }} pending</span>
+    </div>
+    <div class="card-body" style="padding: 0;">
+        {% if requests %}
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>User</th>
+                    <th>Email</th>
+                    <th>Role</th>
+                    <th>Requested At</th>
+                    <th>Reason</th>
+                    <th style="text-align: right;">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for u in requests %}
+                <tr>
+                    <td>
+                        <strong>{{ u.get_full_name }}</strong>
+                        {% if u.registration_id %}
+                            <br><span style="font-size: 11px; color: var(--text-tertiary);">{{ u.registration_id }}</span>
+                        {% endif %}
+                    </td>
+                    <td style="font-family: monospace; font-size: 13px;">{{ u.email }}</td>
+                    <td>
+                        <span class="badge {% if u.role == 'participant' %}badge-info{% elif u.role == 'speaker' %}badge-success{% else %}badge-warning{% endif %}">
+                            {{ u.role }}
+                        </span>
+                    </td>
+                    <td>
+                        {% if u.deletion_requested_at %}
+                            {{ u.deletion_requested_at|date:"d M Y, H:i" }}
+                        {% else %}
+                            —
+                        {% endif %}
+                    </td>
+                    <td style="max-width: 260px;">
+                        {% if u.deletion_reason %}
+                            <strong style="font-size: 12px; color: var(--text);">{{ u.deletion_reason }}</strong>
+                            {% if u.deletion_reason_detail %}
+                                <br><span style="font-size: 11px; color: var(--text-tertiary);">{{ u.deletion_reason_detail|truncatechars:120 }}</span>
+                            {% endif %}
+                        {% else %}
+                            <span style="color: var(--text-tertiary); font-size: 12px;">—</span>
+                        {% endif %}
+                    </td>
+                    <td style="text-align: right;">
+                        <form method="POST" action="{% url 'deletion_request_action' u.pk %}" style="display: inline;" onsubmit="return confirm('APPROVE deletion for {{ u.get_full_name }}? This will permanently anonymize their account and cannot be undone.');">
+                            {% csrf_token %}
+                            <input type="hidden" name="action" value="approve">
+                            <button type="submit" class="btn btn-danger btn-sm">
+                                <i class="fas fa-check"></i> Approve &amp; Delete
+                            </button>
+                        </form>
+                        <form method="POST" action="{% url 'deletion_request_action' u.pk %}" style="display: inline;" onsubmit="return confirm('Deny deletion request for {{ u.get_full_name }}?');">
+                            {% csrf_token %}
+                            <input type="hidden" name="action" value="deny">
+                            <button type="submit" class="btn btn-secondary btn-sm">
+                                <i class="fas fa-times"></i> Deny
+                            </button>
+                        </form>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <div class="empty-state">
+            <i class="fas fa-check-circle"></i>
+            <h3>No Pending Requests</h3>
+            <p>All account deletion requests have been processed.</p>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+{% endblock %}

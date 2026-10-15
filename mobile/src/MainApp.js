@@ -1,3 +1,4 @@
+import CertificatesScreen from './screens/CertificatesScreen';
 import ReportErrorScreen from './screens/ReportErrorScreen';
 import OnboardingGuideScreen from './screens/OnboardingGuideScreen';
 import StaffGroupChatScreen from './screens/StaffGroupChatScreen';
@@ -6,6 +7,7 @@ import StaffDetailScreen from './screens/StaffDetailScreen';
 import VoiceCallScreen from './screens/VoiceCallScreen';
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { View, Text, TouchableOpacity, Pressable, StyleSheet, Platform, Animated, Modal, BackHandler, Keyboard } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { COLORS, FONT, SPACE, RADIUS, SHADOW, API_URL, API_HEADERS, API_ROOT, BOTTOM } from './theme';
@@ -21,6 +23,7 @@ import NotificationsScreen from './screens/NotificationsScreen';
 import AdminTab from './screens/admin/AdminTab';
 import EditProfileScreen from './screens/EditProfileScreen';
 import ChangePasswordScreen from './screens/ChangePasswordScreen';
+import ForgotPasswordScreen from './screens/ForgotPasswordScreen';
 import SponsorsScreen from './screens/SponsorsScreen';
 import SpokersScreen from './screens/SpokersScreen';
 import ChatListScreen from './screens/ChatListScreen';
@@ -169,9 +172,9 @@ function AnimatedFAB({ tab, isActive, onTab }) {
   );
 }
 
-function BottomTabBar({ active, onTab, tabs, networkBadge }) {
+function BottomTabBar({ active, onTab, tabs, networkBadge, bottomInset = 0 }) {
   return (
-    <View style={st.barWrapper} pointerEvents="box-none">
+    <View style={[st.barWrapper, { bottom: BOTTOM + bottomInset }]} pointerEvents="box-none">
       <View style={st.barContainer}>
         {tabs.map((t) => {
           if (t.accent) {
@@ -231,6 +234,7 @@ export default function MainApp({
   notificationRoute,
   clearNotificationRoute,
 }) {
+  const insets = useSafeAreaInsets();
   const [tab, setTab] = useState('home');
   const [subScreen, setSubScreen] = useState(null);
   const [selectedStaff, setSelectedStaff] = useState(null);
@@ -300,73 +304,29 @@ export default function MainApp({
     }
   };
 
-  useEffect(() => {
-    if (!tokens?.access || !isOrganizer) return;
-
-    let ws = null;
-    let reconnectTimeout = null;
-
-    function connectCallSocket() {
-      try {
-        ws = new WebSocket(`${API_ROOT.replace('https://', 'wss://').replace('http://', 'ws://')}/ws/call/?token=${tokens.access}`);
-        callWsRef.current = ws;
-
-        ws.onmessage = (e) => {
-          try {
-            const data = JSON.parse(e.data);
-            if (data.type === 'incoming_call') {
-              try { Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning); } catch (_) {}
-              setActiveCall({
-                mode: 'incoming',
-                targetUser: data.caller,
-                incomingSessionId: data.session_id,
-              });
-            }
-          } catch (err) {
-            console.warn('[Call Listen Error]', err);
-          }
-        };
-
-        ws.onclose = () => {
-          reconnectTimeout = setTimeout(connectCallSocket, 5000);
-        };
-      } catch (err) {
-        console.warn('[Call WS Conn Error]', err);
-      }
-    }
-
-    connectCallSocket();
-
-    return () => {
-      if (reconnectTimeout) clearTimeout(reconnectTimeout);
-      if (ws) ws.close();
-    };
-  }, [tokens?.access, isOrganizer]);
+  // Call WebSocket disabled (WebRTC calling is inactive)
 
   const fetchBadges = useCallback(async () => {
     const t = tokensRef.current;
     if (!t?.access) return;
     try {
-      const auth = { ...API_HEADERS, Authorization: `Bearer ${t.access}` };
       const [reqRes, convRes] = await Promise.all([
-        fetch(`${API_URL}/chat/requests/count/`, { headers: auth }),
-        fetch(`${API_URL}/chat/conversations/`, { headers: auth }),
+        apiFetch('/chat/requests/count/'),
+        apiFetch('/chat/conversations/'),
       ]);
-      if (reqRes.status === 401 || convRes.status === 401) {
-        await apiFetch('/auth/me/'); 
-        return;
+      if (reqRes.ok && convRes.ok) {
+        const reqData = await reqRes.json();
+        const convData = await convRes.json();
+        setPendingRequests(reqData.pending_count || 0);
+        setChatUnread(convData.total_unread || 0);
       }
-      const reqData = await reqRes.json();
-      const convData = await convRes.json();
-      setPendingRequests(reqData.pending_count || 0);
-      setChatUnread(convData.total_unread || 0);
     } catch { /* silent */ }
   }, []);
 
   useEffect(() => {
-    const d = setTimeout(fetchBadges, 500);
+    fetchBadges();
     const t = setInterval(fetchBadges, 30000);
-    return () => { clearTimeout(d); clearInterval(t); };
+    return () => clearInterval(t);
   }, [fetchBadges]);
 
   useEffect(() => {
@@ -442,10 +402,13 @@ export default function MainApp({
     if (subScreen === 'notifications') return <NotificationsScreen tokens={tokens} onBack={closeSubScreen} />;
     if (subScreen === 'edit_profile') return <EditProfileScreen user={user} tokens={tokens} onBack={closeSubScreen} onProfileUpdated={handleProfileUpdated} />;
     if (subScreen === 'change_password') return <ChangePasswordScreen user={user} tokens={tokens} onDone={closeSubScreen} onLogout={onLogout} />;
+    if (subScreen === 'forgot_password') return <ForgotPasswordScreen onBack={closeSubScreen} initialEmail={user?.email || ''} />;
     if (subScreen === 'sponsors') return <SponsorsScreen tokens={tokens} onBack={closeSubScreen} />;
-    if (subScreen === 'speakers') return <SpokersScreen tokens={tokens} onBack={closeSubScreen} />;
+    if (subScreen === 'speakers') return <SpokersScreen tokens={tokens} onBack={closeSubScreen} onOpenChatRoom={(convId) => openSubScreen('chat_room', { conversationId: convId })}
+        onOpenCertificates={() => openSubScreen('certificates')} />;
     if (subScreen === 'chat_list') return <ChatListScreen tokens={tokens} onBack={closeSubScreen} onOpenChat={(convId) => openSubScreen('chat_room', { conversationId: convId })} onOpenRequests={() => openSubScreen('connection_requests')} pendingCount={pendingRequests} />;
     if (subScreen === 'chat_room') return <ChatRoomScreen tokens={tokens} user={user} conversationId={subParams.conversationId} onBack={() => setSubScreen('chat_list')} onDisconnected={() => setSubScreen('chat_list')} />;
+    if (subScreen === 'certificates') return <CertificatesScreen tokens={tokens} onBack={closeSubScreen} />;
     if (subScreen === 'connection_requests') return <ConnectionRequestsScreen tokens={tokens} onBack={closeSubScreen} onOpenChat={(convId) => openSubScreen('chat_room', { conversationId: convId })} />;
     
     if (subScreen === 'staff_team') {
@@ -547,6 +510,7 @@ export default function MainApp({
         user={user} tokens={tokens} onLogout={onLogout}
         onEditProfile={() => openSubScreen('edit_profile')}
         onChangePassword={() => openSubScreen('change_password')}
+          onForgotPassword={() => openSubScreen('forgot_password')}
         onOpenNotifications={() => openSubScreen('notifications')}
         onOpenChats={() => openSubScreen('chat_list')}
         onOpenRecap={() => openSubScreen('recap')}
@@ -555,6 +519,7 @@ export default function MainApp({
         onOpenStaffTeam={() => openSubScreen('staff_team')}
         onOpenReportError={() => openSubScreen('report_error')}
         onOpenChatRoom={(convId) => openSubScreen('chat_room', { conversationId: convId })}
+        onOpenCertificates={() => openSubScreen('certificates')}
       />
     ),
     admin: <AdminTab user={user} tokens={tokens} onLogout={onLogout} />,
@@ -562,7 +527,7 @@ export default function MainApp({
   };
 
   return (
-    <View style={{ flex: 1, backgroundColor: COLORS.bg }}>
+    <View style={{ flex: 1, backgroundColor: COLORS.bg, paddingTop: insets.top }}>
       {subScreen ? renderSubScreenContent() : (SCREENS[tab] || SCREENS.home)}
 
       {activeCall && (
@@ -586,7 +551,7 @@ export default function MainApp({
       />
 
       {!subScreen && !keyboardVisible && (
-        <BottomTabBar active={tab} onTab={setTab} tabs={tabs} networkBadge={pendingRequests} />
+        <BottomTabBar active={tab} onTab={setTab} tabs={tabs} networkBadge={pendingRequests} bottomInset={insets.bottom} />
       )}
 
       <OnboardingGuideScreen 

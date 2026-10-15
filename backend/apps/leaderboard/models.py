@@ -61,15 +61,12 @@ class UserPoints(models.Model):
     @property
     def rank(self):
         """
-        1-based rank among checked-in participants only.
+        1-based rank among ALL checked-in users (participants, speakers, staff, etc.).
         Ties are broken sequentially by:
           1. More points
           2. Earlier point update timestamp (updated_at)
           3. Deterministic user_id sorting fallback
         """
-        if self.user.role != 'participant':
-            return 0
-
         from apps.checkins.models import CheckIn
 
         eligible = CheckIn.objects.filter(user=self.user, checkin_type='conference').exists()
@@ -81,7 +78,6 @@ class UserPoints(models.Model):
         ).values_list('user_id', flat=True))
 
         better_count = UserPoints.objects.filter(
-            user__role='participant',
             user_id__in=checked_in_user_ids,
         ).filter(
             models.Q(total_points__gt=self.total_points) |

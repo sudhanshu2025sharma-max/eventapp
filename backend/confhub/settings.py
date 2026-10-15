@@ -46,6 +46,7 @@ LOCAL_APPS = [
     'apps.chat',
     'apps.schedule',
     'apps.error_reports',
+    'apps.certificates',
 ]
 
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
@@ -95,7 +96,7 @@ if config('USE_POSTGRES', default=False, cast=bool):
             'PASSWORD': config('DB_PASSWORD'),
             'HOST': config('DB_HOST'),
             'PORT': config('DB_PORT'),
-            'CONN_MAX_AGE': 0,
+            'CONN_MAX_AGE': config('CONN_MAX_AGE', default=60, cast=int),
         }
     }
 else:

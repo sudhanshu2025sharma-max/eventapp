@@ -361,9 +361,15 @@ def admin_login(request):
     conf = ConferenceSetting.get()
 
     if request.method == 'POST':
-        email    = request.POST.get('email', '').strip()
+        email    = (request.POST.get('email') or request.POST.get('username') or '').strip().lower()
         password = request.POST.get('password', '')
+        # Try authenticating with lowercase email first, then exact input
         user     = authenticate(request, username=email, password=password)
+        if not user:
+            # Fallback if DB holds mixed-case email
+            matched = User.objects.filter(email__iexact=email).first()
+            if matched:
+                user = authenticate(request, username=matched.email, password=password)
 
         if user is not None and user.role in ('super_admin', 'mgmt_admin', 'team_head', 'staff'):
             login(request, user)
@@ -1149,6 +1155,8 @@ def staff_permissions_panel(request):
                 messages.success(request, f"{name} deleted.")
             except User.DoesNotExist:
                 messages.error(request, "User not found.")
+            from django.core.cache import cache
+            cache.delete('support_committee_team_v2')
             return redirect('staff_permissions_panel')
 
         elif action == 'create':
@@ -1157,10 +1165,14 @@ def staff_permissions_panel(request):
             last_name = request.POST.get('last_name', '').strip()
             if not email or not first_name:
                 messages.error(request, "Email and first name required.")
-                return redirect('staff_permissions_panel')
+                from django.core.cache import cache
+            cache.delete('support_committee_team_v2')
+            return redirect('staff_permissions_panel')
             if User.objects.filter(email=email).exists():
                 messages.error(request, "Email already exists.")
-                return redirect('staff_permissions_panel')
+                from django.core.cache import cache
+            cache.delete('support_committee_team_v2')
+            return redirect('staff_permissions_panel')
             role = request.POST.get('role', 'staff')
             password = request.POST.get('password', 'Staff@123') or 'Staff@123'
             u = User.objects.create_user(email=email, password=password, first_name=first_name, last_name=last_name, role=role)
@@ -1174,12 +1186,15 @@ def staff_permissions_panel(request):
                 profile_url=request.POST.get('profile_url', ''),
                 scholar_url=request.POST.get('scholar_url', ''),
                 order=StaffProfile.objects.count() + 1,
+                is_public=('is_public' in request.POST),
             )
             if 'photo' in request.FILES:
                 p = u.staff_profile
                 p.photo = request.FILES['photo']
                 p.save()
             messages.success(request, f"{first_name} {last_name} created.")
+            from django.core.cache import cache
+            cache.delete('support_committee_team_v2')
             return redirect('staff_permissions_panel')
 
         elif action == 'edit':
@@ -1200,17 +1215,20 @@ def staff_permissions_panel(request):
                 p.linkedin_url = request.POST.get('linkedin_url', p.linkedin_url)
                 p.profile_url = request.POST.get('profile_url', p.profile_url)
                 p.scholar_url = request.POST.get('scholar_url', p.scholar_url)
+                p.is_public = ('is_public' in request.POST)
                 if 'photo' in request.FILES:
                     p.photo = request.FILES['photo']
                 p.save()
                 messages.success(request, f"{u.get_full_name()} updated.")
             except (User.DoesNotExist, StaffProfile.DoesNotExist):
                 messages.error(request, "Staff not found.")
+            from django.core.cache import cache
+            cache.delete('support_committee_team_v2')
             return redirect('staff_permissions_panel')
 
         elif action == 'permissions':
             user_id = request.POST.get('user_id')
-            selected_modules = request.POST.getlist('modules')
+            selected_modules = list(set(request.POST.getlist('modules')))
             try:
                 target_user = User.objects.get(id=user_id)
                 StaffPermission.objects.filter(user=target_user).delete()
@@ -1220,6 +1238,8 @@ def staff_permissions_panel(request):
                 messages.success(request, f"Permissions updated for {target_user.get_full_name()}.")
             except User.DoesNotExist:
                 messages.error(request, "User not found.")
+            from django.core.cache import cache
+            cache.delete('support_committee_team_v2')
             return redirect('staff_permissions_panel')
 
     staff_users = User.objects.filter(
@@ -1234,7 +1254,7 @@ def staff_permissions_panel(request):
 
     module_categories = [
         {'name': 'Management', 'items': [('participants', 'Participants'), ('ideathon', 'Ideathon Teams'), ('meal_scanner', 'Meal Scanner'), ('checkin_scanner', 'Check-In Scanner')]},
-        {'name': 'Content', 'items': [('schedule', 'Events & Schedule'), ('papers', 'Papers & Posters'), ('papers', 'Papers & Posters'), ('photos', 'Photos'), ('checkpoint', 'Checkpoint'), ('feed', 'Posts & Feed')]},
+        {'name': 'Content', 'items': [('schedule', 'Events & Schedule'), ('papers', 'Papers & Posters'), ('photos', 'Photos'), ('checkpoint', 'Checkpoint'), ('feed', 'Posts & Feed')]},
         {'name': 'Engagement', 'items': [('polls', 'Polls'), ('qa_manager', 'Q&A Manager'), ('leaderboard', 'Leaderboard'), ('chat', 'Chat'), ('reported_messages', 'Reported Messages'), ('shake_logs', 'Shake Logs'), ('chat_analytics', 'Chat Analytics')]},
         {'name': 'System', 'items': [('notifications', 'Notifications'), ('sponsors', 'Sponsors'), ('speakers', 'Speakers'), ('users_manage', 'User Management'), ('reports', 'Reports'), ('settings', 'Settings')]},
     ]
@@ -1247,3 +1267,93 @@ def staff_permissions_panel(request):
     }
     return render(request, 'panel/staff_permissions.html', context)
 
+
+
+# ── Account Deletion Requests ──────────────────────────────────────────────
+
+@login_required(login_url='/panel/login/')
+def deletion_requests(request):
+    """List all pending account deletion requests."""
+    from .permissions_helper import user_has_module_access
+    if request.user.role not in ('super_admin', 'mgmt_admin') and not user_has_module_access(request.user, 'users_manage'):
+        messages.error(request, 'Permission denied.')
+        return redirect('admin_dashboard')
+
+    pending = User.objects.filter(is_deletion_pending=True).order_by('-deletion_requested_at')
+    return render(request, 'panel/deletion_requests.html', {
+        'requests': pending,
+        'total': pending.count(),
+    })
+
+
+@login_required(login_url='/panel/login/')
+def deletion_request_action(request, pk):
+    """Approve (execute soft-delete) or deny a pending deletion request."""
+    from .permissions_helper import user_has_module_access
+    if request.user.role not in ('super_admin', 'mgmt_admin') and not user_has_module_access(request.user, 'users_manage'):
+        messages.error(request, 'Permission denied.')
+        return redirect('admin_dashboard')
+
+    user_target = get_object_or_404(User, pk=pk, is_deletion_pending=True)
+
+    if request.method == 'POST':
+        action = request.POST.get('action', '')
+
+        if action == 'approve':
+            # Execute soft-delete (same logic as original delete_account_view)
+            user_target.is_active = False
+            user_target.suspended_reason = 'Account deleted per user request (admin approved).'
+            user_target.first_name = 'Deleted'
+            user_target.last_name = 'User'
+            user_target.phone = ''
+            user_target.bio = ''
+            user_target.linkedin_url = ''
+            user_target.research_interests = ''
+            user_target.profile_photo = None
+            user_target.is_deletion_pending = False
+            user_target.set_unusable_password()
+            user_target.save()
+
+            # Clear push / FCM tokens
+            try:
+                from apps.notifications.models import DeviceToken
+                DeviceToken.objects.filter(user=user_target).delete()
+            except Exception:
+                pass
+            try:
+                from .models import UserFCMToken
+                UserFCMToken.objects.filter(user=user_target).delete()
+            except Exception:
+                pass
+
+            messages.success(request, 'Account deletion approved and executed. User data has been anonymized.')
+
+        elif action == 'deny':
+            user_target.is_deletion_pending = False
+            user_target.deletion_requested_at = None
+            user_target.save(update_fields=['is_deletion_pending', 'deletion_requested_at'])
+            messages.success(request, f'Deletion request denied for {user_target.get_full_name()}. User can continue using their account.')
+
+    return redirect('deletion_requests')
+
+
+@login_required(login_url='/panel/login/')
+def deletion_history(request):
+    """Show all approved & executed account deletions."""
+    from .permissions_helper import user_has_module_access
+    if request.user.role not in ('super_admin', 'mgmt_admin') and not user_has_module_access(request.user, 'users_manage'):
+        messages.error(request, 'Permission denied.')
+        return redirect('admin_dashboard')
+
+    history = User.objects.filter(
+        first_name='Deleted',
+        last_name='User',
+        is_active=False,
+    ).exclude(
+        deletion_requested_at__isnull=True
+    ).order_by('-deletion_requested_at')
+
+    return render(request, 'panel/deletion_history.html', {
+        'history': history,
+        'total': history.count(),
+    })

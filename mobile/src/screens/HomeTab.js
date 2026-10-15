@@ -7,7 +7,11 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS, FONT, SPACE, RADIUS, SHADOW, TOP, API_URL, API_HEADERS, fixMediaUrl } from '../theme';
 import { apiFetch, setTokens as setApiTokens } from '../api';
+import { getCached, setCache } from '../cache';
 import { PulsingDot, GradientAvatar } from '../components';
+
+let _memHomeConf = null;
+let _memHomeEvents = null;
 
 const PAD = SPACE.xl;
 const TIMELINE_WINDOW = 3;
@@ -544,50 +548,106 @@ export default function HomeTab({
   const [unread, setUnread] = useState(0);
   const [points, setPoints] = useState(0);
   const [rank, setRank] = useState(0);
-  const [conf, setConf] = useState(DEFAULT_CONF);
-  const [allEvents, setAllEvents] = useState([]);
+  const [conf, setConf] = useState(() => _memHomeConf || DEFAULT_CONF);
+  const [allEvents, setAllEvents] = useState(() => _memHomeEvents || []);
   const [recentNotifs, setRecentNotifs] = useState([]);
   const [selectedDay, setSelectedDay] = useState(1);
   const [expandedId, setExpandedId] = useState(null);
   const [now, setNow] = useState(new Date());
-  const [loaded, setLoaded] = useState(false);
+  const [loaded, setLoaded] = useState(() => !!(_memHomeConf || _memHomeEvents?.length));
   const [showAllQuick, setShowAllQuick] = useState(false);
-  const tokensRef = useRef(null);
+  const tokensRef = useRef(tokens);
   const heroWidthRef = useRef(0);
   const cardAnims = useRef([new Animated.Value(0), new Animated.Value(0), new Animated.Value(0)]).current;
 
-  useEffect(() => { tokensRef.current = tokens; }, [tokens]);
-  useEffect(() => { if (tokens) setApiTokens(tokens); }, [tokens]);
+  useEffect(() => {
+    tokensRef.current = tokens;
+    if (tokens) setApiTokens(tokens);
+  }, [tokens]);
+
+  // Fast cache hydration from AsyncStorage
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      try {
+        const [cachedConf, cachedSessions] = await Promise.all([
+          getCached('home_conf'),
+          getCached('home_sessions'),
+        ]);
+        if (!mounted) return;
+        if (cachedConf && !_memHomeConf) {
+          _memHomeConf = cachedConf;
+          setConf((prev) => ({ ...prev, ...cachedConf }));
+          setLoaded(true);
+        }
+        if (cachedSessions && cachedSessions.length > 0 && (!_memHomeEvents || _memHomeEvents.length === 0)) {
+          _memHomeEvents = cachedSessions;
+          setAllEvents(cachedSessions);
+          setLoaded(true);
+        }
+      } catch {}
+    })();
+    return () => { mounted = false; };
+  }, []);
 
   const hour = new Date().getHours();
   const greeting = hour < 12 ? 'Morning' : hour < 17 ? 'Afternoon' : 'Evening';
 
   const fetchAll = useCallback(async () => {
     const t = tokensRef.current || tokens;
-    if (!t?.access) return;
-    const safeJson = async (p) => { try { const r = await p; if (!r.ok) return null; return await r.json(); } catch { return null; } };
-    const [u, p, c, ev, notif] = await Promise.all([
-      safeJson(apiFetch('/notifications/unread-count/')),
-      safeJson(apiFetch('/leaderboard/my/')),
-      safeJson(apiFetch('/conferences/settings/')),
-      safeJson(apiFetch('/schedule/sessions/')),
-      safeJson(apiFetch('/notifications/my/')),
-    ]);
-    if (u) setUnread(u.unread_count || 0);
-    if (p) { setPoints(p.total_points || 0); setRank(p.rank || 0); }
-    if (c) setConf(prev => ({ ...prev, ...c }));
-    const sessionList = ev?.sessions || (Array.isArray(ev) ? ev : ev?.results);
-    if (sessionList) setAllEvents(sessionList);
-    if (notif?.notifications?.length) {
-      setRecentNotifs(notif.notifications.slice(0, 5));
+    const safeJson = async (p) => {
+      try {
+        const r = await p;
+        if (!r.ok) return null;
+        return await r.json();
+      } catch {
+        return null;
+      }
+    };
+
+    // Public data: fetch immediately and update as soon as each returns
+    safeJson(apiFetch('/conferences/settings/')).then((c) => {
+      if (c) {
+        _memHomeConf = c;
+        setConf((prev) => ({ ...prev, ...c }));
+        setCache('home_conf', c);
+        setLoaded(true);
+      }
+    });
+
+    safeJson(apiFetch('/schedule/sessions/')).then((ev) => {
+      const sessionList = ev?.sessions || (Array.isArray(ev) ? ev : ev?.results);
+      if (sessionList && sessionList.length > 0) {
+        _memHomeEvents = sessionList;
+        setAllEvents(sessionList);
+        setCache('home_sessions', sessionList);
+        setLoaded(true);
+      }
+    });
+
+    // Authenticated data
+    if (t?.access) {
+      safeJson(apiFetch('/notifications/unread-count/')).then((u) => {
+        if (u) setUnread(u.unread_count || 0);
+      });
+      safeJson(apiFetch('/leaderboard/my/')).then((p) => {
+        if (p) {
+          setPoints(p.total_points || 0);
+          setRank(p.rank || 0);
+        }
+      });
+      safeJson(apiFetch('/notifications/my/')).then((notif) => {
+        if (notif?.notifications?.length) {
+          setRecentNotifs(notif.notifications.slice(0, 5));
+        }
+      });
     }
-    if (c !== null || ev !== null) setLoaded(true);
   }, [tokens]);
 
   useEffect(() => {
-    const d = setTimeout(fetchAll, 500);
+    fetchAll();
     const t = setInterval(fetchAll, 30000);
-    return () => { clearTimeout(d); clearInterval(t); };
+    return () => clearInterval(t);
   }, [fetchAll]);
 
   useEffect(() => {

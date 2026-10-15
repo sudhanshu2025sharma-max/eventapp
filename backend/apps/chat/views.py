@@ -139,10 +139,11 @@ def _message_data(msg, request):
     }
 
 
-def _conversation_data(conv, user, request):
+def _conversation_data(conv, user, request, unread=None):
     other = conv.other_participant(user)
     last_msg = conv.messages.filter(is_deleted=False).order_by('-created_at').first()
-    unread = conv.unread_count_for(user)
+    if unread is None:
+        unread = conv.unread_count_for(user)
     return {
         'id':             str(conv.id),
         'topic':          conv.topic,
@@ -361,9 +362,16 @@ def conversation_list(request):
     ).select_related('participant_a', 'participant_b').prefetch_related('messages').order_by('-last_message_at', '-created_at')
 
     active_convs = [c for c in convs if c.other_participant(request.user).id not in all_blocked]
-    total_unread = sum(c.unread_count_for(request.user) for c in active_convs)
+    unread_counts_map = dict(
+        Message.objects.filter(conversation__in=active_convs, read=False)
+        .exclude(sender=request.user)
+        .values('conversation_id')
+        .annotate(cnt=Count('id'))
+        .values_list('conversation_id', 'cnt')
+    )
+    total_unread = sum(unread_counts_map.values())
     return Response({
-        'conversations': [_conversation_data(c, request.user, request) for c in active_convs],
+        'conversations': [_conversation_data(c, request.user, request, unread=unread_counts_map.get(c.id, 0)) for c in active_convs],
         'total_unread':  total_unread,
     })
 

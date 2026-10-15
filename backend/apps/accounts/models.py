@@ -60,6 +60,10 @@ class User(AbstractBaseUser, PermissionsMixin):
     warning_acknowledged_at = models.DateTimeField(null=True, blank=True, help_text='When the warning was acknowledged')
     warning_response     = models.TextField(blank=True, help_text='User message/response when acknowledging')
     suspended_reason    = models.TextField(blank=True, help_text='Reason for account suspension')
+    is_deletion_pending    = models.BooleanField(default=False, help_text='User has requested account deletion')
+    deletion_requested_at  = models.DateTimeField(null=True, blank=True, help_text='When deletion was requested')
+    deletion_reason        = models.CharField(max_length=50, blank=True, help_text='User-selected reason category')
+    deletion_reason_detail = models.TextField(blank=True, help_text='Free-text detail if reason is Other')
     is_active           = models.BooleanField(default=True)
     is_staff            = models.BooleanField(default=False)
 
@@ -173,6 +177,7 @@ class StaffProfile(models.Model):
         ('deputy',    'Deputy Librarian'),
         ('assistant', 'Assistant Librarian'),
         ('staff',     'Staff'),
+        ('intern',    'Intern'),
     ]
     user        = models.OneToOneField('self' if False else 'accounts.User',
                         on_delete=models.CASCADE, related_name='staff_profile')
@@ -223,7 +228,8 @@ class StaffPermission(models.Model):
         ('users_manage',      'User Management'),
         ('reports',           'Reports'),
         ('settings',          'Settings'),
-        ('error_reports',     'Error Reports & Logs'),
+        ('error_reports', 'Error & System Logs'),
+        ('certificates',     'Error Reports & Logs'),
     ]
     user       = models.ForeignKey('accounts.User', on_delete=models.CASCADE,
                         related_name='staff_permissions')

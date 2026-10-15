@@ -74,41 +74,24 @@ def meal_status(request):
         pass
 
     user = request.user
-    now_ist = timezone.now().astimezone(IST)
-    today = now_ist.date()
+    today = timezone.now().astimezone(IST).date()
 
     window = MealWindow.objects.filter(date=today).order_by('-id').first()
     is_open = window.is_open if window else False
-    active_meal_name = (window.meal_type if window and window.meal_type else "Meal")
+    active_meal_name = window.meal_type if (window and window.meal_type) else "Meal"
 
     scanned_count = MealPass.objects.filter(date=today, meal_type=active_meal_name, used=True).count()
 
-    active_pass = None
-    if window and window.meal_type:
-        active_pass = MealPass.objects.filter(user=user, date=today, meal_type=window.meal_type, is_active=True).first()
-    if not active_pass:
-        active_pass = MealPass.objects.filter(user=user, date=today, is_active=True).order_by('-created_at').first()
-
+    active_pass = MealPass.objects.filter(user=user, date=today, meal_type=active_meal_name, used=True).first() if window else None
+    
     pass_data = None
-    if active_pass and is_open and active_pass.meal_type == active_meal_name:
+    if active_pass:
         pass_data = {
             "id": str(active_pass.id),
-            "qr_data": str(active_pass.id),
-            "meal_type": active_pass.meal_type,
-            "used": active_pass.used,
-            "used_at": active_pass.used_at.isoformat() if active_pass.used_at else None,
-            "date": str(active_pass.date),
-            "display_name": active_pass.display_name,
-        }
-    elif active_pass and active_pass.used and active_pass.meal_type == active_meal_name:
-        pass_data = {
-            "id": str(active_pass.id),
-            "qr_data": None,
             "meal_type": active_pass.meal_type,
             "used": True,
             "used_at": active_pass.used_at.isoformat() if active_pass.used_at else None,
             "date": str(active_pass.date),
-            "display_name": active_pass.display_name,
         }
 
     return Response({
@@ -201,46 +184,89 @@ def scan_meal(request):
     raw_qr = request.data.get('qr_data') or request.data.get('qr_code') or request.data.get('registration_id') or ''
     raw_qr = str(raw_qr).strip()
 
-    meal_pass = None
-    try:
-        import uuid
-        pass_uuid = uuid.UUID(raw_qr)
-        meal_pass = MealPass.objects.filter(id=pass_uuid, is_active=True).first()
-    except Exception:
-        pass
+    target_user = User.objects.filter(models.Q(registration_id__iexact=raw_qr) | models.Q(email__iexact=raw_qr)).first()
+    
+    if not target_user:
+        try:
+            import uuid
+            pass_uuid = uuid.UUID(raw_qr)
+            fallback_pass = MealPass.objects.filter(id=pass_uuid).first()
+            if fallback_pass and fallback_pass.user:
+                target_user = fallback_pass.user
+        except Exception:
+            pass
 
-    if not meal_pass:
-        target_user = User.objects.filter(models.Q(registration_id=raw_qr) | models.Q(email=raw_qr)).first()
-        if target_user:
-            today = timezone.now().astimezone(IST).date()
-            meal_pass = MealPass.objects.filter(user=target_user, date=today, is_active=True).order_by('-created_at').first()
+    if not target_user:
+        return Response({"success": False, "error": f"Participant '{raw_qr}' not found."}, status=404)
 
-    if not meal_pass:
-        return Response({"success": False, "error": "Invalid or expired Meal Pass QR."}, status=404)
-
-    if meal_pass.used:
+    is_checked_in = CheckIn.objects.filter(user=target_user, checkin_type='conference').exists()
+    if not is_checked_in:
         return Response({
-            "success": False,
-            "error": f"This {meal_pass.meal_type} pass has already been used.",
-            "message": f"This {meal_pass.meal_type} pass has already been used."
+            "success": False, 
+            "error": f"Not Checked-In! {target_user.get_full_name()} must check in at registration desk first."
         }, status=400)
 
+    today = timezone.now().astimezone(IST).date()
+    window = MealWindow.objects.filter(date=today).order_by('-id').first()
+    if not window or not window.is_open:
+        return Response({"success": False, "error": "No active dining service is currently open."}, status=400)
+
+    active_meal_name = window.meal_type or "Meal"
+
+    existing_scan = MealPass.objects.filter(user=target_user, date=today, meal_type=active_meal_name, used=True).first()
+    if existing_scan:
+        time_str = existing_scan.used_at.astimezone(IST).strftime('%I:%M %p') if existing_scan.used_at else ""
+        return Response({
+            "success": False,
+            "error": f"Already Redeemed at {time_str}",
+            "message": f"{target_user.get_full_name()} already redeemed {active_meal_name} at {time_str}."
+        }, status=400)
+
+    meal_pass = MealPass.objects.filter(user=target_user, date=today, meal_type=active_meal_name, used=False).first()
+    if not meal_pass:
+        meal_pass = MealPass(user=target_user, date=today, meal_type=active_meal_name, is_active=True)
+    
     meal_pass.used = True
     meal_pass.used_at = timezone.now()
     meal_pass.scanned_by = request.user
     meal_pass.save()
 
-    if meal_pass.user:
-        try:
-            award_points(meal_pass.user, 'meal_checkin', f"Attended {meal_pass.meal_type} dining service")
-        except Exception:
-            pass
+    try:
+        award_points(target_user, 'meal_checkin', f"Attended {meal_pass.meal_type} service")
+    except Exception:
+        pass
 
     return Response({
         "success": True,
         "status": "success",
-        "message": f"{meal_pass.meal_type} pass verified for {meal_pass.display_name}!"
+        "message": f"✅ {active_meal_name} approved for {target_user.get_full_name()}!"
     }, status=200)
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def reset_meal_scan(request):
+    pass_id = request.data.get('pass_id')
+    meal_pass = MealPass.objects.filter(id=pass_id).first()
+    if not meal_pass:
+        return Response({"success": False, "error": "Record not found"}, status=404)
+    
+    user_name = meal_pass.display_name
+    meal_type = meal_pass.meal_type
+    meal_pass.delete()
+    return Response({"success": True, "message": f"Reset {meal_type} scan for {user_name}."})
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def reset_meal_scan(request):
+    pass_id = request.data.get('pass_id')
+    meal_pass = MealPass.objects.filter(id=pass_id).first()
+    if not meal_pass:
+        return Response({"success": False, "error": "Record not found"}, status=404)
+    
+    meal_pass.delete()
+    return Response({"success": True, "message": "Meal scan reset successfully. User can scan again."})
+
 
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])

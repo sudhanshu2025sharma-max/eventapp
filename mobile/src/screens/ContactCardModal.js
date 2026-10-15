@@ -707,15 +707,18 @@ export default function ContactCardModal({ visible, onClose, onSent, sender, rec
               </View>
             )}
           </Animated.View>
+
+          {topicModal && (
+            <TopicPickerModal
+              visible={topicModal}
+              useModal={false}
+              onClose={() => setTopicModal(false)}
+              onConfirm={handleTopicConfirmed}
+              title="What do you want to discuss?"
+            />
+          )}
         </View>
       </Modal>
-
-      <TopicPickerModal
-        visible={topicModal}
-        onClose={() => setTopicModal(false)}
-        onConfirm={handleTopicConfirmed}
-        title="What do you want to discuss?"
-      />
     </>
   );
 }

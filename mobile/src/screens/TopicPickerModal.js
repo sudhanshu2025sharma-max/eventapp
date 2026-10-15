@@ -1,12 +1,13 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
-  View, Text, Modal, TouchableOpacity, ScrollView,
+  View, Text, TouchableOpacity, ScrollView,
   TextInput, StyleSheet, Platform, KeyboardAvoidingView,
+  BackHandler,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { COLORS, FONT, SPACE, RADIUS, SHADOW, BOTTOM } from '../theme';
+import { COLORS, FONT, SPACE, RADIUS, SHADOW } from '../theme';
 
-const TOPICS = [
+export const TOPICS = [
   { key: 'research_collab',   label: 'Research Collaboration', icon: 'flask-outline' },
   { key: 'session_discuss',   label: 'Session Discussion',     icon: 'calendar-outline' },
   { key: 'digital_libraries', label: 'Digital Libraries',      icon: 'library-outline' },
@@ -22,9 +23,21 @@ export default function TopicPickerModal({ visible, onClose, onConfirm, title = 
   const [selected, setSelected] = useState('networking');
   const [custom, setCustom]     = useState('');
 
+  // Android back button closes picker
+  useEffect(() => {
+    if (!visible) return;
+    const handler = BackHandler.addEventListener('hardwareBackPress', () => {
+      handleClose();
+      return true;
+    });
+    return () => handler.remove();
+  }, [visible]);
+
+  if (!visible) return null;
+
   const handleConfirm = () => {
     if (selected === 'other' && !custom.trim()) return;
-    onConfirm({ topic: selected, custom_topic: selected === 'other' ? custom.trim() : '' });
+    onConfirm?.({ topic: selected, custom_topic: selected === 'other' ? custom.trim() : '' });
     setSelected('networking');
     setCustom('');
   };
@@ -32,24 +45,23 @@ export default function TopicPickerModal({ visible, onClose, onConfirm, title = 
   const handleClose = () => {
     setSelected('networking');
     setCustom('');
-    onClose();
+    onClose?.();
   };
 
   return (
-    <Modal visible={visible} transparent animationType="slide" presentationStyle="overFullScreen" onRequestClose={handleClose}>
+    <View style={s.overlay} pointerEvents="auto">
       <KeyboardAvoidingView
-        style={s.overlay}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        style={s.kav}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
         <TouchableOpacity style={s.backdrop} activeOpacity={1} onPress={handleClose} />
+
         <View style={s.sheet}>
-          {/* Handle */}
           <View style={s.handle} />
 
-          {/* Header */}
           <View style={s.header}>
-            <Text style={s.title}>{title}</Text>
-            <TouchableOpacity onPress={handleClose} style={s.closeBtn} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+            <Text style={s.title} numberOfLines={1}>{title}</Text>
+            <TouchableOpacity onPress={handleClose} style={s.closeBtn} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
               <Ionicons name="close" size={20} color={COLORS.textSec} />
             </TouchableOpacity>
           </View>
@@ -58,7 +70,12 @@ export default function TopicPickerModal({ visible, onClose, onConfirm, title = 
             Every conversation starts with a topic so both parties are aligned.
           </Text>
 
-          <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 380 }}>
+          <ScrollView
+            showsVerticalScrollIndicator={false}
+            style={s.scrollArea}
+            keyboardShouldPersistTaps="handled"
+            bounces={false}
+          >
             {TOPICS.map(t => {
               const active = selected === t.key;
               return (
@@ -79,7 +96,6 @@ export default function TopicPickerModal({ visible, onClose, onConfirm, title = 
               );
             })}
 
-            {/* Custom topic input */}
             {selected === 'other' && (
               <View style={s.customWrap}>
                 <TextInput
@@ -93,10 +109,9 @@ export default function TopicPickerModal({ visible, onClose, onConfirm, title = 
                 />
               </View>
             )}
-            <View style={{ height: 12 }} />
+            <View style={{ height: 16 }} />
           </ScrollView>
 
-          {/* Confirm */}
           <TouchableOpacity
             style={[
               s.confirmBtn,
@@ -111,37 +126,49 @@ export default function TopicPickerModal({ visible, onClose, onConfirm, title = 
           </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>
-    </Modal>
+    </View>
   );
 }
 
 const s = StyleSheet.create({
   overlay: {
-    flex: 1, justifyContent: 'flex-end',
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 99999,
+    elevation: 99999,
+    justifyContent: 'flex-end',
+    backgroundColor: 'transparent',
+  },
+  kav: {
+    flex: 1,
+    justifyContent: 'flex-end',
   },
   backdrop: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0,0,0,0.45)',
+    backgroundColor: 'rgba(0,0,0,0.55)',
   },
   sheet: {
     backgroundColor: '#fff',
-    borderTopLeftRadius: 32,
-    borderTopRightRadius: 32,
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
     paddingHorizontal: SPACE.xl,
-    paddingBottom: BOTTOM + 8,
+    paddingBottom: Platform.OS === 'ios' ? 36 : 24,
     paddingTop: SPACE.md,
+    maxHeight: '82%',
     ...SHADOW.xl,
   },
   handle: {
     width: 40, height: 4, borderRadius: 2,
     backgroundColor: COLORS.border,
-    alignSelf: 'center', marginBottom: SPACE.lg,
+    alignSelf: 'center', marginBottom: SPACE.md,
   },
   header: {
     flexDirection: 'row', alignItems: 'center',
-    justifyContent: 'space-between', marginBottom: SPACE.sm,
+    justifyContent: 'space-between', marginBottom: SPACE.xs,
   },
-  title:    { fontSize: FONT.lg, fontWeight: FONT.w8, color: COLORS.text },
+  title: {
+    flex: 1, fontSize: FONT.lg, fontWeight: FONT.w8, color: COLORS.text,
+    marginRight: SPACE.sm,
+  },
   closeBtn: {
     width: 32, height: 32, borderRadius: 16,
     backgroundColor: COLORS.borderLight,
@@ -149,7 +176,10 @@ const s = StyleSheet.create({
   },
   subtitle: {
     fontSize: FONT.xs, color: COLORS.textTer,
-    marginBottom: SPACE.lg, lineHeight: 18,
+    marginBottom: SPACE.md, lineHeight: 18,
+  },
+  scrollArea: {
+    maxHeight: 340,
   },
   option: {
     flexDirection: 'row', alignItems: 'center',
@@ -196,7 +226,7 @@ const s = StyleSheet.create({
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
     gap: SPACE.sm, backgroundColor: COLORS.brand,
     borderRadius: RADIUS.xl, paddingVertical: SPACE.lg,
-    marginTop: SPACE.lg,
+    marginTop: SPACE.md,
     ...SHADOW.brand,
   },
   confirmBtnDisabled: { opacity: 0.45 },

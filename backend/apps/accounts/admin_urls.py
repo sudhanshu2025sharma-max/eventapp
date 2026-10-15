@@ -28,6 +28,10 @@ urlpatterns = [
     path('users/<uuid:pk>/dismiss-reports/',    admin_views.user_dismiss_reports, name='user_dismiss_reports'),
     path('users/<uuid:pk>/reports-data/',       admin_views.user_reports_modal_data, name='user_reports_modal_data'),
 
+    # Account Deletion Requests
+    path('deletion-requests/',                  admin_views.deletion_requests,       name='deletion_requests'),
+    path('deletion-requests/<uuid:pk>/action/', admin_views.deletion_request_action, name='deletion_request_action'),
+    path('deletion-history/',                   admin_views.deletion_history,          name='deletion_history'),
 
     # Forgot password (public)
     path('password-reset/',                          admin_views.password_reset_request, name='password_reset_request'),

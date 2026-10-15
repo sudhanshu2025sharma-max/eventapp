@@ -2,7 +2,7 @@ import SupportModal from './SupportModal';
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   View, Text, TouchableOpacity, ScrollView, StyleSheet,
-  Platform, Image, Modal, Share, Linking, Alert, ActivityIndicator
+  Platform, Image, Modal, Share, Linking, Alert, ActivityIndicator, TextInput, KeyboardAvoidingView
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
@@ -430,6 +430,198 @@ const blk = StyleSheet.create({
   },
 });
 
+// ── Delete Account Modal (Reason Picker) ──────────────────────────────────────
+const DELETE_REASONS = [
+  { key: 'not_useful',     icon: 'thumbs-down-outline', label: 'App is not useful for me' },
+  { key: 'privacy',        icon: 'lock-closed-outline', label: 'Privacy concerns' },
+  { key: 'too_many_notifs',icon: 'notifications-off-outline', label: 'Too many notifications' },
+  { key: 'conference_over',icon: 'calendar-outline',    label: 'Conference is over' },
+  { key: 'other',          icon: 'ellipsis-horizontal-outline', label: 'Other reason' },
+];
+
+function DeleteAccountModal({ visible, tokens, onDismiss, onSubmitted }) {
+  const [selectedReason, setSelectedReason] = useState(null);
+  const [detail, setDetail] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+
+  const resetAndClose = () => {
+    setSelectedReason(null);
+    setDetail('');
+    setSubmitting(false);
+    onDismiss();
+  };
+
+  const submit = async () => {
+    if (!selectedReason) {
+      Alert.alert('Select a Reason', 'Please tell us why you are leaving.');
+      return;
+    }
+    if (selectedReason.key === 'other' && detail.trim().length < 5) {
+      Alert.alert('Please Elaborate', 'Kindly write at least a few words about your reason.');
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      const res = await fetch(`${API_URL}/auth/delete-account/`, {
+        method: 'POST',
+        headers: {
+          ...API_HEADERS,
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${tokens?.access}`,
+        },
+        body: JSON.stringify({
+          reason: selectedReason.label,
+          reason_detail: detail.trim(),
+        }),
+      });
+      const data = await res.json();
+
+      if (data.success) {
+        setSubmitting(false);
+        Alert.alert(
+          'Request Submitted',
+          'Your deletion request has been sent to the administrator. You will be logged out now. Admin review typically takes up to 48 hours.',
+          [{ text: 'OK', onPress: () => { resetAndClose(); onSubmitted && onSubmitted(); } }]
+        );
+      } else {
+        setSubmitting(false);
+        Alert.alert('Error', data.error || 'Failed to submit deletion request.');
+      }
+    } catch (e) {
+      setSubmitting(false);
+      Alert.alert('Error', 'Network error while submitting deletion request.');
+    }
+  };
+
+  return (
+    <Modal visible={visible} transparent animationType="slide" presentationStyle="overFullScreen" onRequestClose={resetAndClose}>
+      <KeyboardAvoidingView
+        style={del.overlay}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : -80}
+      >
+        <View style={del.card}>
+          <View style={del.header}>
+            <View style={{ flex: 1 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <View style={del.iconRing}>
+                  <Ionicons name="trash-outline" size={17} color="#dc2626" />
+                </View>
+                <Text style={del.title}>Request Account Deletion</Text>
+              </View>
+              <Text style={del.subtitle}>
+                Your request will be sent to the administrator for review. Once approved, your account will be permanently deleted within 48 hours.
+              </Text>
+            </View>
+            <TouchableOpacity onPress={resetAndClose} style={del.closeBtn} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+              <Ionicons name="close" size={22} color={COLORS.textSec} />
+            </TouchableOpacity>
+          </View>
+
+          <ScrollView style={del.body} showsVerticalScrollIndicator={false}>
+            <Text style={del.sectionLabel}>Why are you leaving? (Required)</Text>
+
+            {DELETE_REASONS.map((r) => {
+              const active = selectedReason?.key === r.key;
+              return (
+                <TouchableOpacity
+                  key={r.key}
+                  onPress={() => setSelectedReason(r)}
+                  activeOpacity={0.75}
+                  style={[del.reasonRow, active && del.reasonRowActive]}
+                >
+                  <View style={[del.reasonIcon, active && del.reasonIconActive]}>
+                    <Ionicons name={r.icon} size={16} color={active ? '#fff' : COLORS.brand} />
+                  </View>
+                  <Text style={[del.reasonLabel, active && { color: COLORS.brand, fontWeight: FONT.w7 }]}>{r.label}</Text>
+                  {active && <Ionicons name="checkmark-circle" size={18} color={COLORS.brand} />}
+                </TouchableOpacity>
+              );
+            })}
+
+            {selectedReason?.key === 'other' && (
+              <View style={del.textAreaWrap}>
+                <Text style={del.sectionLabel}>Please elaborate</Text>
+                <View style={del.textAreaBox}>
+                  <Text style={{ color: COLORS.textTer, fontSize: FONT.xs, marginBottom: 4 }}>Tell us more (minimum 5 characters)</Text>
+                  <TextInput
+                    value={detail}
+                    onChangeText={setDetail}
+                    multiline
+                    numberOfLines={4}
+                    placeholder="Your feedback helps us improve..."
+                    placeholderTextColor={COLORS.textTer}
+                    style={del.textArea}
+                  />
+                </View>
+              </View>
+            )}
+
+            {selectedReason && selectedReason.key !== 'other' && (
+              <View style={del.textAreaWrap}>
+                <Text style={del.sectionLabel}>Additional comments (Optional)</Text>
+                <View style={del.textAreaBox}>
+                  <TextInput
+                    value={detail}
+                    onChangeText={setDetail}
+                    multiline
+                    numberOfLines={3}
+                    placeholder="Any extra context? (optional)"
+                    placeholderTextColor={COLORS.textTer}
+                    style={del.textArea}
+                  />
+                </View>
+              </View>
+            )}
+          </ScrollView>
+
+          <View style={del.footer}>
+            <TouchableOpacity onPress={resetAndClose} style={del.cancelBtn} activeOpacity={0.75} disabled={submitting}>
+              <Text style={del.cancelBtnText}>Cancel</Text>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={submit} style={[del.submitBtn, submitting && { opacity: 0.6 }]} activeOpacity={0.85} disabled={submitting}>
+              {submitting ? (
+                <ActivityIndicator size="small" color="#fff" />
+              ) : (
+                <>
+                  <Ionicons name="send-outline" size={15} color="#fff" />
+                  <Text style={del.submitBtnText}>Submit Request</Text>
+                </>
+              )}
+            </TouchableOpacity>
+          </View>
+        </View>
+      </KeyboardAvoidingView>
+    </Modal>
+  );
+}
+
+const del = StyleSheet.create({
+  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.65)', justifyContent: 'flex-end' },
+  card: { backgroundColor: '#FFFFFF', borderTopLeftRadius: 28, borderTopRightRadius: 28, maxHeight: '88%', minHeight: '55%', paddingTop: SPACE.md, ...SHADOW.xl },
+  header: { flexDirection: 'row', alignItems: 'flex-start', paddingHorizontal: SPACE.xl, paddingBottom: SPACE.md, borderBottomWidth: 1, borderBottomColor: '#f1f5f9' },
+  iconRing: { width: 32, height: 32, borderRadius: 16, backgroundColor: '#fee2e2', alignItems: 'center', justifyContent: 'center' },
+  title: { fontSize: FONT.md, fontWeight: FONT.w8, color: COLORS.text },
+  subtitle: { fontSize: 11.5, color: COLORS.textTer, marginTop: 4, lineHeight: 16 },
+  closeBtn: { padding: 4, marginLeft: SPACE.sm },
+  body: { paddingHorizontal: SPACE.xl, paddingTop: SPACE.md },
+  sectionLabel: { fontSize: 11, fontWeight: FONT.w8, color: COLORS.textSec, letterSpacing: 0.6, marginBottom: SPACE.sm, marginTop: SPACE.xs },
+  reasonRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: SPACE.md, paddingHorizontal: SPACE.md, borderWidth: 1.5, borderColor: '#e2e8f0', borderRadius: 14, marginBottom: SPACE.xs + 2, gap: SPACE.md, backgroundColor: '#fff' },
+  reasonRowActive: { borderColor: COLORS.brand, backgroundColor: COLORS.brandLight },
+  reasonIcon: { width: 32, height: 32, borderRadius: 10, backgroundColor: COLORS.brandLight, alignItems: 'center', justifyContent: 'center' },
+  reasonIconActive: { backgroundColor: COLORS.brand },
+  reasonLabel: { flex: 1, fontSize: FONT.sm, color: COLORS.text, fontWeight: FONT.w5 },
+  textAreaWrap: { marginTop: SPACE.md },
+  textAreaBox: { backgroundColor: '#f8fafc', borderRadius: 14, padding: SPACE.md, borderWidth: 1, borderColor: '#e2e8f0' },
+  textArea: { fontSize: FONT.sm, color: COLORS.text, minHeight: 70, textAlignVertical: 'top', fontFamily: Platform.OS === 'ios' ? 'System' : 'sans-serif' },
+  footer: { flexDirection: 'row', paddingHorizontal: SPACE.xl, paddingVertical: SPACE.md, borderTopWidth: 1, borderTopColor: '#f1f5f9', backgroundColor: '#f8fafc', gap: SPACE.md },
+  cancelBtn: { flex: 1, height: 46, borderRadius: RADIUS.md, backgroundColor: '#fff', borderWidth: 1.5, borderColor: '#e2e8f0', alignItems: 'center', justifyContent: 'center' },
+  cancelBtnText: { fontSize: FONT.sm, fontWeight: FONT.w7, color: COLORS.textSec },
+  submitBtn: { flex: 1.4, flexDirection: 'row', gap: 6, height: 46, borderRadius: RADIUS.md, backgroundColor: '#dc2626', alignItems: 'center', justifyContent: 'center' },
+  submitBtnText: { fontSize: FONT.sm, fontWeight: FONT.w7, color: '#fff' },
+});
+
 // ── Main Profile Tab Component ────────────────────────────────────────────────
 export default function ProfileTab({
   user,
@@ -437,6 +629,7 @@ export default function ProfileTab({
   onLogout,
   onEditProfile,
   onChangePassword,
+  onForgotPassword,
   onOpenNotifications,
   onOpenChats,
   onOpenRecap,
@@ -445,6 +638,7 @@ export default function ProfileTab({
   onOpenStaffTeam,
   onOpenReportError,
   onOpenChatRoom,
+  onOpenCertificates,
 }) {
   const [stats, setStats] = useState({ points: 0, rank: 0 });
   const [connections, setConnections] = useState(0);
@@ -452,6 +646,7 @@ export default function ProfileTab({
   const [showSupportModal, setShowSupportModal] = useState(false);
   const [showMissingModal, setShowMissingModal] = useState(false);
   const [showBlockedModal, setShowBlockedModal] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
 
   const fetchStats = useCallback(async () => {
     if (!tokens?.access) return;
@@ -512,37 +707,7 @@ export default function ProfileTab({
   const hasInterestsIncomplete = interests.length < 3;
 
   const handleDeleteAccount = () => {
-    Alert.alert(
-      'Delete Account',
-      'Are you sure you want to permanently delete your account? All your personal profile information, chat messages, connections, and conference check-in data will be erased. This action cannot be undone.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete My Account',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              const res = await fetch(`${API_URL}/accounts/delete-account/`, {
-                method: 'POST',
-                headers: { ...API_HEADERS, Authorization: `Bearer ${tokens?.access}` },
-              });
-              const data = await res.json();
-              if (data.success) {
-                Alert.alert(
-                  'Account Deleted',
-                  'Your account has been deleted successfully.',
-                  [{ text: 'OK', onPress: onLogout }]
-                );
-              } else {
-                Alert.alert('Error', data.error || 'Failed to delete account.');
-              }
-            } catch {
-              Alert.alert('Error', 'Network error while requesting account deletion.');
-            }
-          },
-        },
-      ]
-    );
+    setShowDeleteModal(true);
   };
 
   const MENU = [
@@ -551,7 +716,8 @@ export default function ProfileTab({
       items: [
         { icon: 'person-outline',        label: 'Edit Profile',    sub: 'Update personal & academic info', onPress: onEditProfile },
         { icon: 'notifications-outline', label: 'Notifications',   sub: 'Updates & announcements',         onPress: onOpenNotifications },
-        { icon: 'lock-closed-outline',   label: 'Change Password', sub: 'Update your login password',       onPress: onChangePassword },
+        // { icon: 'lock-closed-outline',   label: 'Change Password', sub: 'Update your login password',       onPress: onChangePassword },
+        { icon: 'lock-closed-outline',      label: 'Change Password', sub: 'Reset via OTP sent to your email', onPress: onForgotPassword },
         {
           icon: 'ban-outline',
           label: 'Blocked Accounts',
@@ -563,8 +729,8 @@ export default function ProfileTab({
         // For admin-provisioned symposium accounts, this is commented out so it won't appear on screen.
         {
           icon: 'trash-outline',
-          label: 'Delete Account',
-          sub: 'Permanently remove your account & data',
+          label: 'Request Account Deletion',
+          sub: 'Submit deletion request to admin',
           color: COLORS.error,
           bg: '#fee2e2',
           onPress: handleDeleteAccount
@@ -573,10 +739,9 @@ export default function ProfileTab({
       ]
     },
     {
-      section: 'Conference Hub',
+      section: 'Conference Activity',
       items: [
         { icon: 'sparkles-outline',      label: 'My Conference Memory', sub: 'Your personalized recap & highlights', onPress: onOpenRecap },
-        { icon: 'ribbon-outline',        label: 'Participation Certificate', sub: 'Official verified certificate',    onPress: () => setShowCert(true) },
         { icon: 'bar-chart-outline',     label: 'Leaderboard & Points', sub: `${stats.points} pts earned (Rank #${stats.rank || '—'})`, onPress: onOpenLeaderboard },
         { icon: 'chatbubbles-outline',   label: 'Networking & Chats',   sub: `${connections} direct connections`,    onPress: onOpenChats },
         { icon: 'calendar-outline',      label: 'Conference Schedule',  sub: 'Explore sessions & bookmark talks',    onPress: onOpenSchedule },
@@ -589,7 +754,7 @@ export default function ProfileTab({
         { icon: 'people-outline',        label: 'Support & Help', sub: 'Central Library & Committee Leaders', onPress: () => setShowSupportModal(true) },
         { icon: 'shield-checkmark-outline', label: 'Privacy Policy', sub: 'https://etd2026.iitd.ac.in/app-privacy-policy/', onPress: () => Linking.openURL('https://etd2026.iitd.ac.in/app-privacy-policy/').catch(() => {}) },
         { icon: 'document-text-outline', label: 'Account Deletion Policy', sub: 'https://etd2026.iitd.ac.in/app-account-deletion/', onPress: () => Linking.openURL('https://etd2026.iitd.ac.in/app-account-deletion/').catch(() => {}) },
-        { icon: 'globe-outline',         label: 'Official Conference Portal', sub: 'https://etd2026.iitd.ac.in',     onPress: () => Linking.openURL('https://etd2026.iitd.ac.in/') },
+        { icon: 'globe-outline',         label: 'Official Conference Website', sub: 'https://etd2026.iitd.ac.in',     onPress: () => Linking.openURL('https://etd2026.iitd.ac.in/') },
       ]
     },
   ];
@@ -599,6 +764,12 @@ export default function ProfileTab({
       <CertificateModal visible={showCert} user={user} onDismiss={() => setShowCert(false)} />
       <SupportModal visible={showSupportModal} onDismiss={() => setShowSupportModal(false)} onOpenChatRoom={onOpenChatRoom} />
       <BlockedUsersModal visible={showBlockedModal} tokens={tokens} onDismiss={() => setShowBlockedModal(false)} />
+      <DeleteAccountModal
+        visible={showDeleteModal}
+        tokens={tokens}
+        onDismiss={() => setShowDeleteModal(false)}
+        onSubmitted={onLogout}
+      />
 
       <ScrollView showsVerticalScrollIndicator={false}>
 
@@ -738,10 +909,11 @@ export default function ProfileTab({
             </FadeIn>
           )}
 
+
           {/* Quick Shortcuts */}
           <FadeIn delay={180}>
             <View style={p.quickGrid}>
-              <TouchableOpacity onPress={() => setShowCert(true)} style={p.quickCard} activeOpacity={0.8}>
+              <TouchableOpacity onPress={onOpenCertificates} style={p.quickCard} activeOpacity={0.8}>
                 <LinearGradient colors={['#fef3c7', '#fde68a']} style={p.quickIconBg}>
                   <Ionicons name="ribbon" size={20} color="#b45309" />
                 </LinearGradient>

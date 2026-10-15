@@ -247,7 +247,7 @@ function CompactRankHeader({ rank, points, gap, nextName, eligible, onOpenWays }
               style={hero.rankBadge}
             >
               <Text style={hero.rankLabel}>RANK</Text>
-              <Text style={hero.rankValue}>{eligible && rank ? `#${rank}` : '—'}</Text>
+              <Text style={hero.rankValue}>{rankLabel || (eligible && rank ? `#${rank}` : '—')}</Text>
             </LinearGradient>
           </Animated.View>
 

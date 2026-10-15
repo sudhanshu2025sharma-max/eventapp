@@ -13,6 +13,7 @@ urlpatterns = [
     path('meal/status/', views.meal_status, name='meal_status'),
     path('meal/generate/', views.generate_meal_pass, name='generate_meal_pass'),
     path('meal/scan/', views.scan_meal, name='scan_meal'),
+    path('meal/reset/', views.reset_meal_scan, name='reset_meal_scan'),
     path('meal/window/', views.meal_window_toggle, name='meal_window_toggle'),
     path('meal/push/', views.meal_push_notification, name='meal_push_notification'),
     path('meal/stats/', views.meal_stats, name='meal_stats'),

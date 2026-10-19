@@ -828,6 +828,27 @@ def shake_connect(request):
     me = request.user
     action = (request.data.get('action') or 'shake').strip()
 
+    user_lat = request.data.get('lat') or request.data.get('latitude')
+    user_lng = request.data.get('lng') or request.data.get('longitude')
+    try:
+        user_lat = float(user_lat) if user_lat is not None else None
+        user_lng = float(user_lng) if user_lng is not None else None
+    except (TypeError, ValueError):
+        user_lat, user_lng = None, None
+
+    def _distance_meters(lat1, lon1, lat2, lon2):
+        if lat1 is None or lon1 is None or lat2 is None or lon2 is None:
+            return None
+        import math
+        R = 6371000  # radius of Earth in meters
+        phi1 = math.radians(lat1)
+        phi2 = math.radians(lat2)
+        delta_phi = math.radians(lat2 - lat1)
+        delta_lambda = math.radians(lon2 - lon1)
+        a = math.sin(delta_phi / 2)**2 + math.cos(phi1) * math.cos(phi2) * math.sin(delta_lambda / 2)**2
+        c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
+        return R * c
+
     def _photo_url(u):
         if not u.profile_photo:
             return None
@@ -836,7 +857,7 @@ def shake_connect(request):
         except Exception:
             return None
 
-    def _find_shakers(my_ts, active_dict):
+    def _find_shakers(my_ts, active_dict, my_lat=None, my_lng=None):
         blocked_pairs = BlockedUser.objects.filter(
             Q(blocker=me) | Q(blocked=me)
         ).values_list('blocker_id', 'blocked_id')
@@ -861,11 +882,25 @@ def shake_connect(request):
         connected_ids.discard(str(me.id))
 
         shakers = []
-        for uid, ts in (active_dict or {}).items():
+        for uid, val in (active_dict or {}).items():
             uid = str(uid)
             if uid == str(me.id) or uid in blocked_ids:
                 continue
-            if abs(float(ts) - float(my_ts)) > 3.0:
+
+            if isinstance(val, dict):
+                ts = val.get('ts')
+                o_lat = val.get('lat')
+                o_lng = val.get('lng')
+            else:
+                ts = val
+                o_lat, o_lng = None, None
+
+            if ts is None or abs(float(ts) - float(my_ts)) > 3.0:
+                continue
+
+            dist = _distance_meters(my_lat, my_lng, o_lat, o_lng)
+            # If both provided GPS coordinates, filter out if distance > 100 meters
+            if dist is not None and dist > 100.0:
                 continue
 
             u = User.objects.filter(id=uid, is_active=True).first()
@@ -879,6 +914,7 @@ def shake_connect(request):
                 'designation': u.designation or '',
                 'profile_photo_url': _photo_url(u),
                 'already_connected': uid in connected_ids,
+                'distance_meters': round(dist) if dist is not None else None,
             })
 
         return shakers
@@ -993,17 +1029,22 @@ def shake_connect(request):
     if action == 'shake':
         now = time.time()
         active = cache.get('shake:active', {}) or {}
-        active = {uid: ts for uid, ts in active.items() if now - float(ts) < 4}
-        active[str(me.id)] = now
-        cache.set('shake:active', active, timeout=15)
-        cache.set(f'shake:{me.id}', now, timeout=4)
+        clean_active = {}
+        for uid, val in active.items():
+            ts = val.get('ts') if isinstance(val, dict) else val
+            if now - float(ts) < 4:
+                clean_active[uid] = val
+        clean_active[str(me.id)] = {'ts': now, 'lat': user_lat, 'lng': user_lng}
+        cache.set('shake:active', clean_active, timeout=15)
+        cache.set(f'shake:{me.id}', {'ts': now, 'lat': user_lat, 'lng': user_lng}, timeout=4)
         
         ShakeLog.objects.create(user=me, event_type='shake')
-        shakers = _find_shakers(now, active)
+        shakers = _find_shakers(now, clean_active, my_lat=user_lat, my_lng=user_lng)
         return Response({
             'shakers': shakers,
             'count': len(shakers),
             'your_shake_at': now,
+            'gps_enabled': user_lat is not None,
         })
 
     if action == 'status':
@@ -1019,16 +1060,21 @@ def shake_connect(request):
                 'connected_with': incoming_matches[0].get('connected_with'),
             })
 
-        my_ts = cache.get(f'shake:{me.id}')
+        my_data = cache.get(f'shake:{me.id}')
         active = cache.get('shake:active', {}) or {}
-        if not my_ts:
+        if not my_data:
             return Response({'shakers': [], 'count': 0, 'your_shake_at': None})
 
-        shakers = _find_shakers(my_ts, active)
+        my_ts = my_data.get('ts') if isinstance(my_data, dict) else my_data
+        my_lat = my_data.get('lat') if isinstance(my_data, dict) else user_lat
+        my_lng = my_data.get('lng') if isinstance(my_data, dict) else user_lng
+
+        shakers = _find_shakers(my_ts, active, my_lat=my_lat, my_lng=my_lng)
         return Response({
             'shakers': shakers,
             'count': len(shakers),
             'your_shake_at': my_ts,
+            'gps_enabled': my_lat is not None,
         })
 
     if action == 'pick':
@@ -1073,6 +1119,178 @@ def shake_connect(request):
         })
 
     return Response({'error': 'action must be shake, status or pick'}, status=400)
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def scan_and_connect(request):
+    """
+    # ── Rate limit: 10 scans/min per user ──
+    from django.core.cache import cache as _rcache
+    _rk = f'scan_rate:{request.user.id}'
+    if _rcache.get(_rk):
+        return Response({'success': False, 'error': 'Too many scans. Please wait a few seconds.'}, status=429)
+    _rcache.set(_rk, True, 6)
+
+    POST /api/v1/chat/scan-connect/
+    Body: { registration_id: "ETD-2026-R-001" } or { qr_data: "..." }
+
+    Scans a person's ID-card QR (which contains their registration_id) and
+    instantly creates a connection — exactly the same pairing logic as Shake Connect.
+    Logs to ShakeLog with event_type='scan_connect'.
+    """
+    from django.db.models import Q
+    from django.utils import timezone
+    from apps.accounts.models import User
+    from apps.chat.models import ConnectionRequest, Conversation, BlockedUser, ShakeLog
+
+    me = request.user
+    raw = (
+        request.data.get('registration_id') or
+        request.data.get('qr_data') or
+        request.data.get('qr_code') or
+        request.data.get('code') or
+        request.data.get('data') or
+        request.data.get('user_id') or
+        ''
+    ).strip()
+
+    if not raw:
+        return Response({'success': False, 'error': 'registration_id or qr_data is required'}, status=400)
+
+    # Clean JSON wrapper or URL query string if full QR string was read
+    if raw.startswith('{') and raw.endswith('}'):
+        try:
+            import json
+            j = json.loads(raw)
+            raw = str(j.get('registration_id') or j.get('qr_data') or j.get('id') or raw).strip()
+        except Exception:
+            pass
+    if 'reg_id=' in raw:
+        raw = raw.split('reg_id=')[-1].split('&')[0].strip()
+
+    # Resolve target user by registration_id (case-insensitive) or by UUID or email
+    target = None
+    if len(raw) == 36 and raw.count('-') >= 4:
+        target = User.objects.filter(id=raw, is_active=True).first()
+    if not target:
+        target = User.objects.filter(registration_id__iexact=raw, is_active=True).first()
+    if not target:
+        target = User.objects.filter(email__iexact=raw, is_active=True).first()
+
+    if not target:
+        return Response({'success': False, 'error': f'No active participant found with ID or QR "{raw}".'}, status=404)
+
+    if target.id == me.id:
+        return Response({'success': False, 'error': 'You cannot connect with yourself.'}, status=400)
+
+    # Block check
+    is_blocked = BlockedUser.objects.filter(
+        Q(blocker=me, blocked=target) | Q(blocker=target, blocked=me)
+    ).exists()
+    if is_blocked:
+        return Response({'success': False, 'error': 'Cannot connect with this person.'}, status=403)
+
+    def _photo_url(u):
+        if not u.profile_photo:
+            return None
+        try:
+            return request.build_absolute_uri(u.profile_photo.url)
+        except Exception:
+            return None
+
+    historical_cutoff = timezone.now() - timezone.timedelta(seconds=15)
+
+    hist = ConnectionRequest.objects.filter(
+        Q(sender=me, receiver=target) | Q(sender=target, receiver=me),
+        status='accepted',
+        created_at__lt=historical_cutoff,
+    ).first()
+
+    if hist:
+        conv = Conversation.objects.filter(
+            Q(participant_a=me, participant_b=target) |
+            Q(participant_a=target, participant_b=me)
+        ).first()
+        return Response({
+            'success': True,
+            'already_connected': True,
+            'conversation_id': str(conv.id) if conv else None,
+            'connected_with': {
+                'id': str(target.id),
+                'name': target.get_full_name(),
+                'profile_photo_url': _photo_url(target),
+                'registration_id': getattr(target, 'registration_id', '') or '',
+                'role': getattr(target, 'role', 'participant'),
+            },
+        })
+
+    # Cancel any pending request between the two
+    ConnectionRequest.objects.filter(
+        Q(sender=me, receiver=target) | Q(sender=target, receiver=me),
+        status__in=['pending', 'later'],
+    ).delete()
+
+    req = ConnectionRequest.objects.create(
+        sender=me,
+        receiver=target,
+        status='accepted',
+        topic='other',
+        custom_topic='Scan & Connect — met at ETD 2026',
+        responded_at=timezone.now(),
+    )
+
+    conv = Conversation.objects.create(
+        request=req,
+        participant_a=me,
+        participant_b=target,
+        topic='other',
+        custom_topic='Scan & Connect',
+    )
+
+    # Log with event_type='scan_connect' for admin tracking
+    ShakeLog.objects.create(user=me, event_type='scan_connect', partner=target)
+    ShakeLog.objects.create(user=target, event_type='scan_connect', partner=me)
+
+    # Push notification to scanned person
+    try:
+        from apps.notifications.fcm import send_to_user as _send_push
+        _send_push(
+            target,
+            title=f'📷 {me.get_full_name()} scanned your badge!',
+            body='You were connected via QR Scan at ETD 2026. Tap to say hello.',
+            data={
+                'type': 'chat',
+                'screen': 'chat_room',
+                'conversation_id': str(conv.id),
+                'other_user_id': str(me.id),
+            },
+        )
+    except Exception:
+        pass
+
+    # Award leaderboard points
+    try:
+        from apps.leaderboard.utils import award_points
+        from apps.leaderboard.models import PointAction
+        award_points(me, PointAction.NETWORKING, f'QR Scan connect: {target.get_full_name()}')
+        award_points(target, PointAction.NETWORKING, f'QR Scan connect: {me.get_full_name()}')
+    except Exception:
+        pass
+
+    return Response({
+        'success': True,
+        'already_connected': False,
+        'conversation_id': str(conv.id),
+        'connected_with': {
+            'id': str(target.id),
+            'name': target.get_full_name(),
+            'profile_photo_url': _photo_url(target),
+            'registration_id': getattr(target, 'registration_id', '') or '',
+            'role': getattr(target, 'role', 'participant'),
+        },
+    })
+
 
 
 @api_view(['POST'])

@@ -2,6 +2,7 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework import status
+from django.db.models import Count
 
 from .models import Speaker
 from .serializers import SpeakerListSerializer, SpeakerDetailSerializer
@@ -32,7 +33,7 @@ def list_speakers(request):
     Returns all active speakers split into keynote + regular groups.
     GET /api/v1/speakers/
     """
-    qs = Speaker.objects.filter(is_active=True)
+    qs = Speaker.objects.filter(is_active=True).annotate(list_talk_count=Count('talks'))
     keynotes = qs.filter(is_keynote=True)
     regulars = qs.filter(is_keynote=False)
 

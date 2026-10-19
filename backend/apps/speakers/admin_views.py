@@ -6,9 +6,10 @@ from django.contrib.auth.hashers import make_password
 import secrets
 import string
 
-from apps.accounts.admin_views import admin_required
 from apps.accounts.models import User
 from .models import Speaker, SpeakerTalk
+from django.contrib.auth.decorators import login_required
+from apps.accounts.permissions_helper import module_required
 
 
 def _generate_temp_password(length=10):
@@ -32,7 +33,8 @@ def _sync_speaker_to_user(speaker, user):
 
 # ─── Speakers List ──────────────────────────────────────────────────────────
 
-@admin_required
+@login_required(login_url='/panel/login/')
+@module_required('speakers')
 def speakers_panel(request):
     keynotes = Speaker.objects.select_related('user').filter(is_keynote=True).prefetch_related('talks')
     regulars = Speaker.objects.select_related('user').filter(is_keynote=False).prefetch_related('talks')
@@ -47,11 +49,13 @@ def speakers_panel(request):
 
 # ─── Create Speaker ──────────────────────────────────────────────────────────
 
-@admin_required
+@login_required(login_url='/panel/login/')
+@module_required('speakers')
 def speaker_create(request):
     if request.method == 'POST':
         try:
             login_email = request.POST.get('login_email', '').strip().lower()
+            registration_id = request.POST.get('registration_id', '').strip()
             create_account = request.POST.get('create_account') == 'on'
             
             speaker = Speaker(
@@ -77,11 +81,17 @@ def speaker_create(request):
             speaker.save()
             
             # Create linked user account if requested
-            if create_account and login_email:
-                if User.objects.filter(email=login_email).exists():
+            if create_account:
+                if login_email and User.objects.filter(email=login_email).exists():
                     messages.warning(request, f'User with email {login_email} already exists. Linking to existing account.')
                     user = User.objects.get(email=login_email)
+                    if registration_id:
+                        user.registration_id = registration_id
+                        user.save()
                 else:
+                    if not login_email:
+                        login_email = f"pending-{secrets.token_hex(4)}@no-email.com"
+                        
                     temp_pwd = _generate_temp_password()
                     user = User.objects.create_user(
                         email=login_email,
@@ -92,10 +102,12 @@ def speaker_create(request):
                     user.role = 'speaker'
                     user.is_active = True
                     user.must_change_password = True
+                    user.temp_password = temp_pwd
+                    user.registration_id = registration_id
                     user.save()
                     messages.success(
                         request,
-                        f'✅ Speaker created. Login: {login_email} | Temp Password: {temp_pwd}',
+                        f'✅ Speaker created. Reg ID: {registration_id or "N/A"} | Temp Password: {temp_pwd}',
                         extra_tags='credentials'
                     )
                 
@@ -116,7 +128,8 @@ def speaker_create(request):
 
 # ─── Edit Speaker ─────────────────────────────────────────────────────────────
 
-@admin_required
+@login_required(login_url='/panel/login/')
+@module_required('speakers')
 def speaker_edit(request, pk):
     speaker = get_object_or_404(Speaker.objects.select_related('user'), pk=pk)
 
@@ -146,10 +159,35 @@ def speaker_edit(request, pk):
 
             speaker.save()
             
-            # Sync to linked user
-            if speaker.user:
-                _sync_speaker_to_user(speaker, speaker.user)
+            registration_id = request.POST.get('registration_id', '').strip()
             
+            # Sync to linked user or create account if registration_id provided
+            if speaker.user:
+                speaker.user.registration_id = registration_id
+                speaker.user.save()
+                _sync_speaker_to_user(speaker, speaker.user)
+            elif registration_id:
+                # Auto-create user account if admin assigns a Reg ID
+                user_email = speaker.email if speaker.email else f"pending-{secrets.token_hex(4)}@no-email.com"
+                temp_pwd = _generate_temp_password()
+                user = User.objects.create_user(
+                    email=user_email,
+                    password=temp_pwd,
+                    first_name=speaker.first_name,
+                    last_name=speaker.last_name,
+                )
+                user.role = 'speaker'
+                user.is_active = True
+                user.must_change_password = True
+                user.temp_password = temp_pwd
+                user.registration_id = registration_id
+                user.save()
+                
+                speaker.user = user
+                speaker.save()
+                _sync_speaker_to_user(speaker, user)
+                messages.success(request, f'✅ User account auto-created with Reg ID {registration_id} and Temp Password: {temp_pwd}')
+
             messages.success(request, f'Speaker "{speaker.full_name}" updated.')
             return redirect('speaker_edit', pk=speaker.pk)
         except Exception as e:
@@ -164,8 +202,9 @@ def speaker_edit(request, pk):
 
 # ─── Manage Speaker Login Credentials ────────────────────────────────────────
 
-@admin_required
 @require_POST
+@login_required(login_url='/panel/login/')
+@module_required('speakers')
 def speaker_credentials(request, pk):
     """Create/update login credentials for a speaker."""
     speaker = get_object_or_404(Speaker, pk=pk)
@@ -175,18 +214,15 @@ def speaker_credentials(request, pk):
         if action == 'create_account':
             new_email = request.POST.get('login_email', '').strip().lower()
             if not new_email:
-                messages.error(request, 'Email is required.')
-                return redirect('speaker_edit', pk=pk)
+                new_email = f"pending-{secrets.token_hex(4)}@no-email.com"
             
             if User.objects.filter(email=new_email).exists():
-                # Link to existing user
                 user = User.objects.get(email=new_email)
                 speaker.user = user
                 speaker.save()
                 _sync_speaker_to_user(speaker, user)
                 messages.success(request, f'✅ Linked to existing user: {new_email}')
             else:
-                # Create new user
                 temp_pwd = _generate_temp_password()
                 user = User.objects.create_user(
                     email=new_email,
@@ -197,6 +233,7 @@ def speaker_credentials(request, pk):
                 user.role = 'speaker'
                 user.is_active = True
                 user.must_change_password = True
+                user.temp_password = temp_pwd
                 user.save()
                 
                 speaker.user = user
@@ -227,6 +264,7 @@ def speaker_credentials(request, pk):
             
             speaker.user.email = new_email
             speaker.user.set_password(temp_pwd)
+            speaker.user.temp_password = temp_pwd
             speaker.user.must_change_password = True
             speaker.user.save()
             
@@ -242,6 +280,7 @@ def speaker_credentials(request, pk):
             
             temp_pwd = _generate_temp_password()
             speaker.user.set_password(temp_pwd)
+            speaker.user.temp_password = temp_pwd
             speaker.user.must_change_password = True
             speaker.user.save()
             
@@ -265,8 +304,9 @@ def speaker_credentials(request, pk):
 
 # ─── Delete Speaker ───────────────────────────────────────────────────────────
 
-@admin_required
 @require_POST
+@login_required(login_url='/panel/login/')
+@module_required('speakers')
 def speaker_delete(request, pk):
     speaker = get_object_or_404(Speaker, pk=pk)
     name = speaker.full_name
@@ -277,7 +317,8 @@ def speaker_delete(request, pk):
 
 # ─── Talk CRUD ────────────────────────────────────────────────────────────────
 
-@admin_required
+@login_required(login_url='/panel/login/')
+@module_required('speakers')
 def talk_create(request, speaker_pk):
     speaker = get_object_or_404(Speaker, pk=speaker_pk)
     if request.method == 'POST':
@@ -297,11 +338,35 @@ def talk_create(request, speaker_pk):
     return redirect('speaker_edit', pk=speaker_pk)
 
 
-@admin_required
 @require_POST
+@login_required(login_url='/panel/login/')
+@module_required('speakers')
 def talk_delete(request, pk):
     talk = get_object_or_404(SpeakerTalk, pk=pk)
     speaker_pk = talk.speaker_id
     talk.delete()
     messages.success(request, 'Talk removed.')
     return redirect('speaker_edit', pk=speaker_pk)
+
+
+@login_required
+def export_speaker_credentials(request):
+    import csv
+    from django.http import HttpResponse
+    response = HttpResponse(content_type='text/csv')
+    response['Content-Disposition'] = 'attachment; filename="ETD2026_Speaker_Credentials.csv"'
+    writer = csv.writer(response)
+    writer.writerow(['Registration ID', 'Full Name', 'Category / Sub-Role', 'Email', 'Designation', 'Organisation', 'Temporary Password'])
+    
+    speakers = User.objects.filter(role='speaker').order_by('first_name')
+    for s in speakers:
+        writer.writerow([
+            s.registration_id or '',
+            s.get_full_name() or '',
+            s.category or getattr(s, 'designation', '') or 'Speaker',
+            s.email or '',
+            s.designation or '',
+            s.affiliation or '',
+            s.temp_password if s.must_change_password else '(Password Changed)'
+        ])
+    return response

@@ -196,7 +196,7 @@ export default function StaffScreen({ onBack, onOpenStaffDetail, onOpenGroupChat
           <Ionicons name="arrow-back" size={24} color="#fff" />
         </TouchableOpacity>
         <View style={{ flex: 1 }}>
-          <Text style={styles.topTitle}>Events Team</Text>
+          <Text style={styles.topTitle}>Event Team</Text>
           <Text style={styles.topSub}>Central Library, IIT Delhi</Text>
         </View>
       </View>

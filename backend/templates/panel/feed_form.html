@@ -22,16 +22,19 @@
 
         <div style="display:grid;grid-template-columns:2fr 1fr;gap:12px;">
             <div>
-                <label class="form-label">Title *</label>
-                <input class="form-control" name="title" required maxlength="300"
-                       value="{{ post.title|default:'' }}" placeholder="e.g. Lunch extended by 30 mins">
+                <label class="form-label" id="title-label">{% if request.POST.post_type == 'quiz' or post.post_type == 'quiz' %}Title (optional){% else %}Title *{% endif %}</label>
+                <input class="form-control" name="title" id="post-title" {% if request.POST.post_type != 'quiz' and post.post_type != 'quiz' %}required{% endif %} maxlength="300"
+                       value="{% if request.method == 'POST' %}{{ request.POST.title }}{% else %}{{ post.title|default:'' }}{% endif %}" placeholder="e.g. Lunch extended by 30 mins">
             </div>
             <div>
                 <label class="form-label">Type *</label>
                 <select class="form-control" name="post_type">
                     {% for val,label in post_types %}
-                    <option value="{{ val }}" {% if post and post.post_type == val %}selected{% endif %}>{{ label }}</option>
+                    {% if val != 'quiz' %}
+                    <option value="{{ val }}" {% if request.method == 'POST' %}{% if request.POST.post_type == val %}selected{% endif %}{% elif post and post.post_type == val %}selected{% endif %}>{{ label }}</option>
+                    {% endif %}
                     {% endfor %}
+                    <option value="quiz" {% if request.method == 'POST' %}{% if request.POST.post_type == 'quiz' %}selected{% endif %}{% elif post.post_type == 'quiz' %}selected{% endif %}>Quiz</option>
                 </select>
             </div>
         </div>
@@ -39,7 +42,33 @@
         <div>
             <label class="form-label">Body *</label>
             <textarea class="form-control" name="body" rows="6" required
-                      placeholder="Write the full post content here...">{{ post.body|default:'' }}</textarea>
+                      placeholder="Write the full post content here...">{% if request.method == 'POST' %}{{ request.POST.body }}{% else %}{{ post.body|default:'' }}{% endif %}</textarea>
+        </div>
+
+        <div>
+            <label class="form-label">Attached link (optional)</label>
+            <input class="form-control" name="link_url" type="url" maxlength="2000"
+                   value="{% if request.method == 'POST' %}{{ request.POST.link_url }}{% else %}{{ post.link_url|default:'' }}{% endif %}" placeholder="https://example.com">
+        </div>
+
+        <div id="quiz-editor" style="display:grid;gap:12px;" hidden>
+            <label class="form-label">Quiz type</label>
+            <select class="form-control" name="quiz_type" id="quiz-type">
+                <option value="multiple_choice">Multiple choice</option>
+                <option value="true_false">True / False</option>
+            </select>
+            <label class="form-label">Question *</label>
+            <input class="form-control" name="quiz_question" maxlength="500" value="{{ quiz_form.question }}">
+            <div id="quiz-options" aria-live="polite"></div>
+            <button type="button" class="btn btn-secondary" id="add-option">Add option</button>
+            <label class="form-label">Correct answer (optional)</label>
+            <select class="form-control" name="quiz_correct_option" id="quiz-correct"></select>
+            <small>Choose “No correct answer” to collect opinions without grading. Participants can respond once. Questions and answers cannot change after the first response.</small>
+            {% if post.post_type == 'quiz' %}
+            <p>{{ post.quiz_responses.count }} participant responses</p>
+            <a class="btn btn-secondary" href="{% url 'feed_quiz_stats_detail' post.pk %}">View Response Statistics</a>
+            {% for result in quiz_results %}<p>{{ result.option }}: {{ result.count }}</p>{% endfor %}
+            {% endif %}
         </div>
 
         <div>
@@ -144,4 +173,71 @@
 
 </div>
 </form>
+{{ quiz_form|json_script:"quiz-form-data" }}
+<script>
+(() => {
+    const initial = JSON.parse(document.getElementById('quiz-form-data').textContent) || {};
+    const type = document.querySelector('[name="post_type"]');
+    const kind = document.getElementById('quiz-type');
+    const editor = document.getElementById('quiz-editor');
+    const options = document.getElementById('quiz-options');
+    const correct = document.getElementById('quiz-correct');
+    const add = document.getElementById('add-option');
+    // Older workers can render this template without quiz setup data.
+    let choices = Array.isArray(initial.options) && initial.options.length >= 2
+        ? initial.options.slice() : ['', ''];
+    let selected = initial.correct === null || initial.correct === undefined || initial.correct === ''
+        ? '' : Number(initial.correct);
+    kind.value = initial.type === 'true_false' ? 'true_false' : 'multiple_choice';
+    function render() {
+        editor.hidden = type.value !== 'quiz';
+        editor.style.display = editor.hidden ? 'none' : 'grid';
+        document.getElementById('post-title').required = editor.hidden;
+        document.getElementById('title-label').textContent = editor.hidden ? 'Title *' : 'Title (optional)';
+        document.querySelector('[name="quiz_question"]').required = !editor.hidden;
+        options.replaceChildren();
+        correct.replaceChildren();
+        correct.add(new Option('No correct answer (collect responses only)', ''));
+        const values = kind.value === 'true_false' ? ['True', 'False'] : choices;
+        values.forEach((value, index) => {
+            const row = document.createElement('div');
+            row.style.cssText = 'display:flex;gap:8px;margin-bottom:8px';
+            const input = document.createElement('input');
+            input.className = 'form-control'; input.name = 'quiz_option';
+            input.value = value; input.maxLength = 200; input.placeholder = `Option ${index + 1}`;
+            input.readOnly = kind.value === 'true_false';
+            input.addEventListener('input', () => {
+                choices[index] = input.value;
+                correct.options[index + 1].text = input.value.trim() || `Option ${index + 1}`;
+            });
+            row.append(input);
+            if (kind.value !== 'true_false' && values.length > 2) {
+                const remove = document.createElement('button');
+                remove.type = 'button'; remove.textContent = 'Remove'; remove.className = 'btn btn-secondary';
+                remove.addEventListener('click', () => {
+                    choices.splice(index, 1);
+                    selected = selected === index ? '' : selected !== '' && selected > index ? selected - 1 : selected;
+                    render();
+                });
+                row.append(remove);
+            }
+            options.append(row);
+            correct.add(new Option(value.trim() || `Option ${index + 1}`, index));
+        });
+        if (selected !== '' && selected >= values.length) selected = '';
+        correct.value = String(selected);
+        add.hidden = kind.value === 'true_false' || choices.length >= 6;
+    }
+    correct.addEventListener('change', () => { selected = correct.value === '' ? '' : Number(correct.value); });
+    type.addEventListener('change', render);
+    kind.addEventListener('change', () => { selected = ''; render(); });
+    add.addEventListener('click', () => {
+        if (kind.value === 'true_false' || choices.length >= 6) return;
+        choices.push('');
+        render();
+        options.lastElementChild.querySelector('input').focus();
+    });
+    render();
+})();
+</script>
 {% endblock %}

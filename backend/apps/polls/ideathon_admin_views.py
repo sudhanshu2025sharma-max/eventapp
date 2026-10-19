@@ -6,7 +6,9 @@ from django.utils import timezone
 from django.utils.dateparse import parse_datetime
 from zoneinfo import ZoneInfo
 
-from apps.accounts.admin_views import admin_required
+from django.contrib.auth.decorators import login_required
+from apps.accounts.permissions_helper import module_required, user_has_module_access
+from .registration import set_registration, queue_registration_notification
 from .ideathon_models import IdeathonConfig, IdeathonTeam, IdeathonMember, IdeathonInterest
 from .models import Poll, PollOption, PollAuditLog
 
@@ -24,7 +26,8 @@ def _parse_dt(val):
     return dt.astimezone(timezone.utc)
 
 
-@admin_required
+@login_required
+@module_required('ideathon')
 def ideathon_panel(request):
     cfg = IdeathonConfig.get()
     teams = IdeathonTeam.objects.prefetch_related('members__user').all()
@@ -54,6 +57,7 @@ def ideathon_panel(request):
         action = request.POST.get('action')
 
         if action == 'save_config':
+            was_open = cfg.registration_open
             cfg.registration_open = request.POST.get('registration_open') == 'on'
             cfg.reg_starts_at = _parse_dt(request.POST.get('reg_starts_at'))
             cfg.reg_ends_at = _parse_dt(request.POST.get('reg_ends_at'))
@@ -62,29 +66,14 @@ def ideathon_panel(request):
             cfg.description = request.POST.get('description', '').strip()
             cfg.updated_by = request.user
             cfg.save()
+            if cfg.registration_open and not was_open:
+                queue_registration_notification(cfg, request.user)
             messages.success(request, 'Ideathon settings saved.')
 
         elif action == 'toggle_registration':
-            cfg.registration_open = not cfg.registration_open
-            cfg.updated_by = request.user
-            cfg.save()
+            cfg = set_registration(request.user)
             state = 'opened' if cfg.registration_open else 'closed'
             messages.success(request, f'Team registration {state}.')
-
-            if cfg.registration_open:
-                try:
-                    from apps.notifications.models import Notification as Notif
-                    from apps.notifications.fcm import send_to_all
-                    notif = Notif.objects.create(
-                        title='🏆 Ideathon Team Registration is Open!',
-                        body='Form your teams now in the app. Teams of 3-5 members.',
-                        target_type='all', sent_by=request.user, status='pending',
-                        data={'type': 'poll'},
-                    )
-                    s, f, _ = send_to_all(notif.title, notif.body, notif.data, notif, request)
-                    notif.status = 'sent'; notif.sent_count = s; notif.failed_count = f; notif.save()
-                except Exception:
-                    pass
 
         elif action == 'delete_team':
             team_id = request.POST.get('team_id')
@@ -144,6 +133,9 @@ def ideathon_panel(request):
                 messages.success(request, "Cleared all interested participant records.")
 
         elif action == 'create_voting_poll':
+            if not user_has_module_access(request.user, 'polls'):
+                messages.error(request, 'Polls permission is also required to create a voting poll.')
+                return redirect('ideathon_panel')
             if teams.count() < 2:
                 messages.error(request, 'Need at least 2 teams to create a voting poll.')
             else:

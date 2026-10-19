@@ -120,7 +120,7 @@ class SelfieSubmission(models.Model):
     class Meta:
         db_table = 'selfie_submissions'
         ordering = ['-created_at']
-        unique_together = ['user', 'selfie_point']
+        # unique_together removed to allow up to 5 submissions per spot
 
     def __str__(self):
         return f"{self.user.email} → {self.selfie_point.name} [{self.status}]"

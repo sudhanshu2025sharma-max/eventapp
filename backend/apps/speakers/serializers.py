@@ -1,5 +1,6 @@
 from rest_framework import serializers
 from .models import Speaker, SpeakerTalk
+from confhub.media import preview_url
 
 
 class SpeakerTalkSerializer(serializers.ModelSerializer):
@@ -24,15 +25,10 @@ class SpeakerListSerializer(serializers.ModelSerializer):
         ]
 
     def get_photo_url(self, obj):
-        if obj.photo:
-            request = self.context.get('request')
-            if request:
-                return request.build_absolute_uri(obj.photo.url)
-            return obj.photo.url
-        return None
+        return preview_url(obj.photo, self.context.get('request'), size=480)
 
     def get_talk_count(self, obj):
-        return obj.talks.count()
+        return obj.list_talk_count if hasattr(obj, 'list_talk_count') else obj.talks.count()
 
 
 class SpeakerDetailSerializer(serializers.ModelSerializer):

@@ -326,72 +326,111 @@
             <a href="{% url 'participants_list' %}" class="menu-item {% if 'participant' in request.resolver_match.url_name %}active{% endif %}">
                 <i class="fas fa-users"></i> Participants
             </a>
-            <a href="/panel/ideathon/" class="menu-item {% if 'ideathon' in request.resolver_match.url_name %}active{% endif %}">
+            {% if is_super_admin or "ideathon" in user_permissions %}
+              <a href="/panel/ideathon/" class="menu-item {% if 'ideathon' in request.resolver_match.url_name %}active{% endif %}">
                 <i class="fas fa-people-group"></i> Ideathon Teams
             </a>
+              {% endif %}
+            {% if is_super_admin or is_team_head or "checkin_scanner" in user_permissions %}
             <a href="/panel/checkins/scanner/" class="menu-item {% if request.resolver_match.url_name == 'checkin_scanner' %}active{% endif %}">
                 <i class="fas fa-qrcode"></i> Scanner
             </a>
-          <a href="/panel/checkins/list/" class="menu-item {% if request.resolver_match.url_name == 'checkin_list' %}active{% endif %}">
+            {% endif %}
+          {% if is_super_admin or "checkin_scanner" in user_permissions %}
+              <a href="/panel/checkins/list/" class="menu-item {% if request.resolver_match.url_name == 'checkin_list' %}active{% endif %}">
             <i class="fas fa-list-ul"></i> History & Export
           </a>
+              {% endif %}
+          {% if is_super_admin or is_team_head or "certificates" in user_permissions %}
+          <a href="/panel/certificates/" class="menu-item {% if request.resolver_match.url_name == 'certificates' %}active{% endif %}">
+            <i class="fa-solid fa-certificate"></i> Certificate 
+          </a>
+          {% endif %}
 
             <div class="menu-label">Content</div>
-            <a href="/panel/schedule/accepted-papers/" class="menu-item {% if '/accepted-papers/' in request.path %}active{% endif %}"><i class="fas fa-file-alt"></i> Accepted Papers</a>
+            {% if is_super_admin or "papers" in user_permissions %}
+              <a href="/panel/schedule/accepted-papers/" class="menu-item {% if '/accepted-papers/' in request.path %}active{% endif %}"><i class="fas fa-file-alt"></i> Accepted Papers</a>
+              {% endif %}
+            {% if is_super_admin or is_team_head or "schedule" in user_permissions %}
             <a href="/panel/schedule/" class="menu-item {% if 'schedule' in request.resolver_match.url_name %}active{% endif %}">
                 <i class="fas fa-calendar-alt"></i> Events &amp; Schedule
             </a>
-            <a href="/panel/photos/" class="menu-item {% if request.resolver_match.url_name == 'photos_panel' %}active{% endif %}">
+            {% endif %}
+            {% if is_super_admin or "photos" in user_permissions %}
+              <a href="/panel/photos/" class="menu-item {% if request.resolver_match.url_name == 'photos_panel' %}active{% endif %}">
                 <i class="fas fa-camera"></i> Photos
             </a>
+              {% endif %}
+            {% if is_super_admin or is_team_head or "checkpoint" in user_permissions %}
             <a href="/panel/selfie-points/" class="menu-item {% if request.resolver_match.url_name == 'photos_panel' %}active{% endif %}">
                 <i class="fas fa-location-dot"></i> Selfie Spots
             </a>
-            <a href="/panel/feed/" class="menu-item {% if 'feed' in request.resolver_match.url_name %}active{% endif %}">
+            {% endif %}
+            {% if is_super_admin or "feed" in user_permissions %}
+              <a href="/panel/feed/" class="menu-item {% if 'feed' in request.resolver_match.url_name %}active{% endif %}">
                 <i class="fas fa-newspaper"></i> Posts &amp; Feed
             </a>
+              {% endif %}
 
             <div class="menu-label">Engagement</div>
-            <a href="/panel/polls/" class="menu-item {% if 'poll' in request.resolver_match.url_name %}active{% endif %}">
+            {% if is_super_admin or "polls" in user_permissions %}
+              <a href="/panel/polls/" class="menu-item {% if 'poll' in request.resolver_match.url_name %}active{% endif %}">
                 <i class="fas fa-chart-bar"></i> Polls
             </a>
+              {% endif %}
+            {% if is_super_admin or is_team_head or "leaderboard" in user_permissions %}
             <a href="/panel/leaderboard/" class="menu-item {% if request.resolver_match.url_name == 'leaderboard_panel' %}active{% endif %}">
                 <i class="fas fa-trophy"></i> Leaderboard
             </a>
+            {% endif %}
 
             <div class="menu-label">System</div>
-                        <a href="/panel/error-reports/" class="menu-item {% if '/error-reports/' in request.path %}active{% endif %}">
+                        {% if is_super_admin or "error_reports" in user_permissions %}
+              <a href="/panel/error-reports/" class="menu-item {% if '/error-reports/' in request.path %}active{% endif %}">
                 <i class="fas fa-triangle-exclamation"></i> Error &amp; System Logs
             </a>
+              {% endif %}
+            {% if is_super_admin or is_team_head or "notifications" in user_permissions %}
             <a href="/panel/notifications/" class="menu-item {% if request.resolver_match.url_name == 'notifications_panel' %}active{% endif %}">
                 <i class="fas fa-bell"></i> Notifications
             </a>
+            {% endif %}
             
             {% if is_super_admin or "users_manage" in user_permissions %}
             <a href="/panel/staff/permissions/" class="menu-item {% if '/staff/' in request.path %}active{% endif %}">
                 <i class="fas fa-user-shield"></i> Staff Management
             </a>
             {% endif %}
+{% if is_super_admin or is_team_head or "sponsors" in user_permissions %}
 <a href="/panel/sponsors/" class="menu-item {% if 'sponsor' in request.resolver_match.url_name %}active{% endif %}">
                 <i class="fas fa-handshake"></i> Sponsors
             </a>
-            <a href="/panel/speakers/" class="menu-item {% if 'speaker' in request.resolver_match.url_name %}active{% endif %}">
+{% endif %}
+            {% if is_super_admin or "speakers" in user_permissions %}
+              <a href="/panel/speakers/" class="menu-item {% if 'speaker' in request.resolver_match.url_name %}active{% endif %}">
                 <i class="fas fa-microphone"></i> Speakers
             </a>
+              {% endif %}
+            {% if is_super_admin or is_team_head or "users_manage" in user_permissions %}
             <a href="/panel/users/manage/" class="menu-item {% if request.resolver_match.url_name == 'users_manage' %}active{% endif %}">
                 <i class="fas fa-shield-halved"></i> User Management
             </a>
+            {% endif %}
             {% if is_super_admin or "users_manage" in user_permissions %}
             <a href="/panel/deletion-requests/" class="menu-item {% if '/deletion-requests/' in request.path %}active{% endif %}">
                 <i class="fas fa-user-minus"></i> Deletion Requests
             </a>
+            {% if is_super_admin or is_team_head or "users_manage" in user_permissions %}
             <a href="/panel/deletion-history/" class="menu-item {% if '/deletion-history/' in request.path %}active{% endif %}">
                 <i class="fas fa-history"></i> Deletion History
             </a>
             {% endif %}
+            {% endif %}
+            {% if is_super_admin or is_team_head or "settings" in user_permissions %}
             <a href="/panel/settings/conference/" class="menu-item {% if request.resolver_match.url_name == 'conference_settings' %}active{% endif %}">
                 <i class="fas fa-cog"></i> Settings
             </a>
+            {% endif %}
         </nav>
 
         <div class="sidebar-footer">
@@ -437,6 +476,18 @@
         </header>
 
         <div class="page-content">
+              {% if messages %}
+              <div style="padding: 1rem 2rem 0;">
+                  {% for message in messages %}
+                  <div style="padding: 0.75rem 1rem; margin-bottom: 0.5rem; border-radius: 6px;
+                              background: {% if 'error' in message.tags %}#fee2e2{% elif 'success' in message.tags %}#dcfce7{% else %}#dbeafe{% endif %};
+                              color: {% if 'error' in message.tags %}#991b1b{% elif 'success' in message.tags %}#166534{% else %}#1e40af{% endif %};
+                              font-size: 0.9rem;">
+                      {{ message }}
+                  </div>
+                  {% endfor %}
+              </div>
+              {% endif %}
             {% block content %}{% endblock %}
         </div>
     </main>
@@ -448,7 +499,7 @@ function toggleSubmenu(e, id) {
     var el = document.getElementById(id);
     // always keep visible if we are on a schedule page
     var isSchedule = window.location.pathname.includes('/schedule');
-    if (el) el.style.display = if (el) el.style.display === 'none' ? 'block' : '';
+    if (el) el.style.display = el.style.display === 'none' ? 'block' : '';
 }
 // On page load: keep submenu open if on schedule page
 document.addEventListener('DOMContentLoaded', function() {

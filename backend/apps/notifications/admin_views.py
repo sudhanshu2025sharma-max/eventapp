@@ -3,9 +3,11 @@ from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from .models import DeviceToken, Notification, NotificationAttachment
 from . import fcm
+from apps.accounts.permissions_helper import module_required
 
 
 @login_required(login_url='/panel/login/')
+@module_required('notifications')
 def notifications_page(request):
     notifs = Notification.objects.all()[:20]
     for n in notifs:
@@ -18,6 +20,7 @@ def notifications_page(request):
 
 
 @login_required(login_url='/panel/login/')
+@module_required('notifications')
 def send_notification(request):
     if request.method != 'POST':
         return redirect('panel_notifications')
@@ -79,6 +82,7 @@ from .models import NotificationAttachment
 
 
 @login_required(login_url='/panel/login/')
+@module_required('notifications')
 def notification_detail(request, pk):
     notif = get_object_or_404(Notification, pk=pk)
     return render(request, 'panel/notification_detail.html', {
@@ -88,6 +92,7 @@ def notification_detail(request, pk):
 
 
 @login_required(login_url='/panel/login/')
+@module_required('notifications')
 def notification_edit(request, pk):
     notif = get_object_or_404(Notification, pk=pk)
     if request.method == 'POST':
@@ -119,6 +124,7 @@ def notification_edit(request, pk):
 
 
 @login_required(login_url='/panel/login/')
+@module_required('notifications')
 def notification_delete(request, pk):
     notif = get_object_or_404(Notification, pk=pk)
     if request.method == 'POST':

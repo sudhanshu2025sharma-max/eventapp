@@ -1,3 +1,11 @@
+
+def _get_all_participant_categories():
+    from apps.accounts.models import ParticipantCategory, User
+    db_cats = list(ParticipantCategory.objects.values_list('name', flat=True))
+    part_qs = User.objects.exclude(role__in=['super_admin', 'mgmt_admin', 'team_head', 'staff', 'speaker'])
+    user_cats = list(filter(None, set(part_qs.values_list('category', flat=True).distinct())))
+    combined = sorted(list(set(['Participant'] + db_cats + user_cats)))
+    return combined
 import csv
 import io
 import qrcode
@@ -18,6 +26,7 @@ from django.db.models import Q
 from django.utils import timezone
 
 from .models import ParticipantImport
+from apps.accounts.permissions_helper import module_required
 
 try:
     from apps.leaderboard.utils import award_points
@@ -34,7 +43,7 @@ User = get_user_model()
 _CSV_HEADERS = [
     'Salutation', 'Full Name', 'Registration ID', 'Email ID', 'Gender',
     'Designation', 'Organisation / Institute',
-    'Mobile Number', 'Address', 'PIN / Postal Code',
+    'Mobile Number', 'Address', 'PIN / Postal Code', 'Role',
 ]
 
 _HEADER_MAP = {
@@ -56,18 +65,29 @@ _HEADER_MAP = {
     'pin / postal code':        'pin_code',
     'pin':                      'pin_code',
     'postal code':              'pin_code',
+    'role':                     'imported_role',
+    'category':                 'imported_role',
 }
 
 
-def _generate_temp_password(length=12):
-    alphabet = string.ascii_letters + string.digits
-    while True:
-        pwd = ''.join(secrets.choice(alphabet) for _ in range(length))
-        if (any(c.isupper() for c in pwd)
-                and any(c.islower() for c in pwd)
-                and any(c.isdigit() for c in pwd)):
-            return pwd
-
+def _generate_temp_password(full_name=''):
+    import re, random
+    clean = re.sub(r'[^a-zA-Z\s]', '', str(full_name)).strip()
+    parts = clean.split()
+    base_str = ''
+    is_short = False
+    for p in parts:
+        if len(p) > 2:
+            base_str = p
+            break
+    if not base_str:
+        base_str = parts[0] if parts else 'User'
+        is_short = True
+    base_str = base_str.capitalize()
+    if len(base_str) < 4:
+        base_str = base_str.ljust(4, 'x')
+        is_short = True
+    return f'{base_str}@{random.randint(100, 999)}', is_short
 
 def _split_name(full_name):
     parts = full_name.strip().split(None, 1)
@@ -385,7 +405,7 @@ def admin_login(request):
 @login_required(login_url='/panel/login/')
 def admin_logout(request):
     logout(request)
-    return redirect('admin_login')
+    return redirect('/panel/login/')
 
 
 # ── dashboard ──────────────────────────────────────────────────────────────
@@ -503,8 +523,28 @@ def admin_dashboard(request):
 # ── participant import ─────────────────────────────────────────────────────
 
 @login_required(login_url='/panel/login/')
+@module_required('participants')
 def participants_upload(request):
     if request.method == 'POST':
+        if request.POST.get('action') == 'add_category':
+            from apps.accounts.models import ParticipantCategory
+            new_cat = request.POST.get('new_category_name', '').strip()
+            if new_cat:
+                ParticipantCategory.objects.get_or_create(name=new_cat)
+                messages.success(request, f"New category '{new_cat}' created successfully!")
+            return redirect('participants_upload')
+        if request.POST.get('action') == 'delete_category':
+            from apps.accounts.models import ParticipantCategory
+            cat_to_del = request.POST.get('category_name', '').strip()
+            if cat_to_del:
+                part_qs = User.objects.exclude(role__in=['super_admin', 'mgmt_admin', 'team_head', 'staff', 'speaker']).filter(category__iexact=cat_to_del)
+                user_count = part_qs.count()
+                if user_count > 0:
+                    messages.error(request, f"Cannot delete '{cat_to_del}': {user_count} participant(s) currently belong to it.")
+                else:
+                    ParticipantCategory.objects.filter(name__iexact=cat_to_del).delete()
+                    messages.success(request, f"Category '{cat_to_del}' deleted.")
+            return redirect('participants_upload')
         f = request.FILES.get('csv_file')
         if not f:
             messages.error(request, 'Please select a file.')
@@ -522,7 +562,13 @@ def participants_upload(request):
             uploaded_by=request.user, status='pending'
         ).delete()
 
-        objs = [ParticipantImport(uploaded_by=request.user, **row) for row in rows]
+        default_cat = request.POST.get('default_category', '').strip() or 'Participant'
+        objs = []
+        for r in rows:
+            cat_val = r.get('category') or r.get('imported_role') or default_cat
+            r['category'] = cat_val
+            r['imported_role'] = cat_val
+            objs.append(ParticipantImport(uploaded_by=request.user, **r))
         ParticipantImport.objects.bulk_create(objs, ignore_conflicts=False)
 
         if errors:
@@ -531,10 +577,27 @@ def participants_upload(request):
         messages.success(request, f"{len(rows)} row(s) staged for review.")
         return redirect('participants_preview')
 
-    return render(request, 'panel/participants_upload.html')
+    all_cats = _get_all_participant_categories()
+    from django.db.models import Count
+    base_qs = User.objects.exclude(role__in=['super_admin', 'mgmt_admin', 'team_head', 'staff', 'speaker'])
+    raw_cats = list(base_qs.values('category').annotate(count=Count('id')))
+    cat_counts = {}
+    for item in raw_cats:
+        cname = (item['category'] or '').strip() or 'Participant'
+        cat_counts[cname] = cat_counts.get(cname, 0) + item['count']
+
+    for dc in _get_all_participant_categories():
+        if dc not in cat_counts:
+            cat_counts[dc] = 0
+
+    return render(request, 'panel/participants_upload.html', {
+        'category_stats': cat_counts,
+        'categories': sorted(list(cat_counts.keys()))
+    })
 
 
 @login_required(login_url='/panel/login/')
+@module_required('participants')
 def participants_preview(request):
     pending = ParticipantImport.objects.filter(
         uploaded_by=request.user, status='pending'
@@ -576,6 +639,7 @@ def participants_preview(request):
 
 
 @login_required(login_url='/panel/login/')
+@module_required('participants')
 def participants_delete_row(request, pk):
     if request.method == 'POST':
         ParticipantImport.objects.filter(
@@ -585,6 +649,7 @@ def participants_delete_row(request, pk):
 
 
 @login_required(login_url='/panel/login/')
+@module_required('participants')
 def participants_confirm(request):
     if request.method != 'POST':
         return redirect('participants_preview')
@@ -597,11 +662,8 @@ def participants_confirm(request):
         messages.error(request, 'Nothing to import.')
         return redirect('participants_upload')
 
-    send_email = request.POST.get('send_email') == 'on'
-
     created_count = 0
     skipped_count = 0
-    email_failed  = 0
 
     for staged in pending:
         if User.objects.filter(email=staged.email).exists():
@@ -611,22 +673,19 @@ def participants_confirm(request):
             skipped_count += 1
             continue
 
-        if staged.registration_id and User.objects.filter(registration_id=staged.registration_id).exists():
-            staged.status     = 'failed'
-            staged.error_note = 'Registration ID already exists.'
-            staged.save(update_fields=['status', 'error_note'])
-            skipped_count += 1
-            continue
+# Registration ID duplicate check removed to allow shared group/sponsor IDs
 
         first_name, last_name = _split_name(staged.full_name)
         manual_pwd = request.POST.get('temp_password', '').strip()
-        temp_password = manual_pwd if manual_pwd else _generate_temp_password()
+        auto_pwd, _ = _generate_temp_password(staged.full_name)
+        temp_password = manual_pwd if manual_pwd else auto_pwd
 
         try:
             with transaction.atomic():
                 User.objects.create_user(
                     email           = staged.email,
                     password        = temp_password,
+                    temp_password   = temp_password,
                     first_name      = first_name,
                     last_name       = last_name,
                     phone           = staged.mobile,
@@ -634,23 +693,20 @@ def participants_confirm(request):
                     designation     = staged.designation,
                     gender          = staged.gender,
                     registration_id = staged.registration_id or None,
-                    role            = 'participant',
+                    category        = getattr(staged, 'category', '') or staged.imported_role or 'Participant',
+                    role            = 'sponsor_del' if 'sponsor' in (staged.imported_role or '').lower() else 'participant',
                     must_change_password = True,
                     is_active       = True,
                 )
                 staged.status = 'imported'
-                staged.save(update_fields=['status'])
+                staged.temp_password = temp_password
+                staged.save(update_fields=['status', 'temp_password'])
 
             if HAS_LEADERBOARD:
                 try:
                     award_points(User.objects.get(email=staged.email), PointAction.SIGNUP, 'Welcome to ETD 2026')
                 except Exception:
                     pass
-
-            if send_email:
-                ok = _send_credentials_email(staged.email, staged.full_name, temp_password, registration_id=staged.registration_id)
-                if not ok:
-                    email_failed += 1
 
             created_count += 1
 
@@ -662,21 +718,103 @@ def participants_confirm(request):
             skipped_count += 1
 
     msg = f"Import done: {created_count} created, {skipped_count} skipped."
-    if send_email and email_failed:
-        msg += f" ⚠ {email_failed} credential email(s) failed."
-    elif not send_email:
-        msg += " (Emails not sent)"
+    if created_count > 0:
+        msg += " 📥 Download the credentials CSV below to mail-merge login details."
     messages.success(request, msg)
     return redirect('participants_list')
 
 
 @login_required(login_url='/panel/login/')
+@module_required('participants')
 def participants_list(request):
     from apps.checkins.models import CheckIn
+    from django.db.models import Count, Q
+
     search = request.GET.get('search', '').strip()
     status_filter = request.GET.get('status', '').strip()
+    selected_category = request.GET.get('category', '').strip()
 
-    qs = User.objects.filter(role='participant').order_by('first_name', 'last_name')
+    # Handle Actions (Add Category, Delete Selected, Delete Category)
+    if request.method == 'POST':
+        action = request.POST.get('action')
+        from apps.accounts.models import ParticipantCategory
+
+        if action == 'add_category':
+            new_cat = request.POST.get('new_category_name', '').strip()
+            if new_cat:
+                ParticipantCategory.objects.get_or_create(name=new_cat)
+                messages.success(request, f"New category '{new_cat}' created successfully!")
+                return redirect(f"/panel/participants/?category={new_cat}")
+
+        elif action == 'bulk_delete':
+            user_ids = request.POST.getlist('selected_ids')
+            if user_ids:
+                part_qs = User.objects.exclude(
+                    role__in=['super_admin', 'mgmt_admin', 'team_head', 'staff', 'speaker']
+                ).filter(id__in=user_ids)
+                count = part_qs.count()
+                part_qs.delete()
+                messages.success(request, f"Successfully deleted {count} selected participant(s).")
+            else:
+                messages.warning(request, "No participants selected for deletion.")
+            return redirect('participants_list')
+
+        elif action == 'delete_entire_category':
+            cat_to_del = request.POST.get('category_name', '').strip()
+            if cat_to_del:
+                # Delete all participant users under this category
+                if cat_to_del == 'Participant':
+                    part_qs = User.objects.exclude(
+                        role__in=['super_admin', 'mgmt_admin', 'team_head', 'staff', 'speaker']
+                    ).filter(Q(category__iexact='Participant') | Q(category='') | Q(category__isnull=True))
+                else:
+                    part_qs = User.objects.exclude(
+                        role__in=['super_admin', 'mgmt_admin', 'team_head', 'staff', 'speaker']
+                    ).filter(category__iexact=cat_to_del)
+                
+                user_count = part_qs.count()
+                part_qs.delete()
+                ParticipantCategory.objects.filter(name__iexact=cat_to_del).delete()
+                messages.success(request, f"Deleted category '{cat_to_del}' and all {user_count} participant(s) in it.")
+            return redirect('participants_list')
+
+        elif action == 'delete_category':
+            cat_to_del = request.POST.get('category_name', '').strip()
+            if cat_to_del:
+                part_qs = User.objects.exclude(
+                    role__in=['super_admin', 'mgmt_admin', 'team_head', 'staff', 'speaker']
+                ).filter(category__iexact=cat_to_del)
+                user_count = part_qs.count()
+                if user_count > 0:
+                    messages.error(request, f"Cannot delete '{cat_to_del}': {user_count} participant(s) currently belong to it. Use 'Delete Category & All Participants' instead.")
+                else:
+                    ParticipantCategory.objects.filter(name__iexact=cat_to_del).delete()
+                    messages.success(request, f"Category '{cat_to_del}' deleted.")
+            return redirect('participants_list')
+
+    base_qs = User.objects.exclude(role__in=['super_admin', 'mgmt_admin', 'team_head', 'staff', 'speaker'])
+
+    # Category stats & counts
+    raw_cats = list(base_qs.values('category').annotate(count=Count('id')))
+    category_counts = {}
+    total_participants = 0
+    for item in raw_cats:
+        cname = (item['category'] or '').strip() or 'Participant'
+        category_counts[cname] = category_counts.get(cname, 0) + item['count']
+        total_participants += item['count']
+
+    # Ensure all registered categories appear even if count is 0
+    for dc in _get_all_participant_categories():
+        if dc not in category_counts:
+            category_counts[dc] = 0
+
+    qs = base_qs.order_by('first_name', 'last_name')
+
+    if selected_category:
+        if selected_category == 'Participant':
+            qs = qs.filter(Q(category__iexact='Participant') | Q(category='') | Q(category__isnull=True))
+        else:
+            qs = qs.filter(category__iexact=selected_category)
     if search:
         qs = qs.filter(
             Q(first_name__icontains=search) | Q(last_name__icontains=search) |
@@ -689,14 +827,16 @@ def participants_list(request):
     }
     checked_in_ids = set(checkin_map.keys())
 
-    total_all = User.objects.filter(role='participant').count()
-    all_participant_ids = set(User.objects.filter(role='participant').values_list('id', flat=True))
+    total_all = User.objects.filter(role__in=['participant', 'sponsor_del', 'guest', 'invited_guest']).count()
+    all_participant_ids = set(User.objects.filter(role__in=['participant', 'sponsor_del', 'guest', 'invited_guest']).values_list('id', flat=True))
     total_checked_in = len(checked_in_ids.intersection(all_participant_ids))
     total_not_checked_in = total_all - total_checked_in
-    password_set = User.objects.filter(role='participant', must_change_password=False).count()
+    password_set = User.objects.filter(role__in=['participant', 'sponsor_del', 'guest', 'invited_guest'], must_change_password=False).count()
 
     participants = list(qs)
+    creds = dict(ParticipantImport.objects.filter(status='imported').exclude(temp_password='').values_list('email', 'temp_password'))
     for p in participants:
+        p.temp_pwd = creds.get(p.email, '')
         c = checkin_map.get(p.id)
         p.is_checked_in = c is not None
         p.goodies_status = getattr(c, 'goodies_status', 'pending') if c else 'pending'
@@ -716,11 +856,15 @@ def participants_list(request):
         'password_pending': total_all - password_set,
         'search': search,
         'status_filter': status_filter,
+        'category_counts': category_counts,
+        'selected_category': selected_category,
+        'total_participants': total_participants,
         'showing': len(participants),
     })
 
 
 @login_required(login_url='/panel/login/')
+@module_required('participants')
 def participant_add(request):
     """Add a single participant manually."""
     if request.method == 'POST':
@@ -736,13 +880,23 @@ def participant_add(request):
             return render(request, 'panel/participant_add.html', {'form': request.POST})
 
         first_name, last_name = _split_name(full_name)
-        temp_password = _generate_temp_password()
-        reg_id = _next_single_reg_id()
+        category = request.POST.get('category', '').strip() or 'Participant'
+        custom_reg_id = request.POST.get('registration_id', '').strip()
+        reg_id = custom_reg_id if custom_reg_id else _next_single_reg_id()
+        manual_pwd = request.POST.get('temp_password', '').strip()
+        auto_pwd, is_short = _generate_temp_password(full_name)
+        temp_password = manual_pwd if manual_pwd else auto_pwd
+
+        if category:
+            from .models import ParticipantCategory
+            ParticipantCategory.objects.get_or_create(name=category)
 
         try:
             User.objects.create_user(
                 email           = email,
                 password        = temp_password,
+                temp_password   = temp_password,
+                category        = category,
                 first_name      = first_name,
                 last_name       = last_name,
                 phone           = request.POST.get('mobile', '').strip(),
@@ -750,9 +904,16 @@ def participant_add(request):
                 designation     = request.POST.get('designation', '').strip(),
                 gender          = request.POST.get('gender', '').strip(),
                 registration_id = reg_id,
-                role            = 'participant',
+                role            = 'sponsor_del' if 'sponsor' in category.lower() else 'participant',
                 must_change_password = True,
                 is_active       = True,
+            )
+            from .models import ParticipantImport
+            ParticipantImport.objects.create(
+                uploaded_by=request.user, full_name=full_name, email=email,
+                registration_id=reg_id, status='imported', temp_password=temp_password,
+                organisation=request.POST.get('organisation', '').strip(),
+                category=category
             )
         except Exception as exc:
             messages.error(request, f'Error creating user: {exc}')
@@ -782,6 +943,7 @@ def participant_add(request):
 
 
 @login_required(login_url='/panel/login/')
+@module_required('participants')
 def participant_edit(request, pk):
     user = get_object_or_404(User, pk=pk, role='participant')
 
@@ -820,6 +982,7 @@ def participant_edit(request, pk):
 
 
 @login_required(login_url='/panel/login/')
+@module_required('participants')
 def participant_delete(request, pk):
     user = get_object_or_404(User, pk=pk, role='participant')
 
@@ -833,6 +996,8 @@ def participant_delete(request, pk):
 
 # ── CSV template download ──────────────────────────────────────────────────
 
+@login_required(login_url='/panel/login/')
+@module_required('participants')
 def participants_template(request):
     response = HttpResponse(content_type='text/csv')
     response['Content-Disposition'] = 'attachment; filename="etd2026_participants_template.csv"'
@@ -841,7 +1006,7 @@ def participants_template(request):
     writer.writerow(_CSV_HEADERS)
     writer.writerow(['Dr.', 'Amit Kumar', 'ETD-2026-R-001', 'amit.kumar@example.com', 'Male',
                      'Associate Professor', 'IIT Delhi', '9876543210',
-                     '123 Main Street, New Delhi', '110016'])
+                     '123 Main Street, New Delhi', '110016', 'Participant'])
     return response
 
 
@@ -906,7 +1071,7 @@ def password_reset_confirm(request, uidb64, token):
             user.must_change_password = False
             user.save(update_fields=['password', 'must_change_password'])
             messages.success(request, 'Password updated. You can now log in.')
-            return redirect('admin_login')
+            return redirect('/panel/login/')
 
     return render(request, 'panel/password_reset_confirm.html', {
         'valid_link': valid,
@@ -918,6 +1083,7 @@ def password_reset_confirm(request, uidb64, token):
 # ── user management (warn / suspend / unsuspend / UGC reports) ────────────
 
 @login_required(login_url='/panel/login/')
+@module_required('users_manage')
 def users_manage(request):
     search        = request.GET.get('search', '').strip()
     role          = request.GET.get('role', '').strip()
@@ -966,6 +1132,7 @@ def users_manage(request):
 
 
 @login_required(login_url='/panel/login/')
+@module_required('users_manage')
 def user_warn(request, pk):
     user_target = get_object_or_404(User, pk=pk)
     if user_target.role in ('super_admin', 'mgmt_admin'):
@@ -1005,6 +1172,7 @@ def user_warn(request, pk):
 
 
 @login_required(login_url='/panel/login/')
+@module_required('users_manage')
 def user_suspend(request, pk):
     user_target = get_object_or_404(User, pk=pk)
     if user_target.role in ('super_admin', 'mgmt_admin'):
@@ -1055,6 +1223,7 @@ def user_suspend(request, pk):
 
 
 @login_required(login_url='/panel/login/')
+@module_required('users_manage')
 def user_unsuspend(request, pk):
     user_target = get_object_or_404(User, pk=pk)
     if request.method == 'POST':
@@ -1066,6 +1235,7 @@ def user_unsuspend(request, pk):
 
 
 @login_required(login_url='/panel/login/')
+@module_required('users_manage')
 def user_clear_warning(request, pk):
     user_target = get_object_or_404(User, pk=pk)
     if request.method == 'POST':
@@ -1079,6 +1249,7 @@ def user_clear_warning(request, pk):
 
 
 @login_required(login_url='/panel/login/')
+@module_required('users_manage')
 def user_dismiss_reports(request, pk):
     user_target = get_object_or_404(User, pk=pk)
     if request.method == 'POST':
@@ -1094,6 +1265,7 @@ def user_dismiss_reports(request, pk):
 
 
 @login_required(login_url='/panel/login/')
+@module_required('users_manage')
 def user_reports_modal_data(request, pk):
     from django.http import JsonResponse
     user_target = get_object_or_404(User, pk=pk)
@@ -1121,6 +1293,129 @@ def user_reports_modal_data(request, pk):
 
 
 
+# ── Credential Export & Batch Email ─────────────────────────────
+
+@login_required(login_url='/panel/login/')
+@module_required('participants')
+def participants_export_credentials(request):
+    """Download CSV of ALL participants with their temp passwords."""
+    participants = User.objects.exclude(
+        role__in=['super_admin', 'mgmt_admin', 'team_head', 'staff', 'speaker']
+    ).order_by('first_name', 'last_name')
+
+    if not participants.exists():
+        messages.warning(request, 'No participants to export.')
+        return redirect('participants_list')
+
+    response = HttpResponse(content_type='text/csv')
+    response['Content-Disposition'] = 'attachment; filename="etd2026_participant_credentials.csv"'
+
+    writer = csv.writer(response)
+    writer.writerow(['Full Name', 'Email', 'Temp Password', 'Registration ID', 'Category', 'Affiliation', 'Login URL'])
+    for p in participants:
+        pwd = p.temp_password if p.must_change_password and p.temp_password else '(Password Changed By User)'
+        writer.writerow([
+            p.get_full_name(),
+            p.email,
+            pwd,
+            p.registration_id or '',
+            p.category or 'Participant',
+            p.affiliation or '',
+            'https://etd2026.iitd.ac.in/panel/login/',
+        ])
+
+    return response
+
+
+@login_required(login_url='/panel/login/')
+@module_required('participants')
+def participants_batch_email(request):
+    """Upload CSV of emails to send credentials to. Max 30/day (IIT SMTP limit)."""
+    from django.core.cache import cache
+
+    if request.method == 'POST':
+        f = request.FILES.get('email_csv')
+        if not f:
+            messages.error(request, 'Please upload a CSV file with an "Email" column.')
+            return redirect('participants_batch_email')
+
+        raw = f.read()
+        try:
+            text = raw.decode('utf-8-sig')
+        except UnicodeDecodeError:
+            text = raw.decode('latin-1')
+
+        reader = csv.DictReader(io.StringIO(text))
+        emails_to_send = []
+        for row in reader:
+            email = (row.get('Email') or row.get('email') or row.get('Email ID') or '').strip().lower()
+            if email and '@' in email:
+                emails_to_send.append(email)
+
+        if not emails_to_send:
+            messages.error(request, 'No valid emails found in CSV. Column must be named "Email".')
+            return redirect('participants_batch_email')
+
+        # Check daily limit
+        today_key = f'email_batch_count_{timezone.now().date()}'
+        sent_today = cache.get(today_key, 0)
+        remaining = max(0, 30 - sent_today)
+
+        if remaining == 0:
+            messages.error(request, 'Daily email limit reached (30/day via IIT SMTP). Try again tomorrow.')
+            return redirect('participants_batch_email')
+
+        to_send = emails_to_send[:remaining]
+        skipped_limit = len(emails_to_send) - len(to_send)
+
+        sent_count = 0
+        failed_count = 0
+        not_found = 0
+
+        for email in to_send:
+            # Find the import record with temp_password
+            imp = ParticipantImport.objects.filter(
+                email=email, status='imported'
+            ).exclude(temp_password='').first()
+
+            if not imp:
+                not_found += 1
+                continue
+
+            ok = _send_credentials_email(imp.email, imp.full_name, imp.temp_password, registration_id=imp.registration_id)
+            if ok:
+                sent_count += 1
+                imp.temp_password = ''  # Clear after sending
+                imp.save(update_fields=['temp_password'])
+            else:
+                failed_count += 1
+
+        # Update daily counter
+        cache.set(today_key, sent_today + sent_count, timeout=86400)
+
+        msg = f"Batch email: {sent_count} sent, {failed_count} failed, {not_found} not found."
+        if skipped_limit > 0:
+            msg += f" ⚠ {skipped_limit} skipped (daily limit 30)."
+        msg += f" ({remaining - sent_count} remaining today)"
+        messages.success(request, msg)
+        return redirect('participants_list')
+
+    # GET — show upload form
+    today_key = f'email_batch_count_{timezone.now().date()}'
+    sent_today = cache.get(today_key, 0)
+    remaining = max(0, 30 - sent_today)
+
+    pending_credentials = ParticipantImport.objects.filter(
+        status='imported'
+    ).exclude(temp_password='').count()
+
+    return render(request, 'panel/participants_batch_email.html', {
+        'sent_today': sent_today,
+        'remaining': remaining,
+        'pending_credentials': pending_credentials,
+    })
+
+
 # ── admin_required decorator ───────────────────────────────────────────────
 
 from functools import wraps
@@ -1142,11 +1437,31 @@ from .permissions_helper import ALL_MODULE_KEYS, get_user_permissions, user_has_
 @admin_required
 def staff_permissions_panel(request):
     """Full CRUD + permissions management for staff."""
+    import json
+    from django.http import JsonResponse
+    from django.db import transaction
+    from django.core.cache import cache
 
     if request.method == 'POST':
         action = request.POST.get('action', '')
 
-        if action == 'delete':
+        # ── 1. DRAG AND DROP REORDERING ──
+        if action == 'reorder':
+            ordered_ids = request.POST.get('ordered_ids')
+            if ordered_ids:
+                try:
+                    ids = json.loads(ordered_ids)
+                    with transaction.atomic():
+                        for index, uid in enumerate(ids, start=1):
+                            StaffProfile.objects.filter(user_id=uid).update(order=index)
+                    cache.delete('support_committee_team_v2')
+                    return JsonResponse({'success': True})
+                except Exception as e:
+                    return JsonResponse({'success': False, 'error': str(e)})
+            return JsonResponse({'success': False, 'error': 'No ids provided'})
+
+        # ── 2. DELETE STAFF ──
+        elif action == 'delete':
             user_id = request.POST.get('user_id')
             try:
                 u = User.objects.get(id=user_id)
@@ -1155,27 +1470,43 @@ def staff_permissions_panel(request):
                 messages.success(request, f"{name} deleted.")
             except User.DoesNotExist:
                 messages.error(request, "User not found.")
-            from django.core.cache import cache
             cache.delete('support_committee_team_v2')
             return redirect('staff_permissions_panel')
 
+        # ── 3. CREATE NEW STAFF ──
         elif action == 'create':
             email = request.POST.get('email', '').strip().lower()
             first_name = request.POST.get('first_name', '').strip()
             last_name = request.POST.get('last_name', '').strip()
             if not email or not first_name:
                 messages.error(request, "Email and first name required.")
-                from django.core.cache import cache
-            cache.delete('support_committee_team_v2')
-            return redirect('staff_permissions_panel')
+                return redirect('staff_permissions_panel')
             if User.objects.filter(email=email).exists():
                 messages.error(request, "Email already exists.")
-                from django.core.cache import cache
-            cache.delete('support_committee_team_v2')
-            return redirect('staff_permissions_panel')
+                return redirect('staff_permissions_panel')
+            
             role = request.POST.get('role', 'staff')
             password = request.POST.get('password', 'Staff@123') or 'Staff@123'
             u = User.objects.create_user(email=email, password=password, first_name=first_name, last_name=last_name, role=role)
+            # Auto-generate or accept registration_id
+            reg_id = request.POST.get('registration_id', '').strip()
+            if not reg_id:
+                import re
+                existing = list(User.objects.filter(
+                    registration_id__startswith='ETD-2026-OT'
+                ).values_list('registration_id', flat=True))
+                max_num = 0
+                for rid in existing:
+                    m = re.search(r'OT(\d+)$', rid)
+                    if m:
+                        max_num = max(max_num, int(m.group(1)))
+                reg_id = f'ETD-2026-OT{max_num + 1:02d}'
+            u.registration_id = reg_id
+            u.save(update_fields=['registration_id'])
+            
+            req_order = request.POST.get('order', '')
+            order_val = int(req_order) if (req_order.isdigit() or (req_order.startswith('-') and req_order[1:].isdigit())) else (StaffProfile.objects.count() + 1)
+            
             StaffProfile.objects.create(
                 user=u,
                 tier=request.POST.get('tier', 'staff'),
@@ -1185,7 +1516,7 @@ def staff_permissions_panel(request):
                 linkedin_url=request.POST.get('linkedin_url', ''),
                 profile_url=request.POST.get('profile_url', ''),
                 scholar_url=request.POST.get('scholar_url', ''),
-                order=StaffProfile.objects.count() + 1,
+                order=order_val,
                 is_public=('is_public' in request.POST),
             )
             if 'photo' in request.FILES:
@@ -1193,10 +1524,10 @@ def staff_permissions_panel(request):
                 p.photo = request.FILES['photo']
                 p.save()
             messages.success(request, f"{first_name} {last_name} created.")
-            from django.core.cache import cache
             cache.delete('support_committee_team_v2')
             return redirect('staff_permissions_panel')
 
+        # ── 4. EDIT EXISTING STAFF ──
         elif action == 'edit':
             user_id = request.POST.get('user_id')
             try:
@@ -1206,7 +1537,11 @@ def staff_permissions_panel(request):
                 u.role = request.POST.get('role', u.role)
                 if request.POST.get('password'):
                     u.set_password(request.POST['password'])
+                reg_id = request.POST.get('registration_id', '').strip()
+                if reg_id:
+                    u.registration_id = reg_id
                 u.save()
+                
                 p = u.staff_profile
                 p.tier = request.POST.get('tier', p.tier)
                 p.designation = request.POST.get('designation', p.designation)
@@ -1216,16 +1551,21 @@ def staff_permissions_panel(request):
                 p.profile_url = request.POST.get('profile_url', p.profile_url)
                 p.scholar_url = request.POST.get('scholar_url', p.scholar_url)
                 p.is_public = ('is_public' in request.POST)
+                
+                req_order = request.POST.get('order', '')
+                if req_order.isdigit() or (req_order.startswith('-') and req_order[1:].isdigit()):
+                    p.order = int(req_order)
+                    
                 if 'photo' in request.FILES:
                     p.photo = request.FILES['photo']
                 p.save()
                 messages.success(request, f"{u.get_full_name()} updated.")
             except (User.DoesNotExist, StaffProfile.DoesNotExist):
                 messages.error(request, "Staff not found.")
-            from django.core.cache import cache
             cache.delete('support_committee_team_v2')
             return redirect('staff_permissions_panel')
 
+        # ── 5. UPDATE PERMISSIONS ──
         elif action == 'permissions':
             user_id = request.POST.get('user_id')
             selected_modules = list(set(request.POST.getlist('modules')))
@@ -1238,7 +1578,6 @@ def staff_permissions_panel(request):
                 messages.success(request, f"Permissions updated for {target_user.get_full_name()}.")
             except User.DoesNotExist:
                 messages.error(request, "User not found.")
-            from django.core.cache import cache
             cache.delete('support_committee_team_v2')
             return redirect('staff_permissions_panel')
 
@@ -1256,7 +1595,7 @@ def staff_permissions_panel(request):
         {'name': 'Management', 'items': [('participants', 'Participants'), ('ideathon', 'Ideathon Teams'), ('meal_scanner', 'Meal Scanner'), ('checkin_scanner', 'Check-In Scanner')]},
         {'name': 'Content', 'items': [('schedule', 'Events & Schedule'), ('papers', 'Papers & Posters'), ('photos', 'Photos'), ('checkpoint', 'Checkpoint'), ('feed', 'Posts & Feed')]},
         {'name': 'Engagement', 'items': [('polls', 'Polls'), ('qa_manager', 'Q&A Manager'), ('leaderboard', 'Leaderboard'), ('chat', 'Chat'), ('reported_messages', 'Reported Messages'), ('shake_logs', 'Shake Logs'), ('chat_analytics', 'Chat Analytics')]},
-        {'name': 'System', 'items': [('notifications', 'Notifications'), ('sponsors', 'Sponsors'), ('speakers', 'Speakers'), ('users_manage', 'User Management'), ('reports', 'Reports'), ('settings', 'Settings')]},
+        {'name': 'System', 'items': [('notifications', 'Notifications'), ('sponsors', 'Sponsors'), ('speakers', 'Speakers'), ('users_manage', 'User Management'), ('reports', 'Reports'), ('settings', 'Settings'), ('error_reports', 'Error & System Logs')]},
     ]
 
     context = {
@@ -1269,9 +1608,11 @@ def staff_permissions_panel(request):
 
 
 
+
 # ── Account Deletion Requests ──────────────────────────────────────────────
 
 @login_required(login_url='/panel/login/')
+@module_required('users_manage')
 def deletion_requests(request):
     """List all pending account deletion requests."""
     from .permissions_helper import user_has_module_access
@@ -1287,6 +1628,7 @@ def deletion_requests(request):
 
 
 @login_required(login_url='/panel/login/')
+@module_required('users_manage')
 def deletion_request_action(request, pk):
     """Approve (execute soft-delete) or deny a pending deletion request."""
     from .permissions_helper import user_has_module_access
@@ -1338,6 +1680,7 @@ def deletion_request_action(request, pk):
 
 
 @login_required(login_url='/panel/login/')
+@module_required('users_manage')
 def deletion_history(request):
     """Show all approved & executed account deletions."""
     from .permissions_helper import user_has_module_access

@@ -25,6 +25,17 @@ export default function FeedAdmin({ onBack }) {
   const [sendPush, setSendPush] = useState(false);
   const [image, setImage] = useState(null);
   const [existingImageUrl, setExistingImageUrl] = useState(null);
+  const [linkUrl, setLinkUrl] = useState('');
+  const [quizType, setQuizType] = useState('multiple_choice');
+  const [quizQuestion, setQuizQuestion] = useState('');
+  const [quizOptions, setQuizOptions] = useState(['', '', '', '']);
+  const [quizCorrect, setQuizCorrect] = useState(null);
+  const [quizLocked, setQuizLocked] = useState(false);
+
+  const resetExtras = () => {
+    setLinkUrl(''); setQuizType('multiple_choice'); setQuizQuestion('');
+    setQuizOptions(['', '', '', '']); setQuizCorrect(null); setQuizLocked(false);
+  };
 
   const [commentsModalOpen, setCommentsModalOpen] = useState(false);
   const [modPostId, setModPostId] = useState(null);
@@ -36,6 +47,7 @@ export default function FeedAdmin({ onBack }) {
     { label: 'Alert', value: 'alert' },
     { label: 'Announcement', value: 'announcement' },
     { label: 'Update', value: 'update' },
+    { label: 'Quiz', value: 'quiz' },
   ];
 
   const fetchPosts = async () => {
@@ -66,6 +78,7 @@ export default function FeedAdmin({ onBack }) {
   };
 
   const closeForm = () => {
+    resetExtras();
     setIsModalOpen(false);
     setEditingId(null);
     setTitle('');
@@ -79,6 +92,7 @@ export default function FeedAdmin({ onBack }) {
   };
 
   const openCreateForm = () => {
+    resetExtras();
     setEditingId(null);
     setTitle('');
     setBody('');
@@ -92,6 +106,12 @@ export default function FeedAdmin({ onBack }) {
   };
 
   const openEditForm = (post) => {
+    setLinkUrl(post.link_url || '');
+    setQuizType(post.quiz?.type || 'multiple_choice');
+    setQuizQuestion(post.quiz?.question || '');
+    setQuizOptions(post.quiz?.options || ['', '', '', '']);
+    setQuizCorrect(post.quiz?.correct_option ?? null);
+    setQuizLocked((post.quiz?.response_count || 0) > 0);
     setEditingId(post.id);
     setTitle(post.title || '');
     setBody(post.body || '');
@@ -105,8 +125,17 @@ export default function FeedAdmin({ onBack }) {
   };
 
   const handleSave = async () => {
-    if (!title.trim() || !body.trim()) {
-      return Alert.alert('Validation', 'Title and Body are required.');
+    if (saving) return;
+    if ((postType !== 'quiz' && !title.trim()) || !body.trim()) {
+      return Alert.alert('Validation', postType === 'quiz' ? 'Body is required.' : 'Title and Body are required.');
+    }
+    if (linkUrl.trim() && !/^https?:\/\/[^\s]+$/i.test(linkUrl.trim())) {
+      return Alert.alert('Validation', 'Enter a complete HTTP or HTTPS link.');
+    }
+    const options = quizType === 'true_false' ? ['True', 'False'] : quizOptions.map(o => o.trim());
+    if (postType === 'quiz' && (!quizQuestion.trim() || options.some(o => !o) ||
+      new Set(options.map(o => o.toLowerCase())).size !== options.length)) {
+      return Alert.alert('Validation', 'Enter a question and at least two different, non-empty options.');
     }
     setSaving(true);
 
@@ -124,6 +153,11 @@ export default function FeedAdmin({ onBack }) {
       allow_comments: allowComments,
       send_push: !editingId ? sendPush : false,
       image_base64: imageBase64,
+      link_url: linkUrl.trim(),
+      ...(postType === 'quiz' ? {
+        quiz_type: quizType, quiz_question: quizQuestion.trim(),
+        quiz_options: options, quiz_correct_option: quizCorrect,
+      } : {}),
     };
 
     try {
@@ -238,7 +272,7 @@ export default function FeedAdmin({ onBack }) {
             return (
               <View style={s.card}>
                 <View style={s.cardHeader}>
-                  <Text style={s.cardTitle} numberOfLines={2}>{item.title}</Text>
+                  <Text style={s.cardTitle} numberOfLines={2}>{item.title || item.quiz?.question}</Text>
                   <View style={{ flexDirection: 'row', gap: 14 }}>
                     <TouchableOpacity onPress={() => openEditForm(item)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
                       <Ionicons name="pencil" size={18} color={COLORS.textSec} />
@@ -250,6 +284,18 @@ export default function FeedAdmin({ onBack }) {
                 </View>
 
                 <Text style={s.cardBody} numberOfLines={3}>{item.body}</Text>
+                {!!item.link_url && <Text style={s.cardBody} numberOfLines={1}>{item.link_url}</Text>}
+                {item.quiz && (
+                  <View style={{ marginBottom: SPACE.md }}>
+                    <Text style={s.cardTitle}>{item.quiz.question}</Text>
+                    <Text style={s.cardBody}>{item.quiz.response_count} participant responses</Text>
+                    {item.quiz.options.map((option, i) => (
+                      <Text key={i} style={s.cardBody}>
+                        {option}{item.quiz.correct_option === i ? ' ✓' : ''}: {item.quiz.option_counts?.[i] || 0}
+                      </Text>
+                    ))}
+                  </View>
+                )}
 
                 {!!item.image_url && (
                   <View style={s.mediaPreview}>
@@ -312,7 +358,7 @@ export default function FeedAdmin({ onBack }) {
             keyboardShouldPersistTaps="handled"
             showsVerticalScrollIndicator={false}
           >
-            <Text style={s.label}>Title</Text>
+            <Text style={s.label}>{postType === 'quiz' ? 'Title (optional)' : 'Title'}</Text>
             <TextInput
               value={title}
               onChangeText={setTitle}
@@ -336,6 +382,7 @@ export default function FeedAdmin({ onBack }) {
               {POST_TYPES.map((t) => (
                 <TouchableOpacity
                   key={t.value}
+                  disabled={quizLocked && t.value !== 'quiz'}
                   onPress={() => setPostType(t.value)}
                   style={[s.typeBtn, postType === t.value && s.typeBtnActive]}
                 >
@@ -343,6 +390,59 @@ export default function FeedAdmin({ onBack }) {
                 </TouchableOpacity>
               ))}
             </View>
+
+            <Text style={s.label}>Attached link (optional)</Text>
+            <TextInput value={linkUrl} onChangeText={setLinkUrl} placeholder="https://example.com"
+              placeholderTextColor={COLORS.textTer} style={s.input} autoCapitalize="none"
+              autoCorrect={false} keyboardType="url" maxLength={2000} />
+
+            {postType === 'quiz' && (
+              <View>
+                <Text style={s.label}>Quiz type</Text>
+                <View style={s.typeRow}>
+                  {[['multiple_choice', 'Multiple choice'], ['true_false', 'True / False']].map(([value, label]) => (
+                    <TouchableOpacity key={value} disabled={quizLocked}
+                      onPress={() => { setQuizType(value); setQuizCorrect(null); setQuizOptions(['', '', '', '']); }}
+                      style={[s.typeBtn, quizType === value && s.typeBtnActive]}>
+                      <Text style={[s.typeTxt, quizType === value && s.typeTxtActive]}>{label}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+                <Text style={s.label}>Question</Text>
+                <TextInput value={quizQuestion} onChangeText={setQuizQuestion} editable={!quizLocked}
+                  maxLength={500} placeholder="Ask participants a question" placeholderTextColor={COLORS.textTer} style={s.input} />
+                <Text style={s.label}>Options — correct answer is optional</Text>
+                <TouchableOpacity disabled={quizLocked} onPress={() => setQuizCorrect(null)}
+                  style={[s.typeBtn, quizCorrect === null && s.typeBtnActive, { marginBottom: 10 }]}>
+                  <Text style={[s.typeTxt, quizCorrect === null && s.typeTxtActive]}>No correct answer — collect responses only</Text>
+                </TouchableOpacity>
+                {(quizType === 'true_false' ? ['True', 'False'] : quizOptions).map((option, i) => (
+                  <View key={i} style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                    <TouchableOpacity accessibilityLabel={`Mark option ${i + 1} correct`} disabled={quizLocked}
+                      onPress={() => setQuizCorrect(i)} style={s.btnIcon}>
+                      <Ionicons name={quizCorrect === i ? 'radio-button-on' : 'radio-button-off'} size={24} color={COLORS.brand} />
+                    </TouchableOpacity>
+                    <TextInput value={option} editable={!quizLocked && quizType !== 'true_false'} maxLength={200}
+                      onChangeText={text => setQuizOptions(values => values.map((v, index) => index === i ? text : v))}
+                      placeholder={`Option ${i + 1}`} placeholderTextColor={COLORS.textTer} style={[s.input, { flex: 1 }]} />
+                    {!quizLocked && quizType === 'multiple_choice' && quizOptions.length > 2 && (
+                      <TouchableOpacity accessibilityLabel={`Remove option ${i + 1}`} onPress={() => {
+                        setQuizOptions(values => values.filter((_, index) => index !== i));
+                        setQuizCorrect(value => value === i ? null : value !== null && value > i ? value - 1 : value);
+                      }}><Ionicons name="close-circle-outline" size={24} color={COLORS.error} /></TouchableOpacity>
+                    )}
+                  </View>
+                ))}
+                {!quizLocked && quizType === 'multiple_choice' && quizOptions.length < 6 && (
+                  <TouchableOpacity style={s.typeBtn} onPress={() => setQuizOptions(values => [...values, ''])}>
+                    <Text style={s.typeTxt}>+ Add option</Text>
+                  </TouchableOpacity>
+                )}
+                <Text style={s.toggleSub}>{quizLocked
+                  ? 'This quiz has responses. Create a new post to change its question or answers.'
+                  : 'One response per participant. A correct answer, if set, appears after submission.'}</Text>
+              </View>
+            )}
 
             <Text style={s.label}>Attach Media (Image / Video)</Text>
             <TouchableOpacity onPress={pickImage} style={s.imagePicker}>

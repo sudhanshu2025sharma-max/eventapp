@@ -2,17 +2,17 @@ from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.decorators import login_required
 from django.utils import timezone
 from django.contrib import messages
-from apps.accounts.admin_views import admin_required
 from apps.notifications.fcm import send_to_all
 from apps.notifications.models import Notification
 from apps.sponsors.models import Sponsor
 from apps.leaderboard.utils import award_points
 from apps.leaderboard.models import PointAction
 from .models import Photo, PhotoSettings, SelfiePoint, SelfiePointImage, SelfieSubmission
+from apps.accounts.permissions_helper import module_required
 
 
 @login_required
-@admin_required
+@module_required('photos')
 def photos_panel(request):
     cfg = PhotoSettings.get()
     tab = request.POST.get('tab', request.GET.get('tab', 'pending'))
@@ -105,7 +105,7 @@ def photos_panel(request):
 
 
 @login_required
-@admin_required
+@module_required('checkpoint')
 def selfie_points_panel(request):
     cfg = PhotoSettings.get()
     if request.method == 'POST':
@@ -147,9 +147,7 @@ def selfie_points_panel(request):
                     corridor_width_meters=int(request.POST.get('corridor_width_meters') or 30),
                     points=pts, is_active=is_act,
                 )
-                sponsor_ids = request.POST.getlist('sponsors')
-                if sponsor_ids:
-                    sp.sponsors.set(sponsor_ids)
+                sp.sponsors.set(request.POST.getlist('sponsors'))
 
             # Multi-image upload
             sample_photos = request.FILES.getlist('sample_photos')
@@ -163,6 +161,31 @@ def selfie_points_panel(request):
 
             messages.success(request, f'Checkpoint "{sp.name}" created.')
 
+        elif action == 'edit':
+            sp = get_object_or_404(SelfiePoint, pk=request.POST.get('pk'))
+            sp.name = request.POST.get('name', '').strip()
+            sp.description = request.POST.get('description', '').strip()
+            sp.points = int(request.POST.get('points') or 10)
+            sp.is_active = request.POST.get('is_active') == 'on'
+            if sp.checkpoint_type == 'selfie':
+                sp.latitude = request.POST.get('latitude') or None
+                sp.longitude = request.POST.get('longitude') or None
+                sp.radius_meters = int(request.POST.get('radius_meters') or 20)
+            else:
+                sp.point_a_lat = request.POST.get('point_a_lat') or None
+                sp.point_a_lng = request.POST.get('point_a_lng') or None
+                sp.point_b_lat = request.POST.get('point_b_lat') or None
+                sp.point_b_lng = request.POST.get('point_b_lng') or None
+                sp.corridor_width_meters = int(request.POST.get('corridor_width_meters') or 30)
+                sp.sponsors.set(request.POST.getlist('sponsors'))
+            sample_photos = request.FILES.getlist('sample_photos')
+            if sample_photos:
+                sp.sample_photo = sample_photos[0]
+                sp.images.all().delete()
+                for i, img in enumerate(sample_photos):
+                    SelfiePointImage.objects.create(selfie_point=sp, image=img, order=i)
+            sp.save()
+            messages.success(request, f'Checkpoint "{sp.name}" updated.')
         elif action == 'toggle':
             sp = get_object_or_404(SelfiePoint, pk=request.POST.get('pk'))
             sp.is_active = not sp.is_active

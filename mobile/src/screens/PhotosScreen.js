@@ -323,7 +323,7 @@ function PhotoThumb({ item, index, onPress, onDelete, showDelete }) {
         onPress={onPress}
         activeOpacity={0.88}
       >
-        <Image source={{ uri: fixMediaUrl(item.image_url) }} style={ph.thumbImg} resizeMode="cover" />
+        <Image source={{ uri: fixMediaUrl(item.thumbnail_url || item.image_url) }} style={ph.thumbImg} resizeMode="cover" resizeMethod="resize" />
         {pending && (
           <View style={ph.thumbOverlay}>
             <Ionicons name="time-outline" size={18} color="#fff" />
@@ -377,10 +377,12 @@ export default function PhotosScreen({ onBack, onOpenSelfieSpots }) {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [showUpload, setShowUpload] = useState(false);
+  const photoRequest = useRef(0);
   const [lightboxPhoto, setLightboxPhoto] = useState(null);
   const [myPhotos, setMyPhotos] = useState([]);
 
   const fetchPhotos = useCallback(async (sessionId = null, wall = false, tag = null) => {
+    const requestId = ++photoRequest.current;
     try {
       let url = '/photos/gallery/';
       const params = [];
@@ -392,6 +394,7 @@ export default function PhotosScreen({ onBack, onOpenSelfieSpots }) {
       const res = await apiFetch(url);
       if (!res.ok) return;
       const data = await res.json();
+      if (requestId !== photoRequest.current) return;
       setPhotos(data.photos || []);
       setAvailableTags(data.available_tags || []);
       setUploadOpen(data.upload_open || false);
@@ -431,7 +434,14 @@ export default function PhotosScreen({ onBack, onOpenSelfieSpots }) {
     setRefreshing(false);
   }, [fetchPhotos, fetchSessions, fetchMine, activeSession, tab, activeTag]);
 
-  useEffect(() => { fetchAll(); }, [fetchAll]);
+  useEffect(() => { fetchSessions(); fetchMine(); }, [fetchSessions, fetchMine]);
+  useEffect(() => {
+    let active = true;
+    setLoading(true);
+    fetchPhotos(activeSession, tab === 'wall' && !activeSession && !activeTag, activeTag)
+      .finally(() => { if (active) setLoading(false); });
+    return () => { active = false; };
+  }, [fetchPhotos, activeSession, tab, activeTag]);
 
   const onTabChange = (t) => {
     setTab(t);
@@ -449,7 +459,6 @@ export default function PhotosScreen({ onBack, onOpenSelfieSpots }) {
     const nextTag = activeTag === t ? null : t;
     setActiveTag(nextTag);
     setActiveSession(null);
-    fetchPhotos(null, false, nextTag);
   };
 
   const displayPhotos = tab === 'mine' ? myPhotos : photos;
@@ -578,14 +587,14 @@ export default function PhotosScreen({ onBack, onOpenSelfieSpots }) {
           style={{ backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: COLORS.border, flexGrow: 0 }}>
           <TouchableOpacity
             style={[sf.chip, !activeSession && sf.chipActive]}
-            onPress={() => { setActiveSession(null); fetchPhotos(null, false); }}>
+            onPress={() => setActiveSession(null)}>
             <Text style={[sf.chipText, !activeSession && sf.chipTextActive]}>All</Text>
           </TouchableOpacity>
           {sessions.map(s2 => (
             <TouchableOpacity key={s2.id}
               style={[sf.chip, activeSession === s2.id && sf.chipActive,
                 { borderColor: SESSION_TYPE_COLOR[s2.session_type] || COLORS.border }]}
-              onPress={() => { onSessionSelect(s2.id); fetchPhotos(s2.id); }}>
+              onPress={() => onSessionSelect(s2.id)}>
               <Text style={[sf.chipText, activeSession === s2.id && sf.chipTextActive]}
                 numberOfLines={1}>{s2.title}</Text>
               <View style={[sf.chipCount, { backgroundColor: SESSION_TYPE_COLOR[s2.session_type] || COLORS.brand }]}>

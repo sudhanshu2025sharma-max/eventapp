@@ -2,6 +2,7 @@ from django.urls import path
 from . import admin_views
 
 urlpatterns = [
+    path('speakers/export-credentials/', admin_views.export_speaker_credentials, name='speaker_export_credentials'),
     path('speakers/',                              admin_views.speakers_panel,      name='speakers_panel'),
     path('speakers/new/',                          admin_views.speaker_create,      name='speaker_create'),
     path('speakers/<int:pk>/edit/',                admin_views.speaker_edit,        name='speaker_edit'),

@@ -46,12 +46,26 @@ const TYPE_STYLE = {
 
 const DEFAULT_CONF = {
   name: 'ETD 2026', tagline: 'IIT Delhi', logo_url: null,
-  start_date: '2026-10-23', end_date: '2026-10-25',
+  start_date: '2026-10-23', end_date: '2026-10-26',
 };
 
+/* ── Upgraded time parser to correctly map pure times to 2026 ETD days ── */
 function getEventDate(ev, which = 'start') {
-  const iso = which === 'end' ? ev.end_datetime : ev.start_datetime;
-  if (iso) { const d = new Date(iso); if (!Number.isNaN(d.getTime())) return d; }
+  const val = which === 'end' ? (ev.end_datetime || ev.end_time) : (ev.start_datetime || ev.start_time);
+  if (!val) return null;
+  
+  if (typeof val === 'string' && /^\d{2}:\d{2}(:\d{2})?$/.test(val.trim())) {
+    const [h, m, s] = val.trim().split(':').map(Number);
+    const d = new Date();
+    // Anchor to ETD 2026 (Month 9 = October. Day 1 = Oct 23)
+    const dayOffset = Number(ev.day) ? Number(ev.day) : 1; 
+    d.setFullYear(2026, 9, 22 + dayOffset);
+    d.setHours(h, m, s || 0, 0);
+    return d;
+  }
+  
+  const d = new Date(val);
+  if (!Number.isNaN(d.getTime())) return d;
   return null;
 }
 
@@ -661,26 +675,19 @@ export default function HomeTab({
   const firstSession = allSorted[0];
   const lastSession = allSorted[allSorted.length - 1];
 
+  /* ── Overrided Start and End MS to strictly lock them to ETD 2026 boundaries ── */
   const confStartMs = useMemo(() => {
-    if (firstSession) return getEventDate(firstSession, 'start')?.getTime() || new Date(conf.start_date).getTime();
-    return new Date(conf.start_date).getTime();
-  }, [firstSession, conf.start_date]);
+    return new Date('2026-10-23T08:00:00+05:30').getTime();
+  }, []);
 
   const confEndMs = useMemo(() => {
-    if (lastSession) return getEventDate(lastSession, 'end')?.getTime() || new Date(conf.end_date).getTime();
-    return new Date(conf.end_date).getTime() + 86400000;
-  }, [lastSession, conf.end_date]);
+    return new Date('2026-10-26T18:00:00+05:30').getTime();
+  }, []);
 
   const liveSession = allSorted.find(e => e.status === 'current');
   const nextSession = allSorted.find(e => getEventDate(e, 'start') && getEventDate(e, 'start').getTime() > nowMs);
 
-  const total = useMemo(() => {
-    if (allSorted.length > 0) return Math.max(...allSorted.map(e => Number(e.day) || 1));
-    if (conf.start_date && conf.end_date) {
-      return Math.max(1, Math.round((new Date(conf.end_date) - new Date(conf.start_date)) / 86400000) + 1);
-    }
-    return 3;
-  }, [allSorted, conf.start_date, conf.end_date]);
+  const total = 4; // Days 1, 2, 3, 4 of ETD 2026
 
   const activeDayIndex = useMemo(() => {
     if (liveSession) return Number(liveSession.day) || 1;
@@ -700,7 +707,7 @@ export default function HomeTab({
   if (nowMs < confStartMs) {
     mode = 'countdown';
     targetMs = confStartMs;
-    targetLabel = firstSession ? firstSession.title : conf.name;
+    targetLabel = 'ETD 2026 Conference'; // Always fallback to conference title if it's months in advance
     pillText = 'Starting Soon';
   } else if (nowMs >= confEndMs) {
     mode = 'progress';

@@ -3,7 +3,7 @@ import {
   View, Text, FlatList, StyleSheet, Platform, TouchableOpacity,
   RefreshControl, ActivityIndicator, Image, Modal, TextInput,
   Alert, ScrollView, Animated, Dimensions, KeyboardAvoidingView,
-  Easing, Pressable,
+  Easing, Pressable, Linking,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -11,6 +11,7 @@ import { useVideoPlayer, VideoView } from 'expo-video';
 import { COLORS, FONT, SPACE, RADIUS, SHADOW, TOP, BOTTOM, W, H, fixMediaUrl } from '../theme';
 import { apiFetch } from '../api';
 import { useKeyboardHeight } from '../useKeyboard';
+import FeedQuiz from './FeedQuiz';
 
 const REACTIONS = [
   { key: 'like',      emoji: '👍', label: 'Like' },
@@ -22,6 +23,7 @@ const REACTIONS = [
 ];
 
 const TYPE_META = {
+  quiz:         { colors: [COLORS.brand, COLORS.brandDark], icon: 'help-circle', tag: 'QUIZ' },
   alert:        { colors: [COLORS.error, '#dc2626'],    icon: 'warning',        tag: 'ALERT' },
   announcement: { colors: [COLORS.brand, COLORS.brandDark], icon: 'megaphone',  tag: 'ANNOUNCEMENT' },
   update:       { colors: [COLORS.warning, COLORS.accentDark], icon: 'refresh-circle', tag: 'UPDATE' },
@@ -133,7 +135,7 @@ const PostCard = React.memo(({ item, index, onReact, onOpenComments, onOpenMedia
           <View style={{ flex: 1 }}><Text style={s.authorName}>{item.author_name || 'ETD 2026'}</Text><Text style={s.authorRole}>{item.author_role || 'Organizer'}</Text></View>
         </View>
 
-        <Text style={s.title}>{item.title}</Text>
+        {!!item.title && <Text style={s.title}>{item.title}</Text>}
         
         <View style={{ paddingHorizontal: SPACE.lg, marginTop: SPACE.sm }}>
           <Text style={s.body} numberOfLines={expandedText ? undefined : 3}>{item.body}</Text>
@@ -145,6 +147,18 @@ const PostCard = React.memo(({ item, index, onReact, onOpenComments, onOpenMedia
         </View>
 
         <SessionChip session={item.session} />
+
+        {!!item.link_url && /^https?:\/\//i.test(item.link_url) && (
+          <TouchableOpacity accessibilityRole="link" style={s.sessionWrap}
+            onPress={() => Linking.openURL(item.link_url).catch(() => Alert.alert('Link', 'Could not open this link.'))}>
+            <View style={s.sessionInner}>
+              <Ionicons name="link-outline" size={18} color={COLORS.brand} />
+              <Text style={s.sessionText} numberOfLines={2}>{item.link_url}</Text>
+              <Ionicons name="open-outline" size={16} color={COLORS.brand} />
+            </View>
+          </TouchableOpacity>
+        )}
+        {item.quiz && <FeedQuiz postId={item.id} quiz={item.quiz} />}
 
         {!!imgUrl && (
           <TouchableOpacity activeOpacity={0.9} style={s.imgWrap} onPress={() => onOpenMedia(imgUrl, isVideo)}>

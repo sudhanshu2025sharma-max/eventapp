@@ -20,7 +20,7 @@ if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental
 const CACHE_TTL = 3600000;
 async function readScheduleCache(day) {
   try {
-    const raw = await AsyncStorage.getItem(`etd2026_schedule_v3_day_${day}`);
+    const raw = await AsyncStorage.getItem(`etd2026_schedule_v4_day_${day}`);
     if (!raw) return null;
     const { data, ts } = JSON.parse(raw);
     return { data, stale: Date.now() - ts > CACHE_TTL };
@@ -28,7 +28,7 @@ async function readScheduleCache(day) {
 }
 async function writeScheduleCache(day, data) {
   try {
-    await AsyncStorage.setItem(`etd2026_schedule_v3_day_${day}`, JSON.stringify({ data, ts: Date.now() }));
+    await AsyncStorage.setItem(`etd2026_schedule_v4_day_${day}`, JSON.stringify({ data, ts: Date.now() }));
   } catch {}
 }
 
@@ -92,17 +92,36 @@ const REMINDER_OPTIONS = [
 function fmtTime(dt) {
   if (!dt) return '';
   try {
+    if (typeof dt === 'string' && /^\d{2}:\d{2}(:\d{2})?$/.test(dt.trim())) {
+      let [h, m] = dt.trim().split(':');
+      let hour = parseInt(h, 10);
+      const ampm = hour >= 12 ? 'PM' : 'AM';
+      hour = hour % 12 || 12;
+      return `${hour.toString().padStart(2, '0')}:${m} ${ampm}`;
+    }
     return new Date(dt).toLocaleTimeString('en-IN', {
       hour: '2-digit', minute: '2-digit', hour12: true, timeZone: 'Asia/Kolkata',
     });
   } catch { return ''; }
 }
 
+function parseTimeMs(v) {
+  if (!v) return NaN;
+  if (typeof v === 'string' && /^\d{2}:\d{2}(:\d{2})?$/.test(v.trim())) {
+    const [h, m, s] = v.trim().split(':').map(Number);
+    const d = new Date();
+    d.setHours(h, m, s || 0, 0);
+    return d.getTime();
+  }
+  return new Date(v).getTime();
+}
+
 function getStatus(start, end) {
   if (!start || !end) return 'upcoming';
   const now = Date.now();
-  const s = new Date(start).getTime();
-  const e = new Date(end).getTime();
+  const s = parseTimeMs(start);
+  const e = parseTimeMs(end);
+  if (isNaN(s) || isNaN(e)) return 'upcoming';
   if (now > e) return 'past';
   if (now >= s && now <= e) return 'live';
   return 'upcoming';
@@ -110,8 +129,9 @@ function getStatus(start, end) {
 
 function getProgress(start, end) {
   const now = Date.now();
-  const s = new Date(start).getTime();
-  const e = new Date(end).getTime();
+  const s = parseTimeMs(start);
+  const e = parseTimeMs(end);
+  if (isNaN(s) || isNaN(e)) return 0;
   if (now > e) return 100;
   if (now < s) return 0;
   return ((now - s) / (e - s)) * 100;
@@ -129,19 +149,43 @@ function NowLine() {
 }
 
 /* ── Sub-session row ── */
-function SubRow({ sub }) {
+function SubRow({ sub, onBookmark, showParent }) {
+  const sTime = sub.start_datetime || sub.start_time || sub.time_start;
+  const eTime = sub.end_datetime || sub.end_time || sub.time_end;
+  const speaker = sub.speaker_name || sub.speaker || (sub.speakers && sub.speakers[0]?.name);
+  const parentTitle = showParent && sub.parent_session?.title;
+
   return (
     <View style={t.subRow}>
       <View style={t.subDot} />
       <View style={{ flex: 1 }}>
+        {!!parentTitle && (
+          <Text style={t.subParentLabel} numberOfLines={1}>{parentTitle}</Text>
+        )}
         <Text style={t.subTitle}>{sub.title}</Text>
-        {!!sub.speaker_name && <Text style={t.subSpeaker}>{sub.speaker_name}</Text>}
-        {(sub.start_datetime || sub.end_datetime) ? (
+        {!!speaker && <Text style={t.subSpeaker}>{speaker}</Text>}
+        {(sTime || eTime) ? (
           <Text style={t.subTime}>
-            {fmtTime(sub.start_datetime)}{sub.end_datetime ? ` – ${fmtTime(sub.end_datetime)}` : ''}
+            {fmtTime(sTime)}{eTime ? ` – ${fmtTime(eTime)}` : ''}
           </Text>
         ) : null}
       </View>
+      {!!onBookmark && (
+        <TouchableOpacity
+          onPress={() => {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+            onBookmark(sub, 'subsession');
+          }}
+          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+          style={{ paddingLeft: 8 }}
+        >
+          <Ionicons
+            name={sub.is_bookmarked ? 'heart' : 'heart-outline'}
+            size={20}
+            color={sub.is_bookmarked ? COLORS.error : COLORS.textTer}
+          />
+        </TouchableOpacity>
+      )}
     </View>
   );
 }
@@ -286,7 +330,9 @@ function SessionCard({ session, onBookmark, onFeedback, onOpenPaper }) {
         </TouchableOpacity>
         {expanded && hasSubs && (
           <View style={t.subsContainer}>
-            {session.sub_sessions.map((sub, i) => <SubRow key={sub.id || i} sub={sub} />)}
+            {session.sub_sessions.map((sub, i) => (
+              <SubRow key={sub.id || i} sub={sub} onBookmark={onBookmark} />
+            ))}
           </View>
         )}
         {expanded && hasPapers && (
@@ -384,7 +430,11 @@ function SessionCard({ session, onBookmark, onFeedback, onOpenPaper }) {
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
             <Ionicons name={hasPapers ? 'documents-outline' : 'git-merge-outline'} size={14} color={expanded ? '#fff' : meta.color} />
             <Text style={[t.expandText, { color: expanded ? '#fff' : meta.color }]}>
-              {hasPapers ? `${session.papers.length} Presentations` : `${session.sub_sessions.length} Sub-sessions`}
+              {hasPapers && hasSubs
+                ? `${session.papers.length} Presentations & ${session.sub_sessions.length} Talks`
+                : hasPapers
+                  ? `${session.papers.length} Presentations`
+                  : `${session.sub_sessions.length} Sub-sessions`}
             </Text>
           </View>
           <Ionicons name={expanded ? 'chevron-up' : 'chevron-down'} size={15} color={expanded ? '#fff' : meta.color} />
@@ -399,9 +449,17 @@ function SessionCard({ session, onBookmark, onFeedback, onOpenPaper }) {
         </View>
       )}
 
-      {expanded && hasSubs && !hasPapers && (
-        <View style={t.expandedArea}>
-          {session.sub_sessions.map((sub, i) => <SubRow key={sub.id || i} sub={sub} />)}
+      {expanded && hasSubs && (
+        <View style={[t.expandedArea, hasPapers && { marginTop: 24 }]}>
+          {hasPapers && (
+            <View style={[t.papersHeader, { marginBottom: 8 }]}>
+              <Ionicons name="git-merge-outline" size={14} color={COLORS.brand} />
+              <Text style={t.papersSectionLabel}>SUB-SESSIONS ({session.sub_sessions.length})</Text>
+            </View>
+          )}
+          {session.sub_sessions.map((sub, i) => (
+            <SubRow key={sub.id || i} sub={sub} onBookmark={onBookmark} />
+          ))}
         </View>
       )}
     </View>
@@ -410,13 +468,11 @@ function SessionCard({ session, onBookmark, onFeedback, onOpenPaper }) {
   return (
     <Animated.View style={{ marginBottom: 16, transform: [{ scale: isLive ? pulseAnim : 1 }] }}>
       {isLive && <NowLine />}
-      <TouchableOpacity activeOpacity={0.9} onPress={toggleExpand}>
-        {isLive ? (
-          <LinearGradient colors={['#f43f5e', '#ec4899', '#8b5cf6']} start={{x:0,y:0}} end={{x:1,y:1}} style={t.liveWrapper}>
-            {CardInner}
-          </LinearGradient>
-        ) : CardInner}
-      </TouchableOpacity>
+      {isLive ? (
+        <LinearGradient colors={['#f43f5e', '#ec4899', '#8b5cf6']} start={{x:0,y:0}} end={{x:1,y:1}} style={t.liveWrapper}>
+          {CardInner}
+        </LinearGradient>
+      ) : CardInner}
     </Animated.View>
   );
 }
@@ -676,7 +732,10 @@ function ReminderModal({ visible, item, itemType, tokens, onClose }) {
   const save = async () => {
     setSaving(true);
     try {
-      const endpoint = itemType === 'paper' ? 'papers' : 'sessions';
+      const endpoint =
+        itemType === 'paper' ? 'papers' :
+        itemType === 'subsession' ? 'subsessions' :
+        'sessions';
       await fetch(`${API_URL}/schedule/${endpoint}/${item.id}/bookmark/`, {
         method: 'POST',
         headers: { ...API_HEADERS, Authorization: `Bearer ${tokens.access}` },
@@ -834,9 +893,18 @@ export default function ScheduleTab({ tokens, onOpenPaper }) {
   };
 
   const handleBookmark = (item, type = 'session') => {
-    const itemType = type || (item.session_type ? 'session' : 'paper');
+    const itemType =
+      type ||
+      (item.session_type ? 'session' :
+       item.parent_session !== undefined ? 'subsession' :
+       'paper');
+
+    const endpoint =
+      itemType === 'paper' ? 'papers' :
+      itemType === 'subsession' ? 'subsessions' :
+      'sessions';
+
     if (item.is_bookmarked) {
-      const endpoint = itemType === 'paper' ? 'papers' : 'sessions';
       fetch(`${API_URL}/schedule/${endpoint}/${item.id}/bookmark/`, {
         method: 'POST', headers: auth, body: JSON.stringify({}),
       }).then(() => fetchAll(true));
@@ -965,16 +1033,17 @@ export default function ScheduleTab({ tokens, onOpenPaper }) {
               </Text>
               <Text style={t.emptySub}>
                 {activeTab === 'bookmarks'
-                  ? 'Save sessions and presentations to build your personal itinerary.'
+                  ? 'Save sessions, talks and presentations to build your personal itinerary.'
                   : 'No sessions are scheduled for this day yet.'}
               </Text>
             </View>
           )}
 
           {currentData.map((item, i) => {
+            // Saved paper card
             if (activeTab === 'bookmarks' && item.type === 'paper') {
               return (
-                <View key={`p-${i}`}>
+                <View key={`p-${item.id || i}`}>
                   <FadeIn delay={i * 30}>
                     <View style={t.savedPaperCard}>
                       <View style={t.savedPaperHeader}>
@@ -992,9 +1061,37 @@ export default function ScheduleTab({ tokens, onOpenPaper }) {
               );
             }
 
+            // Saved sub-session (talk) card
+            if (activeTab === 'bookmarks' && item.type === 'subsession') {
+              return (
+                <View key={`sub-${item.id || i}`}>
+                  <FadeIn delay={i * 30}>
+                    <View style={t.savedPaperCard}>
+                      <View style={t.savedPaperHeader}>
+                        <Ionicons name="mic-outline" size={13} color={COLORS.purple} />
+                        <Text style={[t.savedPaperLabel, { color: COLORS.purple }]}>SAVED TALK</Text>
+                      </View>
+                      <SubRow
+                        sub={{ ...item.sub_session, is_bookmarked: true }}
+                        onBookmark={(s) => handleBookmark(s, 'subsession')}
+                        showParent
+                      />
+                    </View>
+                  </FadeIn>
+                </View>
+              );
+            }
+
+            // Guard against unknown bookmark types
+            if (activeTab === 'bookmarks' && item.type && item.type !== 'session') {
+              return null;
+            }
+
             const sess = activeTab === 'bookmarks'
               ? { ...item.session, is_bookmarked: true, bookmark_reminder: item.reminder_minutes }
               : item;
+
+            if (!sess) return null;
 
             const isLive = getStatus(sess.start_datetime, sess.end_datetime) === 'live';
 
@@ -1438,6 +1535,14 @@ const t = StyleSheet.create({
     paddingVertical: 10,
   },
   subDot: { width: 7, height: 7, borderRadius: 3.5, backgroundColor: COLORS.brand, marginTop: 5 },
+  subParentLabel: {
+    fontSize: 10,
+    fontWeight: FONT.w7,
+    color: COLORS.textTer,
+    marginBottom: 2,
+    letterSpacing: 0.2,
+    textTransform: 'uppercase',
+  },
   subTitle: { fontSize: 13, fontWeight: FONT.w8, color: COLORS.text, marginBottom: 2, lineHeight: 18 },
   subSpeaker: { fontSize: 11, color: COLORS.textSec, fontWeight: FONT.w6 },
   subTime: { fontSize: 10, color: COLORS.textTer, marginTop: 3, fontWeight: FONT.w7 },
@@ -1618,19 +1723,19 @@ const t = StyleSheet.create({
   },
 
   /* ── Jump to live ── */
-jumpBtn: {
-  position: 'absolute',
-  bottom: Platform.OS === 'ios' ? 140 : 110,
-  alignSelf: 'center',
-  flexDirection: 'row',
-  alignItems: 'center',
-  gap: 7,
-  backgroundColor: COLORS.error,
-  paddingHorizontal: 16,
-  paddingVertical: 10,
-  borderRadius: RADIUS.full,
-  ...SHADOW.lg,
-},
+  jumpBtn: {
+    position: 'absolute',
+    bottom: Platform.OS === 'ios' ? 140 : 110,
+    alignSelf: 'center',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 7,
+    backgroundColor: COLORS.error,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: RADIUS.full,
+    ...SHADOW.lg,
+  },
 
   jumpText: { color: '#fff', fontWeight: FONT.w8, fontSize: 12 },
 });

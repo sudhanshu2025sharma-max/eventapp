@@ -811,8 +811,8 @@ export default function IdeathonScreen({ onBack, onOpenPolls }) {
                 <LinearGradient colors={[COLORS.accent, COLORS.accentDark]} style={sc.voteGrad}>
                   <View style={sc.voteIconBox}><Ionicons name="trophy" size={22} color={COLORS.textInverse} /></View>
                   <View style={{ flex: 1 }}>
-                    <Text style={sc.voteTitle}>🏆 Audience Choice Voting</Text>
-                    <Text style={sc.voteSub}>Team leaders — go to Polls to cast your vote</Text>
+                    <Text style={sc.voteTitle}>See Live Polls </Text>
+                    {/* <Text style={sc.voteSub}>Create teams, Poll votes</Text> */}
                   </View>
                   <Ionicons name="chevron-forward" size={18} color="rgba(255,255,255,0.7)" />
                 </LinearGradient>

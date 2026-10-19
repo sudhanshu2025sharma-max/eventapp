@@ -48,6 +48,39 @@ cd /home/baadalvm/eventapp/backend && python3 flush_and_seed.py && pkill -9 -f g
 
 
 
+# Check Number of Users based on cateogry 
+
+
+cd /home/baadalvm/eventapp/backend
+python3 manage.py shell << 'EOF'
+from apps.accounts.models import User
+from django.db.models import Count
+
+print("=" * 60)
+print("TOTAL USERS:", User.objects.count())
+print("=" * 60)
+print("\nBREAKDOWN BY ROLE:")
+for row in User.objects.values('role').annotate(c=Count('id')).order_by('-c'):
+    print(f"  {row['role']:20s} → {row['c']}")
+
+print("\nSAMPLE EMAILS (first 5 per role):")
+for role in User.objects.values_list('role', flat=True).distinct():
+    print(f"\n[{role}]")
+    for u in User.objects.filter(role=role)[:5]:
+        print(f"  - {u.email}")
+
+print("\n" + "=" * 60)
+print("APPLE REVIEW ACCOUNT CHECK:")
+print("=" * 60)
+# What email did you use for Apple review? Need to confirm.
+for u in User.objects.filter(email__icontains='apple'):
+    print(f"  {u.email} | role={u.role}")
+for u in User.objects.filter(email__icontains='review'):
+    print(f"  {u.email} | role={u.role}")
+EOF
+
+
+
 
 ---
 # Git Push 
@@ -120,7 +153,7 @@ from django.db import models
 from apps.checkins.models import CheckIn
 from apps.accounts.models import User
 
-TARGET = 'sudhanshu2025sharma@gmail.com'
+TARGET = 'director.desidoc@gov.in'
 
 user = User.objects.filter(
     models.Q(email__iexact=TARGET) | models.Q(registration_id__iexact=TARGET)

@@ -241,7 +241,7 @@ def public_accepted_papers(request):
             'pdf_url': p.pdf_url or (p.document.url if p.document else None),
             'is_published': p.is_published,
         })
-    return Response({'results': results})
+    return Response({'papers': results, 'results': results})
 
 
 # ── Authenticated User Endpoints ──
@@ -392,7 +392,7 @@ def submit_feedback(request, pk):
 
 # ── Staff / Admin Endpoints (Module-Guarded) ──
 
-@api_view(['GET', 'POST', 'DELETE'])
+@api_view(['GET', 'POST', 'DELETE', 'PATCH'])
 @permission_classes([IsAuthenticated])
 @api_module_required('papers')
 @parser_classes([MultiPartParser, FormParser, JSONParser])
@@ -416,7 +416,7 @@ def mobile_admin_papers(request):
                 'pdf_url': p.pdf_url or (p.document.url if p.document else None),
                 'is_published': p.is_published,
             })
-        return Response({'results': results})
+        return Response({'papers': results, 'results': results})
 
     if request.method == 'POST':
         doc = request.FILES.get('document')
@@ -444,6 +444,28 @@ def mobile_admin_papers(request):
         )
         return Response({'success': True, 'id': str(paper.id)}, status=status.HTTP_201_CREATED)
 
+    if request.method == 'PATCH':
+        pid = request.data.get('id')
+        if not pid:
+            return Response({'error': 'Paper ID required'}, status=status.HTTP_400_BAD_REQUEST)
+        paper = get_object_or_404(AcceptedPaper, pk=pid)
+        for field in ('paper_id', 'paper_type', 'title', 'authors', 'abstract', 'track', 'is_published'):
+            if field in request.data:
+                setattr(paper, field, request.data[field])
+        for field in ('slot_start', 'slot_end'):
+            if field in request.data:
+                setattr(paper, field, request.data[field] or None)
+        if 'session_id' in request.data:
+            paper.session = ScheduleSession.objects.filter(pk=request.data['session_id']).first()
+        doc = request.FILES.get('document')
+        if doc:
+            doc_err = _validate_document(doc)
+            if doc_err:
+                return Response({'success': False, 'error': doc_err}, status=status.HTTP_400_BAD_REQUEST)
+            paper.document = doc
+        paper.save()
+        return Response({'success': True, 'id': str(paper.id)})
+
     pid = request.GET.get('id') or request.data.get('id')
     if not pid:
         return Response({'error': 'Paper ID required'}, status=status.HTTP_400_BAD_REQUEST)
@@ -455,7 +477,19 @@ def mobile_admin_papers(request):
 @permission_classes([IsAuthenticated])
 @api_module_required('schedule')
 def admin_session_list(request):
-    return session_list(request)
+    qs = ScheduleSession.objects.all().prefetch_related(
+        "sub_sessions",
+        Prefetch("papers", queryset=AcceptedPaper.objects.all()),
+        Prefetch("feedback_forms", queryset=FeedbackForm.objects.filter(is_active=True))
+    )
+    day = request.GET.get("day")
+    if day not in (None, "", "all"):
+        try:
+            qs = qs.filter(day=int(day))
+        except (TypeError, ValueError):
+            pass
+    sessions = [_serialize_session(s) for s in qs.order_by("date", "start_time", "display_order")]
+    return Response({"sessions": sessions, "count": len(sessions)})
 
 
 @api_view(['POST'])

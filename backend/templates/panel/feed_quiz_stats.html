@@ -1,0 +1,98 @@
+{% extends 'panel/base.html' %}
+{% block title %}Question Statistics — ETD 2026 Admin{% endblock %}
+{% block page_title %}Question Statistics{% endblock %}
+{% block page_subtitle %}Responses to feed quizzes and questions{% endblock %}
+{% block content %}
+<div class="page-header" style="display:flex;gap:12px;flex-wrap:wrap;">
+    <a href="{% url 'feed_panel' %}" class="btn btn-secondary">Back to Feed</a>
+    {% if post %}
+    <a href="{% url 'feed_quiz_stats' %}" class="btn btn-secondary">All Questions</a>
+    <a href="{% url 'feed_edit' post.pk %}" class="btn btn-primary">Edit Post</a>
+    {% endif %}
+</div>
+{% if post %}
+<div class="card" style="margin-bottom:20px;">
+    <div class="card-body">
+        {% if post.title %}<p style="color:var(--text-secondary);">{{ post.title }}</p>{% endif %}
+        <h2>{{ post.quiz_question }}</h2>
+        <p>{{ post.get_quiz_type_display }} · {{ post.response_count }} responses
+            {% if has_correct_answer %} · {{ correct_count }} correct{% else %} · No correct answer set{% endif %}
+        </p>
+        {% for option in options %}
+        <div style="margin:18px 0;">
+            <div style="display:flex;justify-content:space-between;gap:12px;">
+                <span>{{ option.label }} {% if option.correct %}<span class="badge badge-success">Correct answer</span>{% endif %}</span>
+                <strong>{{ option.count }} ({{ option.percent }}%)</strong>
+            </div>
+            <progress value="{{ option.count }}" max="{{ post.response_count|default:1 }}"
+                      aria-label="{{ option.label }} responses" style="width:100%;height:18px;accent-color:var(--primary);"></progress>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+<div class="card">
+    <div class="card-header"><h3>Participant Responses</h3></div>
+    <div class="card-body">
+        <form method="get" style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:20px;">
+            <input name="q" class="form-control" value="{{ search }}" maxlength="200"
+                   placeholder="Search name, email or registration ID" aria-label="Search participants" style="flex:1;min-width:200px;">
+            <select name="option" class="form-control" aria-label="Filter by answer" style="width:auto;max-width:100%;">
+                <option value="">All answers</option>
+                {% for option in options %}<option value="{{ option.index }}" {% if option.selected %}selected{% endif %}>{{ option.label }}</option>{% endfor %}
+            </select>
+            <button class="btn btn-primary" type="submit">Filter</button>
+            <a class="btn btn-secondary" href="{% url 'feed_quiz_stats_detail' post.pk %}">Reset</a>
+        </form>
+        <p>{{ response_page.paginator.count }} matching responses</p>
+        <div style="overflow-x:auto;">
+            <table class="data-table">
+                <thead><tr><th>Participant</th><th>Registration ID</th><th>Selected Answer</th>{% if has_correct_answer %}<th>Result</th>{% endif %}<th>Submitted</th></tr></thead>
+                <tbody>
+                {% for row in rows %}
+                <tr>
+                    <td>{{ row.user.get_full_name|default:row.user.email }}<br><small>{{ row.user.email }}</small></td>
+                    <td>{{ row.user.registration_id|default:'—' }}</td>
+                    <td>{{ row.option }}</td>
+                    {% if has_correct_answer %}<td>{% if row.correct %}<span class="badge badge-success">Correct</span>{% else %}<span class="badge badge-danger">Incorrect</span>{% endif %}</td>{% endif %}
+                    <td>{{ row.created_at|date:'d M Y, H:i' }}</td>
+                </tr>
+                {% empty %}<tr><td colspan="5">No responses found.</td></tr>{% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% if response_page.has_other_pages %}
+        <div style="display:flex;gap:12px;margin-top:20px;align-items:center;">
+            {% if response_page.has_previous %}<a class="btn btn-secondary" href="?q={{ search|urlencode }}&amp;option={{ selected_option|urlencode }}&amp;page={{ response_page.previous_page_number }}">Previous</a>{% endif %}
+            <span>Page {{ response_page.number }} of {{ response_page.paginator.num_pages }}</span>
+            {% if response_page.has_next %}<a class="btn btn-secondary" href="?q={{ search|urlencode }}&amp;option={{ selected_option|urlencode }}&amp;page={{ response_page.next_page_number }}">Next</a>{% endif %}
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% else %}
+<div class="card" style="margin-bottom:20px;"><div class="card-body"><strong>{{ quiz_count }}</strong> questions · <strong>{{ response_count }}</strong> total responses</div></div>
+<div class="card"><div class="card-body" style="overflow-x:auto;">
+    <table class="data-table">
+        <thead><tr><th>Question</th><th>Type</th><th>Status</th><th>Responses</th><th></th></tr></thead>
+        <tbody>
+        {% for quiz in quiz_page %}
+        <tr>
+            <td>{% if quiz.title %}<small>{{ quiz.title }}</small><br>{% endif %}{{ quiz.quiz_question }}</td>
+            <td>{{ quiz.get_quiz_type_display }}</td>
+            <td>{% if quiz.is_live %}Published{% elif quiz.scheduled_at %}Scheduled{% else %}Draft{% endif %}</td>
+            <td>{{ quiz.response_count }}</td>
+            <td><a class="btn btn-primary btn-sm" href="{% url 'feed_quiz_stats_detail' quiz.pk %}">View Responses</a></td>
+        </tr>
+        {% empty %}<tr><td colspan="5">No questions posted yet.</td></tr>{% endfor %}
+        </tbody>
+    </table>
+    {% if quiz_page.has_other_pages %}
+    <div style="display:flex;gap:12px;margin-top:20px;align-items:center;">
+        {% if quiz_page.has_previous %}<a class="btn btn-secondary" href="?page={{ quiz_page.previous_page_number }}">Previous</a>{% endif %}
+        <span>Page {{ quiz_page.number }} of {{ quiz_page.paginator.num_pages }}</span>
+        {% if quiz_page.has_next %}<a class="btn btn-secondary" href="?page={{ quiz_page.next_page_number }}">Next</a>{% endif %}
+    </div>
+    {% endif %}
+</div></div>
+{% endif %}
+{% endblock %}

@@ -35,10 +35,12 @@
             <th>Name</th>
             <th>Email</th>
             <th>Reg ID</th>
+            <th>Category</th>
+            <th>Designation</th>
             <th>Organisation</th>
             <th>Mobile</th>
             <th>Status</th>
-            <th style="width:60px;"></th>
+            <th style="width:60px;">Action</th>
           </tr>
         </thead>
         <tbody>
@@ -49,6 +51,12 @@
             </td>
             <td>{{ item.obj.email }}</td>
             <td><code>{{ item.obj.registration_id|default:"—" }}</code></td>
+            <td>
+              <span class="badge" style="background:#e0e7ff;color:#3730a3;font-weight:700;">
+                {{ item.obj.category|default:item.obj.imported_role|default:"Participant" }}
+              </span>
+            </td>
+            <td>{{ item.obj.designation|default:"—" }}</td>
             <td>{{ item.obj.organisation|default:"—" }}</td>
             <td>{{ item.obj.mobile|default:"—" }}</td>
             <td>
@@ -70,7 +78,7 @@
           </tr>
           {% empty %}
           <tr>
-            <td colspan="7">
+            <td colspan="9">
               <div class="empty-state">
                 <i class="fas fa-inbox"></i>
                 <h3>No rows staged</h3>
@@ -87,20 +95,21 @@
 </div>
 
 {% if rows %}
-<div style="display:flex;flex-direction:column;gap:16px;max-width:600px;">
+<div style="display:flex;flex-direction:column;gap:16px;max-width:700px;">
+  <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:12px;padding:16px;font-size:13px;color:#1e40af;line-height:1.6;">
+    <strong>📧 Email Limit Notice:</strong> IIT SMTP allows max 30 emails/day. After import, you can
+    <strong>download a credentials CSV</strong> for mail merge via Gmail/Outlook, or use the
+    <strong>Batch Email</strong> feature to send 30/day directly.
+  </div>
   <form method="post" action="{% url 'participants_confirm' %}">
     {% csrf_token %}
-    <label style="display:flex;align-items:center;gap:10px;cursor:pointer;margin-bottom:16px;">
-      <input type="checkbox" name="send_email" style="width:18px;height:18px;">
-      <span style="font-size:14px;">Send login credentials via email to all participants</span>
-    </label>
     <div style="display:flex;align-items:center;gap:16px;">
       <button type="submit" class="btn btn-primary"
               onclick="return confirm('Create {{ total }} user account(s)?')">
         <i class="fas fa-check-circle"></i> Confirm Import
       </button>
       <span style="font-size:13px;color:var(--text-tertiary);">
-        This will create user accounts for {{ total }} participant(s).
+        Creates {{ total }} account(s). Download credentials CSV after import.
       </span>
     </div>
   </form>

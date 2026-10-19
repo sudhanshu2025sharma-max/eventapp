@@ -2,6 +2,7 @@ from django.contrib import admin
 from django.urls import path, include
 from django.conf import settings
 from django.conf.urls.static import static
+from confhub.media import serve_media
 
 urlpatterns = [
     # ── Web Admin Panel ──
@@ -37,6 +38,14 @@ urlpatterns = [
     path('api/v1/certificates/',  include('apps.certificates.urls')),
 ]
 
+# Serve media files in all environments (static() returns [] when DEBUG=False)
+from django.urls import re_path
+urlpatterns += [re_path(r'^media/(?P<path>.*)$', serve_media, {'document_root': settings.MEDIA_ROOT})]
+
 if settings.DEBUG:
-    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
     urlpatterns += static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)
+
+# ── Custom Error Handlers ──
+handler404 = 'confhub.error_views.handler404'
+handler500 = 'confhub.error_views.handler500'
+handler403 = 'confhub.error_views.handler403'

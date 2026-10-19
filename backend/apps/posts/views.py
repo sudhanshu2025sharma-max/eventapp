@@ -1,6 +1,7 @@
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
-from django.db.models import Count
+from django.db.models import Count, Prefetch
+from django.db import transaction
 from django.core.exceptions import ValidationError
 
 from rest_framework.decorators import api_view, permission_classes
@@ -9,7 +10,9 @@ from rest_framework.response import Response
 from rest_framework.pagination import PageNumberPagination
 from rest_framework import status
 
-from .models import FeedPost, FeedReaction, FeedComment, REACTION_CHOICES
+from .models import FeedPost, FeedReaction, FeedComment, FeedQuizResponse, REACTION_CHOICES
+from .quiz import apply_feed_extras, apply_feed_content
+from apps.accounts.permissions_helper import api_module_required
 import base64
 import uuid
 from django.core.files.base import ContentFile
@@ -53,7 +56,8 @@ def _live_posts_qs():
         FeedPost.objects
         .filter(published_at__isnull=False, published_at__lte=now)
         .select_related('author', 'session')
-        .annotate(comment_count=Count('comments', distinct=True))
+        .annotate(comment_count=Count('comments', distinct=True),
+                  quiz_response_count=Count('quiz_responses', distinct=True))
         .prefetch_related('reactions')
         .order_by('-pinned', '-published_at', '-created_at')
     )
@@ -93,7 +97,35 @@ def _session_payload(session):
     }
 
 
-def _post_payload(request, post, my_reaction=None):
+def _quiz_payload(request, post, admin=False):
+    if post.post_type != 'quiz':
+        return None
+    if hasattr(post, 'my_quiz_responses'):
+        answer = next(iter(post.my_quiz_responses), None)
+    else:
+        answer = post.quiz_responses.filter(user=request.user).first()
+    revealed = admin or answer is not None
+    payload = {
+        'type': post.quiz_type,
+        'question': post.quiz_question,
+        'options': post.quiz_options,
+        'response_count': post.quiz_response_count if hasattr(post, 'quiz_response_count') else post.quiz_responses.count(),
+        'selected_option': answer.selected_option if answer else None,
+        'answered': answer is not None,
+        'has_correct_answer': post.quiz_correct_option is not None,
+    }
+    if revealed:
+        payload['correct_option'] = post.quiz_correct_option
+    if answer:
+        payload['is_correct'] = (answer.selected_option == post.quiz_correct_option
+                                 if post.quiz_correct_option is not None else None)
+    if admin:
+        counts = dict(post.quiz_responses.values('selected_option').annotate(total=Count('id')).values_list('selected_option', 'total'))
+        payload['option_counts'] = [counts.get(i, 0) for i in range(len(post.quiz_options))]
+    return payload
+
+
+def _post_payload(request, post, my_reaction=None, admin=False):
     author_name = 'ETD 2026'
     try:
         if post.author:
@@ -118,6 +150,8 @@ def _post_payload(request, post, my_reaction=None):
         'id': str(post.id),
         'title': post.title,
         'body': post.body,
+        'link_url': post.link_url,
+        'quiz': _quiz_payload(request, post, admin=admin),
         'post_type': post.post_type,
         'image_url': _image_url(request, post),
         'pinned': post.pinned,
@@ -129,7 +163,7 @@ def _post_payload(request, post, my_reaction=None):
         'author_role': 'Organizer',
         'session': _session_payload(session_obj),
         'poll_id': poll_id,
-        'comment_count': getattr(post, 'comment_count', post.comments.count()),
+        'comment_count': post.comment_count if hasattr(post, 'comment_count') else post.comments.count(),
         'reaction_summary': _reaction_summary(post),
         'my_reaction': my_reaction,
     }
@@ -160,7 +194,7 @@ def _dispatch_feed_push(post, sent_by=None, request=None):
     """
     Dispatch push notification for feed post using fcm.send_to_all(title, body, data, notif, request).
     """
-    title = f"📢 {post.title}"[:120]
+    title = f"📢 {post.title or post.quiz_question}"[:120]
     body = (post.body or '')[:240]
     data = {
         'type': 'feed_post',
@@ -205,7 +239,9 @@ def _dispatch_feed_push(post, sent_by=None, request=None):
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def feed_list(request):
-    qs = _live_posts_qs()
+    qs = _live_posts_qs().prefetch_related(Prefetch(
+        'quiz_responses', queryset=FeedQuizResponse.objects.filter(user=request.user),
+        to_attr='my_quiz_responses'))
     paginator = PageNumberPagination()
     paginator.page_size = 20
     page = paginator.paginate_queryset(qs, request)
@@ -222,6 +258,24 @@ def feed_list(request):
         for post in page
     ]
     return paginator.get_paginated_response(data)
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+@transaction.atomic
+def answer_quiz(request, pk):
+    # Serialize submissions and edits on the parent row, including concurrent retries.
+    post = get_object_or_404(
+        FeedPost.objects.select_for_update().filter(
+            published_at__isnull=False, published_at__lte=timezone.now()), pk=pk)
+    if post.post_type != 'quiz':
+        return Response({'detail': 'This post is not a quiz.'}, status=400)
+    selected = request.data.get('selected_option')
+    if type(selected) is not int or not 0 <= selected < len(post.quiz_options):
+        return Response({'detail': 'Select a valid answer.'}, status=400)
+    answer, created = FeedQuizResponse.objects.get_or_create(
+        post=post, user=request.user, defaults={'selected_option': selected})
+    return Response({'success': True, 'quiz': _quiz_payload(request, post)}, status=201 if created else 200)
 
 
 @api_view(['POST'])
@@ -329,32 +383,33 @@ def post_comments(request, pk):
 # -------------------------------------------------------------
 @api_view(['GET', 'POST'])
 @permission_classes([IsAuthenticated])
+@api_module_required('feed')
 def admin_feed_list(request):
     if request.user.role not in ('super_admin', 'mgmt_admin', 'team_head', 'staff'):
         return Response({'detail': 'Not allowed'}, status=403)
 
     if request.method == 'GET':
-        qs = FeedPost.objects.all().order_by('-created_at')
-        return Response({'success': True, 'results': [_post_payload(request, p) for p in qs]})
+        qs = FeedPost.objects.select_related('author', 'session').prefetch_related('reactions').annotate(
+            comment_count=Count('comments', distinct=True),
+            quiz_response_count=Count('quiz_responses', distinct=True)).order_by('-created_at')
+        return Response({'success': True, 'results': [_post_payload(request, p, admin=True) for p in qs]})
 
     data = request.data
     want_push = _is_true(data.get('send_push'), False)
 
-    title = (data.get('title') or '').strip()
-    body = (data.get('body') or '').strip()
-    if not title or not body:
-        return Response({'detail': 'Title and body are required.'}, status=400)
-
     post = FeedPost(
         author=request.user,
-        title=title,
-        body=body,
         post_type=data.get('post_type') or 'general',
         pinned=_is_true(data.get('pinned'), False),
         allow_comments=_is_true(data.get('allow_comments'), True),
         send_push=want_push,
         published_at=timezone.now(),
     )
+    try:
+        apply_feed_extras(post, data)
+        apply_feed_content(post, data)
+    except ValidationError as exc:
+        return Response({'detail': ' '.join(exc.messages)}, status=400)
     if 'image' in request.FILES:
         post.image = request.FILES['image']
     elif 'image_base64' in data and data['image_base64']:
@@ -372,7 +427,7 @@ def admin_feed_list(request):
 
     return Response({
         'success': True,
-        'post': _post_payload(request, post),
+        'post': _post_payload(request, post, admin=True),
         'push_sent': push_ok,
         'push_via': push_via,
         'push_sent_count': push_sent_count,
@@ -382,18 +437,21 @@ def admin_feed_list(request):
 
 @api_view(['PATCH', 'POST', 'DELETE'])
 @permission_classes([IsAuthenticated])
+@api_module_required('feed')
+@transaction.atomic
 def admin_feed_detail(request, pk):
     if request.user.role not in ('super_admin', 'mgmt_admin', 'team_head', 'staff'):
         return Response({'detail': 'Not allowed'}, status=403)
 
-    post = get_object_or_404(FeedPost, pk=pk)
+    post = get_object_or_404(FeedPost.objects.select_for_update(), pk=pk)
 
     if request.method in ('PATCH', 'POST'):
         data = request.data
-        if 'title' in data:
-            post.title = (data.get('title') or '').strip() or post.title
-        if 'body' in data:
-            post.body = (data.get('body') or '').strip() or post.body
+        try:
+            apply_feed_extras(post, data)
+            apply_feed_content(post, data)
+        except ValidationError as exc:
+            return Response({'detail': ' '.join(exc.messages)}, status=400)
         if 'post_type' in data:
             post.post_type = data.get('post_type') or post.post_type
         if 'pinned' in data:
@@ -408,7 +466,7 @@ def admin_feed_detail(request, pk):
             post.image = img_file
 
         post.save()
-        return Response({'success': True, 'post': _post_payload(request, post)})
+        return Response({'success': True, 'post': _post_payload(request, post, admin=True)})
 
     post.delete()
     return Response({'success': True})
@@ -416,6 +474,7 @@ def admin_feed_detail(request, pk):
 
 @api_view(['GET', 'DELETE'])
 @permission_classes([IsAuthenticated])
+@api_module_required('feed')
 def admin_feed_comments(request, pk, comment_id=None):
     if request.user.role not in ('super_admin', 'mgmt_admin', 'team_head', 'staff'):
         return Response({'detail': 'Not allowed'}, status=403)

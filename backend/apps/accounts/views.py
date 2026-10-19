@@ -10,6 +10,7 @@ import html
 import re
 
 from .serializers import LoginSerializer, UserSerializer, ChangePasswordSerializer
+from confhub.media import preview_url
 
 User = get_user_model()
 
@@ -621,7 +622,7 @@ def discover_view(request):
         photo = None
         if u.profile_photo:
             try:
-                photo = request.build_absolute_uri(u.profile_photo.url)
+                photo = preview_url(u.profile_photo, request, size=256)
             except Exception:
                 pass
 
@@ -836,6 +837,12 @@ def admin_staff_permissions_view(request):
             target_user = User.objects.get(id=user_id)
         except User.DoesNotExist:
             return Response({'success': False, 'message': 'User not found.'}, status=status.HTTP_404_NOT_FOUND)
+
+        # Auto-promote role to 'staff' if assigning permissions to a non-admin user
+        if modules and target_user.role not in ('super_admin', 'mgmt_admin', 'team_head', 'staff'):
+            target_user.role = 'staff'
+            target_user.is_staff = True
+            target_user.save(update_fields=['role', 'is_staff'])
 
         StaffPermission.objects.filter(user=target_user).delete()
 

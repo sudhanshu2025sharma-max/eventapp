@@ -5,8 +5,12 @@ class Sponsor(models.Model):
     TIER_CHOICES = [
         ('national_funding', 'National Funding Agency'),
         ('platinum',         'Platinum Sponsor'),
+        ('gold',             'Gold Sponsor'),
         ('silver',           'Silver Sponsor'),
         ('bronze',           'Bronze Sponsor'),
+        ('academic_partner', 'Academic Partner'),
+        ('media_partner',    'Media Partner'),
+        ('other',            'Other Sponsor / Supporter'),
     ]
 
     name        = models.CharField(max_length=200)

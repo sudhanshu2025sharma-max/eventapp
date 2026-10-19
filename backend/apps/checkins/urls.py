@@ -8,6 +8,7 @@ urlpatterns = [
     path('scan/', views.scan_checkin, name='scan_checkin'),
     path('confirm-goodies/', views.confirm_goodies, name='confirm_goodies'),
     path('participants/', views.checked_in_participants, name='checked_in_participants'),
+    path('participants-dir/', views.all_participants_directory, name='all_participants_directory'),
 
     # Meal passes
     path('meal/status/', views.meal_status, name='meal_status'),

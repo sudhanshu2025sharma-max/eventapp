@@ -180,7 +180,7 @@ class ShakeLog(models.Model):
     """Logs every shake event and successful shake-connect."""
     id         = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     user       = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='shake_logs')
-    event_type = models.CharField(max_length=20, choices=[('shake', 'Shake'), ('connect', 'Connected')])
+    event_type = models.CharField(max_length=20, choices=[('shake', 'Shake'), ('connect', 'Connected'), ('scan_connect', 'Scan & Connect')])
     partner    = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name='shake_partner_logs')
     created_at = models.DateTimeField(auto_now_add=True)
 

@@ -17,6 +17,8 @@ urlpatterns = [
     path('participants/delete/<int:pk>/',   admin_views.participants_delete_row, name='participants_delete_row'),
     path('participants/edit/<uuid:pk>/',    admin_views.participant_edit,        name='participant_edit'),
     path('participants/remove/<uuid:pk>/',  admin_views.participant_delete,      name='participant_delete'),
+    path('participants/credentials/export/',  admin_views.participants_export_credentials, name='participants_export_credentials'),
+    path('participants/batch-email/',         admin_views.participants_batch_email,        name='participants_batch_email'),
     path('participants/template/',          admin_views.participants_template,   name='participants_template'),
 
     # User management (warn / suspend / reports)

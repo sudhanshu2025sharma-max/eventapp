@@ -57,13 +57,19 @@ export default function IdeathonAdmin({ onBack }) {
   useEffect(() => { loadData(); }, [loadData]);
 
   const handleToggleReg = async () => {
+    if (toggling || !stats) return;
     setToggling(true);
     try {
-      const res = await apiFetch('/polls/admin/ideathon/toggle/', { method: 'POST' });
+      const res = await apiFetch('/polls/admin/ideathon/toggle/', {
+        method: 'POST', body: JSON.stringify({ registration_open: !stats.registration_open }),
+      });
       const d = await res.json();
       if (d.success) { Alert.alert('Success', d.message); loadData(); }
-      else Alert.alert('Error', d.error || 'Toggle failed');
-    } catch { Alert.alert('Error', 'Connection timed out'); }
+      else Alert.alert('Error', d.detail || d.error || 'Could not update registration.');
+    } catch {
+      loadData();
+      Alert.alert('Connection issue', 'Could not confirm the change. Registration status is being refreshed.');
+    }
     finally { setToggling(false); }
   };
 

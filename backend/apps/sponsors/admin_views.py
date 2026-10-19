@@ -2,11 +2,13 @@ from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib import messages
 from django.views.decorators.http import require_http_methods
 
-from apps.accounts.admin_views import admin_required
 from .models import Sponsor
+from django.contrib.auth.decorators import login_required
+from apps.accounts.permissions_helper import module_required
 
 
-@admin_required
+@login_required(login_url='/panel/login/')
+@module_required('sponsors')
 def sponsors_panel(request):
     tier_filter = request.GET.get('tier', '')
     qs = Sponsor.objects.all().order_by('tier', 'display_order', 'name')
@@ -32,8 +34,9 @@ def sponsors_panel(request):
     return render(request, 'panel/sponsors_list.html', context)
 
 
-@admin_required
 @require_http_methods(['GET', 'POST'])
+@login_required(login_url='/panel/login/')
+@module_required('sponsors')
 def sponsor_create(request):
     if request.method == 'POST':
         try:
@@ -76,8 +79,9 @@ def sponsor_create(request):
     })
 
 
-@admin_required
 @require_http_methods(['GET', 'POST'])
+@login_required(login_url='/panel/login/')
+@module_required('sponsors')
 def sponsor_edit(request, sponsor_id):
     s = get_object_or_404(Sponsor, pk=sponsor_id)
 
@@ -122,8 +126,9 @@ def sponsor_edit(request, sponsor_id):
     })
 
 
-@admin_required
 @require_http_methods(['POST'])
+@login_required(login_url='/panel/login/')
+@module_required('sponsors')
 def sponsor_delete(request, sponsor_id):
     s = get_object_or_404(Sponsor, pk=sponsor_id)
     name = s.name

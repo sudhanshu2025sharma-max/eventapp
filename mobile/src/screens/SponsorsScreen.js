@@ -5,7 +5,7 @@ import {
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
-import { COLORS, FONT, SPACE, RADIUS, SHADOW, API_URL, API_HEADERS, TOP, BOTTOM } from '../theme';
+import { COLORS, FONT, SPACE, RADIUS, SHADOW, API_URL, API_HEADERS, TOP, BOTTOM, fixMediaUrl } from '../theme';
 import SponsorDetailScreen from './SponsorDetailScreen';
 
 const { width: W } = Dimensions.get('window');
@@ -28,7 +28,8 @@ function LogoTile({ sponsor, onPress, size }) {
     >
       {sponsor.logo_url && ok ? (
         <Image
-          source={{ uri: sponsor.logo_url }}
+          source={{ uri: fixMediaUrl(sponsor.logo_url) }}
+          resizeMethod="resize"
           style={{ width: '85%', height: '70%' }}
           resizeMode="contain"
           onError={() => setOk(false)}

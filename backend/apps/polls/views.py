@@ -5,10 +5,13 @@ from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.response import Response
 
 from .models import Poll, PollOption, Vote, PollAuditLog
+from apps.accounts.permissions_helper import user_has_module_access, api_module_required
+from .registration import set_registration
 
 
 def _is_admin(user):
-    return user.is_authenticated and user.role in ('super_admin', 'mgmt_admin')
+    return (user.is_authenticated and user.role in ('super_admin', 'mgmt_admin', 'team_head', 'staff')
+            and user_has_module_access(user, 'polls'))
 
 
 def _poll_payload(poll, user=None):
@@ -414,31 +417,15 @@ def admin_poll_create(request):
 
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
+@api_module_required('ideathon')
 def admin_ideathon_toggle(request):
     """Mobile admin: toggle ideathon registration open/closed."""
-    if not _is_admin(request.user):
+    if request.user.role not in ('super_admin', 'mgmt_admin', 'team_head', 'staff'):
         return Response({'error': 'Forbidden'}, status=403)
-
-    from .ideathon_models import IdeathonConfig
-    cfg = IdeathonConfig.get()
-    cfg.registration_open = not cfg.registration_open
-    cfg.updated_by = request.user
-    cfg.save()
-
-    if cfg.registration_open:
-        try:
-            from apps.notifications.models import Notification as Notif
-            from apps.notifications.fcm import send_to_all
-            notif = Notif.objects.create(
-                title='🏆 Ideathon Team Registration is Open!',
-                body='Form your teams now in the app. Teams of 2–5 members.',
-                target_type='all', sent_by=request.user, status='pending',
-                data={'type': 'poll'},
-            )
-            s, f, _ = send_to_all(notif.title, notif.body, notif.data, notif, request)
-            notif.status = 'sent'; notif.sent_count = s; notif.failed_count = f; notif.save()
-        except Exception:
-            pass
+    desired = request.data.get('registration_open')
+    if 'registration_open' in request.data and type(desired) is not bool:
+        return Response({'error': 'registration_open must be true or false.'}, status=400)
+    cfg = set_registration(request.user, desired)
 
     return Response({
         'success': True,

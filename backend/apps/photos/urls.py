@@ -22,6 +22,8 @@ urlpatterns = [
 
     # Participant Checkpoints
     path('checkpoints/',          views.selfie_points_list,   name='checkpoints_list'),
+    path('checkpoint-submission/<int:point_id>/delete/', views.delete_my_submission, name='delete_my_submission'),
+    path('checkpoint-submission/id/<int:sub_id>/delete/', views.delete_my_submission_by_id, name='delete_my_submission_by_id'),
     path('checkpoint-visit/',     views.selfie_upload,        name='checkpoint_visit'),
     path('selfie-points/',        views.selfie_points_list,   name='selfie_points_list'),
     path('selfie-upload/',        views.selfie_upload,        name='selfie_upload'),

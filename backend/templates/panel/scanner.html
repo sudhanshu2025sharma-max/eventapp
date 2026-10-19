@@ -66,7 +66,7 @@
       <div class="card-body">
         <label class="form-label">Registration ID / Scanned QR Text</label>
         <div style="display:flex;gap:10px;">
-          <input type="text" id="manualInput" class="form-control" placeholder="e.g. ETD-2026-R-001" style="flex:1;" autocomplete="off"/>
+          <input type="text" id="manualInput" class="form-control" placeholder="e.g. ETD-2026-R-001" style="flex:1;" autocomplete="off" onkeypress="if(event.key==='Enter') handleManualScan()"/>
           <button class="btn btn-primary" id="manualBtn" onclick="handleManualScan()"><i class="fas fa-search"></i> Verify</button>
         </div>
       </div>
@@ -156,30 +156,20 @@ function switchMode(mode) {
   if (mode === 'meal') updateMealStatus();
 }
 
-function showMealTypeSelect() {
-  document.getElementById('mealTypeModal').style.display = 'flex';
-}
-function closeMealTypeSelect() {
-  document.getElementById('mealTypeModal').style.display = 'none';
-}
-
-function openCustomPassModal() {
-  document.getElementById('customPassModal').style.display = 'flex';
-}
-function closeCustomPassModal() {
-  document.getElementById('customPassModal').style.display = 'none';
-}
+function showMealTypeSelect() { document.getElementById('mealTypeModal').style.display = 'flex'; }
+function closeMealTypeSelect() { document.getElementById('mealTypeModal').style.display = 'none'; }
+function openCustomPassModal() { document.getElementById('customPassModal').style.display = 'flex'; }
+function closeCustomPassModal() { document.getElementById('customPassModal').style.display = 'none'; }
 
 async function updateMealStatus() {
   try {
     const res = await fetch('/panel/checkins/meal-window-status/');
     const data = await res.json();
-    const is_open = data.is_open || (data.meal && data.meal.is_open);
+    const is_open = data.is_open;
     const meal_type = data.meal_type || (data.meal && data.meal.meal_type) || 'Meal';
-    
     document.getElementById('mealCategoryDisplay').innerText = 'Active Service: ' + meal_type;
     const statusEl = document.getElementById('mealWindowStatus');
-    statusEl.innerText = is_open ? 'OPEN NOW' : 'CLOSED';
+    statusEl.innerText = is_open ? '🔓 OPEN NOW' : '🔒 CLOSED';
     statusEl.style.color = is_open ? 'var(--success)' : 'var(--text-tertiary)';
     document.getElementById('btnSendMealPush').style.display = is_open ? 'inline-flex' : 'none';
   } catch (e) {}
@@ -190,8 +180,8 @@ async function toggleWindow(action, mealType) {
   try {
     const res = await fetch('/panel/checkins/meal/window/', {
       method: 'POST',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({action: action, meal_type: mealType || 'Lunch'})
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: action, meal_type: mealType || 'Lunch' })
     });
     const data = await res.json();
     alert(data.message || 'Updated');
@@ -203,7 +193,7 @@ async function toggleWindow(action, mealType) {
 
 async function sendMealPush() {
   try {
-    const res = await fetch('/panel/checkins/meal/push/', {method: 'POST'});
+    const res = await fetch('/panel/checkins/meal/push/', { method: 'POST' });
     const data = await res.json();
     alert(data.message || 'Notification Sent!');
   } catch (e) {
@@ -230,31 +220,51 @@ async function updateStats() {
   } catch (e) {}
 }
 
-async function handleManualScan() {
+async function handleManualScan(selectedUserId = null) {
   const input = document.getElementById('manualInput');
   const code = input.value.trim();
-  if (!code) return alert('Please enter code');
+  if (!code && !selectedUserId) return alert('Please enter code');
   
   const endpoint = currentMode === 'conference' ? '/panel/checkins/scan/' : '/panel/checkins/meal/scan/';
+  const payload = selectedUserId ? { user_id: selectedUserId } : { registration_id: code, qr_data: code };
+
   try {
     const res = await fetch(endpoint, {
       method: 'POST',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({registration_id: code, qr_data: code})
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
     });
     const data = await res.json();
-    
     const card = document.getElementById('resultCard');
     const body = document.getElementById('resultBody');
     card.style.display = 'block';
-    
+
     if (data.success) {
-      body.innerHTML = `<div style="color:var(--success);font-weight:700;">✅ ${data.message}</div>`;
-      input.value = '';
+      if (data.multiple) {
+        let html = `<div style="font-weight:700;color:var(--primary);margin-bottom:12px;">⚠️ Multiple matches found for "${code}". Select person:</div>`;
+        html += `<div style="display:grid;gap:8px;">`;
+        data.users.forEach(u => {
+          html += `
+            <div style="padding:12px;background:var(--bg);border-radius:10px;border:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;">
+              <div>
+                <div style="font-weight:700;font-size:14px;">${u.name}</div>
+                <div style="font-size:12px;color:var(--text-tertiary);">${u.email || 'No email'} · Reg ID: <strong>${u.registration_id || code}</strong></div>
+                <div style="font-size:11px;color:var(--primary);margin-top:2px;">Category: <strong>${u.category}</strong> ${u.temp_password ? `| Temp Pwd: <span style="font-family:monospace;color:var(--danger);font-weight:700;">${u.temp_password}</span>` : ''}</div>
+              </div>
+              <button class="btn btn-primary btn-sm" onclick="handleManualScan('${u.id}')">Select</button>
+            </div>
+          `;
+        });
+        html += `</div>`;
+        body.innerHTML = html;
+      } else {
+        body.innerHTML = `<div style="color:var(--success);font-weight:700;">✅ ${data.message}</div>`;
+        input.value = '';
+        updateStats();
+      }
     } else {
-      body.innerHTML = `<div style="color:var(--error);font-weight:700;">❌ ${data.message || 'Failed'}</div>`;
+      body.innerHTML = `<div style="color:var(--error);font-weight:700;">❌ ${data.message || data.error || 'Failed'}</div>`;
     }
-    updateStats();
   } catch (e) {
     alert('Error scanning');
   }
@@ -267,7 +277,6 @@ async function submitCustomPass() {
   const mealType = document.getElementById('passMealType').value;
   
   if (!name) return alert('Guest name is required');
-  
   try {
     const formData = new FormData();
     formData.append('guest_name', name);
@@ -278,7 +287,7 @@ async function submitCustomPass() {
     const res = await fetch('/panel/checkins/meal-pass/', {
       method: 'POST',
       body: formData,
-      headers: {'X-Requested-With': 'XMLHttpRequest'}
+      headers: { 'X-Requested-With': 'XMLHttpRequest' }
     });
     const data = await res.json();
     if (data.success) {
@@ -295,10 +304,8 @@ async function submitCustomPass() {
   }
 }
 
-// Auto-poll meal status every 5 seconds to keep Web Scanner synced with schedule/app
-setInterval(() => {
-  if (currentMode === 'meal') updateMealStatus();
-}, 5000);
+// Auto-poll meal status
+setInterval(() => { if (currentMode === 'meal') updateMealStatus(); }, 5000);
 
 // Init
 switchMode('conference');

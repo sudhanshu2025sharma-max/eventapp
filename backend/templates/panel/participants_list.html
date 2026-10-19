@@ -35,11 +35,17 @@
 
 <!-- Actions & Filters -->
 <div style="display:flex;gap:12px;align-items:center;margin-bottom:20px;flex-wrap:wrap;">
+  <button type="button" onclick="document.getElementById('add-cat-modal').style.display='flex';" class="btn btn-secondary" style="background:#4f46e5;color:#fff;border-color:#4f46e5;">
+    <i class="fas fa-folder-plus"></i> Add Category
+  </button>
   <a href="{% url 'participant_add' %}" class="btn btn-primary">
     <i class="fas fa-user-plus"></i> Add Single
   </a>
   <a href="{% url 'participants_upload' %}" class="btn btn-secondary">
     <i class="fas fa-upload"></i> Bulk Import
+  </a>
+  <a href="{% url 'participants_export_credentials' %}" class="btn btn-secondary" style="background:#059669;color:#fff;border-color:#059669;">
+    <i class="fas fa-file-csv"></i> Export Credentials CSV
   </a>
 
   <!-- Status Filter Links -->
@@ -57,104 +63,202 @@
   </form>
 </div>
 
-<!-- Table -->
-<div class="card">
-  <div class="card-body" style="padding:0;">
-    {% if participants %}
-    <div style="overflow-x:auto;">
-      <table class="data-table">
-        <thead>
-          <tr>
-            <th>Name</th>
-            <th>Email</th>
-            <th>Reg ID</th>
-            <th>Affiliation</th>
-            <th>Check-In</th>
-            <th>Kit Status</th>
-            <th>Kit Remarks</th>
-            <th>Account</th>
-            <th style="width:100px;">Actions</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for p in participants %}
-          <tr>
-            <td style="font-weight:600;">{{ p.get_full_name }}</td>
-            <td>{{ p.email }}</td>
-            <td><code>{{ p.registration_id|default:"—" }}</code></td>
-            <td>{{ p.affiliation|default:"—" }}</td>
-            <td>
-              {% if p.is_checked_in %}
-                <span class="badge badge-success" style="background:#d1fae5;color:#059669;font-weight:700;">
-                  <i class="fas fa-check-circle"></i> CHECKED IN
-                </span>
-              {% else %}
-                <span class="badge" style="background:#f1f5f9;color:#64748b;font-weight:600;">
-                  <i class="fas fa-clock"></i> PENDING
-                </span>
-              {% endif %}
-            </td>
-            <td>
-              {% if p.goodies_status == 'received' %}
-                <span class="badge badge-success" style="background:#d1fae5;color:#059669;font-weight:700;">
-                  <i class="fas fa-gift"></i> Kit Given
-                </span>
-              {% elif p.goodies_status == 'skipped' %}
-                <span class="badge badge-warning" style="background:#fef3c7;color:#d97706;font-weight:700;">
-                  <i class="fas fa-exclamation-circle"></i> Skipped
-                </span>
-              {% else %}
-                <span class="badge" style="background:#f1f5f9;color:#94a3b8;font-weight:600;">
-                  Not Issued
-                </span>
-              {% endif %}
-            </td>
-            <td style="font-size:12px;color:#92400e;">
-              {% if p.goodies_note %}
-                <i class="fas fa-comment-dots" style="margin-right:4px;"></i> {{ p.goodies_note }}
-              {% else %}
-                <span style="color:var(--text-tertiary);">—</span>
-              {% endif %}
-            </td>
-            <td>
-              {% if not p.is_active %}
-                <span class="badge badge-danger">Suspended</span>
-              {% elif p.must_change_password %}
-                <span class="badge badge-warning" title="Temporary password active">Pending 1st Login</span>
-              {% else %}
-                <span class="badge badge-success" title="Password changed by user">Active</span>
-              {% endif %}
-            </td>
-            <td>
-              <div style="display:flex;gap:6px;">
-                <a href="{% url 'participant_edit' p.pk %}" class="btn btn-sm btn-secondary" title="Edit & Reset Password">
-                  <i class="fas fa-pen"></i>
-                </a>
-                <form method="post" action="{% url 'participant_delete' p.pk %}" style="margin:0;">
-                  {% csrf_token %}
-                  <button type="submit" class="btn btn-sm btn-danger" title="Delete"
-                          onclick="return confirm('Delete {{ p.get_full_name }}?')">
-                    <i class="fas fa-trash-can"></i>
-                  </button>
-                </form>
-              </div>
-            </td>
-          </tr>
-          {% endfor %}
-        </tbody>
-      </table>
+<!-- Category Filter Tabs with Counts -->
+<div style="margin-bottom:20px;display:flex;gap:8px;flex-wrap:wrap;align-items:center;background:var(--surface);padding:12px;border-radius:12px;border:1px solid var(--border);">
+  <span style="font-size:12px;font-weight:800;color:var(--text-tertiary);letter-spacing:0.5px;margin-right:6px;">CATEGORIES:</span>
+  <a href="{% url 'participants_list' %}" class="btn btn-sm {% if not selected_category %}btn-primary{% else %}btn-secondary{% endif %}" style="border-radius:20px;padding:5px 14px;font-size:12px;font-weight:700;">
+    All ({{ total_participants|default:total }})
+  </a>
+  {% for cname, count in category_counts.items %}
+    <div style="display:inline-flex;align-items:center;">
+      <a href="{% url 'participants_list' %}?category={{ cname }}" class="btn btn-sm {% if selected_category == cname %}btn-primary{% else %}btn-secondary{% endif %}" style="border-radius:20px;padding:5px 14px;font-size:12px;font-weight:700;">
+        {{ cname }} ({{ count }})
+      </a>
+      {% if count == 0 %}
+        <form method="post" style="margin:0;margin-left:-8px;z-index:2;">
+          {% csrf_token %}
+          <input type="hidden" name="action" value="delete_category">
+          <input type="hidden" name="category_name" value="{{ cname }}">
+          <button type="submit" onclick="return confirm('Delete unused category {{ cname }}?');" style="background:#ef4444;color:#fff;border:none;border-radius:50%;width:18px;height:18px;font-size:10px;cursor:pointer;display:flex;align-items:center;justify-content:center;" title="Delete Category">
+            ✕
+          </button>
+        </form>
+      {% endif %}
     </div>
-    {% else %}
-    <div class="empty-state">
-      <i class="fas fa-users"></i>
-      <h3>No participants{% if search %} matching "{{ search }}"{% endif %}</h3>
-      <p>{% if search %}Try a different search.{% else %}Import participants to get started.{% endif %}</p>
-      {% if not search %}<a href="{% url 'participants_upload' %}" class="btn btn-primary">Import Participants</a>{% endif %}
-    </div>
-    {% endif %}
+  {% endfor %}
+
+  {% if selected_category %}
+    <form method="post" style="margin-left:auto;">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="delete_entire_category">
+      <input type="hidden" name="category_name" value="{{ selected_category }}">
+      <button type="submit" class="btn btn-sm btn-danger" onclick="return confirm('WARNING: This will PERMANENTLY DELETE the category \'{{ selected_category }}\' and ALL participants inside it! Are you sure?');">
+        <i class="fas fa-trash-can"></i> Delete Category '{{ selected_category }}' &amp; All Its Users
+      </button>
+    </form>
+  {% endif %}
+</div>
+
+<!-- Modal for Adding Category -->
+<div id="add-cat-modal" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);z-index:999;align-items:center;justify-content:center;">
+  <div style="background:#fff;border-radius:16px;padding:24px;width:100%;max-width:420px;box-shadow:0 20px 25px -5px rgba(0,0,0,0.1);">
+    <h3 style="margin-top:0;margin-bottom:8px;font-size:18px;">Create Custom Category</h3>
+    <p style="font-size:13px;color:var(--text-tertiary);margin-bottom:16px;">Add a new category name to group participants.</p>
+    <form method="post">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="add_category">
+      <label class="form-label" style="font-weight:700;">Category Name *</label>
+      <input type="text" name="new_category_name" required placeholder="e.g. Sponsor Delegate, Exhibitor" class="form-control" style="margin-bottom:20px;">
+      <div style="display:flex;justify-content:flex-end;gap:10px;">
+        <button type="button" onclick="document.getElementById('add-cat-modal').style.display='none';" class="btn btn-secondary">Cancel</button>
+        <button type="submit" class="btn btn-primary"><i class="fas fa-check"></i> Create Category</button>
+      </div>
+    </form>
   </div>
 </div>
+
+<!-- Form wrapper for Bulk Actions -->
+<form method="post" id="bulk-form">
+  {% csrf_token %}
+  <input type="hidden" name="action" value="bulk_delete">
+
+  <!-- Bulk Action Bar -->
+  <div id="bulk-action-bar" style="display:none;align-items:center;justify-content:space-between;background:#fee2e2;border:1px solid #fca5a5;padding:10px 16px;border-radius:10px;margin-bottom:16px;">
+    <span style="color:#991b1b;font-weight:700;font-size:14px;">
+      <i class="fas fa-check-square"></i> <span id="selected-count">0</span> participant(s) selected
+    </span>
+    <button type="submit" class="btn btn-sm btn-danger" onclick="return confirm('Delete selected participant(s)?');">
+      <i class="fas fa-trash-can"></i> Delete Selected
+    </button>
+  </div>
+
+  <div class="card">
+    <div class="card-body" style="padding:0;">
+      {% if participants %}
+      <div style="overflow-x:auto;">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th style="width:40px;text-align:center;">
+                <input type="checkbox" id="select-all" onclick="toggleSelectAll(this)" style="cursor:pointer;width:16px;height:16px;">
+              </th>
+              <th>Name</th>
+              <th>Category</th>
+              <th>Email</th>
+              <th>Reg ID</th>
+              <th>Temp Password</th>
+              <th>Affiliation</th>
+              <th>Check-In</th>
+              <th>Kit Status</th>
+              <th>Account</th>
+              <th style="width:100px;">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for p in participants %}
+            <tr>
+              <td style="text-align:center;">
+                <input type="checkbox" name="selected_ids" value="{{ p.id }}" class="row-checkbox" onchange="updateBulkBar()" style="cursor:pointer;width:16px;height:16px;">
+              </td>
+              <td style="font-weight:600;">{{ p.get_full_name }}</td>
+              <td>
+                <span class="badge" style="background:#e0e7ff;color:#3730a3;font-weight:700;">
+                  {{ p.category|default:p.get_role_display|default:"Participant" }}
+                </span>
+              </td>
+              <td>{{ p.email }}</td>
+              <td><code>{{ p.registration_id|default:"—" }}</code></td>
+              <td>
+                {% if p.must_change_password and p.temp_password %}
+                  <code style="background:#fef3c7;color:#92400e;padding:2px 6px;border-radius:4px;font-weight:bold;">{{ p.temp_password }}</code>
+                {% else %}
+                  <span style="color:var(--text-tertiary);font-size:12px;">(Password Set)</span>
+                {% endif %}
+              </td>
+              <td>{{ p.affiliation|default:"—" }}</td>
+              <td>
+                {% if p.is_checked_in %}
+                  <span class="badge badge-success" style="background:#d1fae5;color:#059669;font-weight:700;">
+                    <i class="fas fa-check-circle"></i> CHECKED IN
+                  </span>
+                {% else %}
+                  <span class="badge" style="background:#f1f5f9;color:#64748b;font-weight:600;">
+                    <i class="fas fa-clock"></i> PENDING
+                  </span>
+                {% endif %}
+              </td>
+              <td>
+                {% if p.goodies_status == 'received' %}
+                  <span class="badge badge-success" style="background:#d1fae5;color:#059669;font-weight:700;">
+                    <i class="fas fa-gift"></i> Kit Given
+                  </span>
+                {% elif p.goodies_status == 'skipped' %}
+                  <span class="badge badge-warning" style="background:#fef3c7;color:#d97706;font-weight:700;">
+                    <i class="fas fa-exclamation-circle"></i> Skipped
+                  </span>
+                {% else %}
+                  <span class="badge" style="background:#f1f5f9;color:#94a3b8;font-weight:600;">
+                    Not Issued
+                  </span>
+                {% endif %}
+              </td>
+              <td>
+                {% if not p.is_active %}
+                  <span class="badge badge-danger">Suspended</span>
+                {% elif p.must_change_password %}
+                  <span class="badge badge-warning" title="Temporary password active">Pending 1st Login</span>
+                {% else %}
+                  <span class="badge badge-success" title="Password changed by user">Active</span>
+                {% endif %}
+              </td>
+              <td>
+                <div style="display:flex;gap:6px;">
+                  <a href="{% url 'participant_edit' p.pk %}" class="btn btn-sm btn-secondary" title="Edit &amp; Reset Password">
+                    <i class="fas fa-pen"></i>
+                  </a>
+                </div>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}
+      <div class="empty-state">
+        <i class="fas fa-users"></i>
+        <h3>No participants{% if search %} matching "{{ search }}"{% endif %}</h3>
+        <p>{% if search %}Try a different search.{% else %}Import participants to get started.{% endif %}</p>
+        {% if not search %}<a href="{% url 'participants_upload' %}" class="btn btn-primary">Import Participants</a>{% endif %}
+      </div>
+      {% endif %}
+    </div>
+  </div>
+</form>
+
 {% if search and showing != total %}
-<p style="margin-top:12px;font-size:13px;color:var(--text-tertiary);">Showing {{ showing }} of {{ total}} participants.</p>
+<p style="margin-top:12px;font-size:13px;color:var(--text-tertiary);">Showing {{ showing }} of {{ total }} participants.</p>
 {% endif %}
+
+<script>
+function toggleSelectAll(master) {
+  var checkboxes = document.querySelectorAll('.row-checkbox');
+  for (var i = 0; i < checkboxes.length; i++) {
+    checkboxes[i].checked = master.checked;
+  }
+  updateBulkBar();
+}
+
+function updateBulkBar() {
+  var checked = document.querySelectorAll('.row-checkbox:checked');
+  var bar = document.getElementById('bulk-action-bar');
+  var countSpan = document.getElementById('selected-count');
+  
+  if (checked.length > 0) {
+    bar.style.display = 'flex';
+    countSpan.textContent = checked.length;
+  } else {
+    bar.style.display = 'none';
+  }
+}
+</script>
 {% endblock %}

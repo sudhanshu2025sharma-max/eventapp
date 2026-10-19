@@ -174,7 +174,7 @@ function AnimatedFAB({ tab, isActive, onTab }) {
 
 function BottomTabBar({ active, onTab, tabs, networkBadge, bottomInset = 0 }) {
   return (
-    <View style={[st.barWrapper, { bottom: BOTTOM + bottomInset }]} pointerEvents="box-none">
+    <View style={[st.barWrapper, { bottom: bottomInset + 8 }]} pointerEvents="box-none">
       <View style={st.barContainer}>
         {tabs.map((t) => {
           if (t.accent) {
@@ -273,6 +273,11 @@ export default function MainApp({
 
   useEffect(() => { if (tokens) setApiTokens(tokens); }, [tokens]);
   useEffect(() => { if (refreshUser) refreshUser(tokens); }, []);
+
+  // Refresh user permissions when Admin tab is opened (catches permission changes made via web panel)
+  useEffect(() => {
+    if (tab === 'admin' && refreshUser && tokens?.access) refreshUser(tokens);
+  }, [tab]);
 
   useEffect(() => {
     if (user?.warning_note && !user?.warning_acknowledged) {
@@ -527,7 +532,7 @@ export default function MainApp({
   };
 
   return (
-    <View style={{ flex: 1, backgroundColor: COLORS.bg, paddingTop: insets.top }}>
+    <View style={{ flex: 1, backgroundColor: COLORS.bg }}>
       {subScreen ? renderSubScreenContent() : (SCREENS[tab] || SCREENS.home)}
 
       {activeCall && (

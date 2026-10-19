@@ -1,0 +1,88 @@
+{% extends "panel/base.html" %}
+{% block title %}Batch Send Emails — ETD 2026{% endblock %}
+{% block page_title %}Batch Send Credential Emails{% endblock %}
+{% block page_subtitle %}Send login credentials via IIT SMTP (max 30/day){% endblock %}
+
+{% block content %}
+{% if messages %}
+  {% for m in messages %}
+    <div class="alert {% if 'error' in m.tags %}alert-error{% elif 'warning' in m.tags %}alert-warning{% else %}alert-success{% endif %}">
+      {{ m }}
+    </div>
+  {% endfor %}
+{% endif %}
+
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:24px;max-width:900px;">
+  <div class="card">
+    <div class="card-header">
+      <h3>Upload Email List</h3>
+    </div>
+    <div class="card-body">
+      <p style="font-size:13px;color:var(--text-secondary);margin-bottom:16px;line-height:1.6;">
+        Upload a CSV with a single <strong>"Email"</strong> column containing participant emails.
+        The system will match them against imported participants and send credential emails.
+      </p>
+      <form method="post" enctype="multipart/form-data">
+        {% csrf_token %}
+        <div style="margin-bottom:16px;">
+          <label class="form-label">CSV File (Email column required)</label>
+          <input type="file" name="email_csv" accept=".csv" required class="form-control">
+        </div>
+        <button type="submit" class="btn btn-primary" style="width:100%;"
+                onclick="return confirm('Send credential emails to matched participants?')">
+          <i class="fas fa-paper-plane"></i> Send Emails (max {{ remaining }})
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <div>
+    <div class="card" style="margin-bottom:20px;">
+      <div class="card-header"><h3>Today's Email Status</h3></div>
+      <div class="card-body">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+          <div style="text-align:center;padding:16px;background:var(--bg);border-radius:12px;">
+            <div style="font-size:28px;font-weight:800;color:var(--primary);">{{ sent_today }}</div>
+            <div style="font-size:11px;color:var(--text-secondary);font-weight:600;">SENT TODAY</div>
+          </div>
+          <div style="text-align:center;padding:16px;background:{% if remaining > 0 %}#d1fae5{% else %}#fee2e2{% endif %};border-radius:12px;">
+            <div style="font-size:28px;font-weight:800;color:{% if remaining > 0 %}#059669{% else %}#dc2626{% endif %};">{{ remaining }}</div>
+            <div style="font-size:11px;color:var(--text-secondary);font-weight:600;">REMAINING</div>
+          </div>
+        </div>
+        <p style="font-size:12px;color:var(--text-tertiary);margin-top:12px;text-align:center;">
+          IIT SMTP limit: 30 emails per day. Counter resets at midnight.
+        </p>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header"><h3>Pending Credentials</h3></div>
+      <div class="card-body">
+        <div style="text-align:center;padding:12px;">
+          <div style="font-size:28px;font-weight:800;color:#7c3aed;">{{ pending_credentials }}</div>
+          <div style="font-size:12px;color:var(--text-secondary);">
+            imported participants with unsent credentials
+          </div>
+        </div>
+        <a href="{% url 'participants_export_credentials' %}" class="btn btn-secondary" style="width:100%;text-align:center;">
+          <i class="fas fa-file-csv"></i> Download All Credentials CSV
+        </a>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="card" style="margin-top:24px;max-width:900px;">
+  <div class="card-header"><h3>CSV Format Example</h3></div>
+  <div class="card-body">
+    <pre style="background:var(--bg);padding:12px;border-radius:8px;font-size:13px;overflow-x:auto;">Email
+amit.kumar@example.com
+priya.sharma@example.com
+rahul.verma@example.com</pre>
+    <p style="font-size:12px;color:var(--text-tertiary);margin-top:8px;">
+      Only the "Email" column is required. Extra columns are ignored.
+    </p>
+  </div>
+</div>
+{% endblock %}

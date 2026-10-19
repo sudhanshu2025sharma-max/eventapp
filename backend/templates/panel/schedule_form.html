@@ -124,46 +124,108 @@
         {% endif %}
     </div>
 
-    <!-- Add Presentation Slot Form -->
+    <!-- Add/Link Presentation Slot Form -->
     <div id="addPaperForm" style="display:none;padding:16px;border-top:1px solid var(--border);background:var(--bg);">
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;">
-            <div>
-                <label class="form-label">Paper / Submission ID</label>
-                <input class="form-control" id="pPaperId" placeholder="e.g. ETD-2026-042">
+        <!-- Mode Tabs -->
+        <div style="display:flex;gap:8px;margin-bottom:14px;border-bottom:1px solid var(--border);padding-bottom:10px;">
+            <button type="button" id="tabLinkPaper" class="btn btn-sm btn-primary" onclick="setPaperFormMode('link')">
+                <i class="fas fa-link"></i> Link Existing Paper / Poster
+            </button>
+            <button type="button" id="tabCreatePaper" class="btn btn-sm btn-secondary" onclick="setPaperFormMode('create')">
+                <i class="fas fa-plus-circle"></i> Create & Link New
+            </button>
+        </div>
+
+        <!-- LINK EXISTING PAPER MODE -->
+        <div id="paperModeLink">
+            <div style="margin-bottom:12px;">
+                <label class="form-label" style="font-weight:600;display:flex;justify-content:space-between;align-items:center;">
+                    <span>Search Paper / Poster ID or Title</span>
+                    <span style="font-size:11px;color:var(--text-tertiary);font-weight:normal;">Filters list automatically</span>
+                </label>
+                <div style="position:relative;">
+                    <i class="fas fa-search" style="position:absolute;left:12px;top:11px;color:var(--text-tertiary);"></i>
+                    <input type="text" class="form-control" id="pSearchInput" placeholder="Type Paper ID (e.g. ETD-042), title, or author..." onkeyup="filterPaperDropdown()" style="padding-left:34px;">
+                </div>
             </div>
-            <div>
-                <label class="form-label">Type</label>
-                <select class="form-control" id="pType">
-                    <option value="paper">Paper Presentation</option>
-                    <option value="poster">Poster Presentation</option>
+
+            <div style="margin-bottom:12px;">
+                <label class="form-label">Select Paper / Poster *</label>
+                <select class="form-control" id="pSelectPaper" style="font-size:13px;font-family:sans-serif;">
+                    <option value="">-- Choose from Master List --</option>
+                    {% for ap in available_papers %}
+                    <option value="{{ ap.id }}" data-search="{{ ap.paper_id|default:'' }} {{ ap.title }} {{ ap.authors }} {{ ap.track|default:'' }}" {% if ap.session_id == session.id %}selected{% endif %}>
+                        [{% if ap.paper_id %}{{ ap.paper_id }}{% else %}No ID{% endif %}] [{% if ap.paper_type == 'paper' %}Paper{% else %}Poster{% endif %}] {{ ap.title|truncatechars:60 }}{% if ap.session %}{% if ap.session_id == session.id %} ★ (Linked to THIS session){% else %} (Linked to: {{ ap.session.title|truncatechars:25 }}){% endif %}{% else %} (Unassigned){% endif %}
+                    </option>
+                    {% empty %}
+                    <option value="">No available papers in master list</option>
+                    {% endfor %}
                 </select>
+                <div style="font-size:11px;color:var(--text-tertiary);margin-top:4px;">
+                    Don't see your paper? Add its full metadata in <a href="{% url 'accepted_papers_panel' %}" target="_blank" style="color:var(--primary);font-weight:600;">Accepted Papers Manager</a> or switch to 'Create & Link New'.
+                </div>
             </div>
-            <div style="grid-column:1/-1;">
-                <label class="form-label">Paper Title *</label>
-                <input class="form-control" id="pTitle" placeholder="e.g. Transformer Architectures in AI">
+
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px;">
+                <div>
+                    <label class="form-label">Slot Start Time (Optional)</label>
+                    <input type="datetime-local" class="form-control" id="pSlotStart">
+                </div>
+                <div>
+                    <label class="form-label">Slot End Time (Optional)</label>
+                    <input type="datetime-local" class="form-control" id="pSlotEnd">
+                </div>
             </div>
-            <div style="grid-column:1/-1;">
-                <label class="form-label">Authors</label>
-                <input class="form-control" id="pAuthors" placeholder="e.g. A. Sharma, B. Kumar, C. Patel">
-            </div>
-            <div style="grid-column:1/-1;">
-                <label class="form-label">Abstract</label>
-                <textarea class="form-control" id="pAbstract" rows="3" placeholder="Brief summary of presentation"></textarea>
-            </div>
-            <div>
-                <label class="form-label">Slot Start Time</label>
-                <input type="datetime-local" class="form-control" id="pSlotStart">
-            </div>
-            <div>
-                <label class="form-label">Slot End Time</label>
-                <input type="datetime-local" class="form-control" id="pSlotEnd">
+
+            <div style="display:flex;gap:8px;">
+                <button type="button" class="btn btn-primary btn-sm" onclick="savePaper()">
+                    <i class="fas fa-link"></i> Link Presentation Slot
+                </button>
+                <button type="button" class="btn btn-secondary btn-sm" onclick="hideAddPaper()">Cancel</button>
             </div>
         </div>
-        <div style="display:flex;gap:8px;">
-            <button type="button" class="btn btn-primary btn-sm" onclick="savePaper()">
-                <i class="fas fa-check"></i> Save Presentation Slot
-            </button>
-            <button type="button" class="btn btn-secondary btn-sm" onclick="hideAddPaper()">Cancel</button>
+
+        <!-- CREATE NEW PAPER MODE (FALLBACK) -->
+        <div id="paperModeCreate" style="display:none;">
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;">
+                <div>
+                    <label class="form-label">Paper / Submission ID</label>
+                    <input class="form-control" id="pPaperId" placeholder="e.g. ETD-2026-042">
+                </div>
+                <div>
+                    <label class="form-label">Type</label>
+                    <select class="form-control" id="pType">
+                        <option value="paper">Paper Presentation</option>
+                        <option value="poster">Poster Presentation</option>
+                    </select>
+                </div>
+                <div style="grid-column:1/-1;">
+                    <label class="form-label">Paper Title *</label>
+                    <input class="form-control" id="pTitle" placeholder="e.g. Transformer Architectures in AI">
+                </div>
+                <div style="grid-column:1/-1;">
+                    <label class="form-label">Authors</label>
+                    <input class="form-control" id="pAuthors" placeholder="e.g. A. Sharma, B. Kumar, C. Patel">
+                </div>
+                <div style="grid-column:1/-1;">
+                    <label class="form-label">Abstract</label>
+                    <textarea class="form-control" id="pAbstract" rows="2" placeholder="Brief summary of presentation"></textarea>
+                </div>
+                <div>
+                    <label class="form-label">Slot Start Time</label>
+                    <input type="datetime-local" class="form-control" id="pSlotStartCreate">
+                </div>
+                <div>
+                    <label class="form-label">Slot End Time</label>
+                    <input type="datetime-local" class="form-control" id="pSlotEndCreate">
+                </div>
+            </div>
+            <div style="display:flex;gap:8px;">
+                <button type="button" class="btn btn-primary btn-sm" onclick="savePaper()">
+                    <i class="fas fa-plus"></i> Create & Link Slot
+                </button>
+                <button type="button" class="btn btn-secondary btn-sm" onclick="hideAddPaper()">Cancel</button>
+            </div>
         </div>
     </div>
 </div>
@@ -403,41 +465,146 @@ async function deleteSub(id) {
     else { alert('Error: ' + data.error); }
 }
 
-function showAddPaper() { document.getElementById('addPaperForm').style.display='block'; document.getElementById('pTitle').focus(); }
-function hideAddPaper() { document.getElementById('addPaperForm').style.display='none'; ['pPaperId','pTitle','pAuthors','pAbstract','pSlotStart','pSlotEnd'].forEach(function(id){ var el = document.getElementById(id); if(el) el.value=''; }); }
+var currentPaperMode = 'link';
+
+function setPaperFormMode(mode) {
+    currentPaperMode = mode;
+    var linkBtn = document.getElementById('tabLinkPaper');
+    var createBtn = document.getElementById('tabCreatePaper');
+    var linkDiv = document.getElementById('paperModeLink');
+    var createDiv = document.getElementById('paperModeCreate');
+
+    if (mode === 'link') {
+        linkBtn.className = 'btn btn-sm btn-primary';
+        createBtn.className = 'btn btn-sm btn-secondary';
+        linkDiv.style.display = 'block';
+        createDiv.style.display = 'none';
+        document.getElementById('pSearchInput').focus();
+    } else {
+        linkBtn.className = 'btn btn-sm btn-secondary';
+        createBtn.className = 'btn btn-sm btn-primary';
+        linkDiv.style.display = 'none';
+        createDiv.style.display = 'block';
+        document.getElementById('pTitle').focus();
+    }
+}
+
+function filterPaperDropdown() {
+    var q = document.getElementById('pSearchInput').value.toLowerCase().trim();
+    var select = document.getElementById('pSelectPaper');
+    var options = select.options;
+    var visibleCount = 0;
+
+    for (var i = 0; i < options.length; i++) {
+        var opt = options[i];
+        if (!opt.value) continue; // Skip header option
+        var searchData = (opt.getAttribute('data-search') || opt.text).toLowerCase();
+        if (!q || searchData.indexOf(q) !== -1) {
+            opt.style.display = '';
+            visibleCount++;
+        } else {
+            opt.style.display = 'none';
+        }
+    }
+}
+
+function showAddPaper() {
+    document.getElementById('addPaperForm').style.display = 'block';
+    setPaperFormMode('link');
+}
+
+function hideAddPaper() {
+    document.getElementById('addPaperForm').style.display = 'none';
+    document.getElementById('pSearchInput').value = '';
+    filterPaperDropdown();
+}
+
+var CURRENT_SESSION_ID = '{{ session.id }}';
+
+function checkPaperReassignment() {
+    var select = document.getElementById('pSelectPaper');
+    var selectedOpt = select.options[select.selectedIndex];
+    var warningDiv = document.getElementById('reassignWarning');
+    var warningText = document.getElementById('reassignWarningText');
+
+    if (!selectedOpt || !selectedOpt.value) {
+        warningDiv.style.display = 'none';
+        return;
+    }
+
+    var linkedSessId = selectedOpt.getAttribute('data-session-id');
+    var linkedSessTitle = selectedOpt.getAttribute('data-session-title');
+
+    if (linkedSessId && linkedSessId !== CURRENT_SESSION_ID) {
+        warningText.innerText = 'Attention: This paper is currently assigned to "' + linkedSessTitle + '". Linking it here will move it to this session.';
+        warningDiv.style.display = 'block';
+    } else {
+        warningDiv.style.display = 'none';
+    }
+}
 
 async function savePaper() {
-    var title = document.getElementById('pTitle').value.trim();
-    if (!title) { alert('Paper Title is required'); return; }
-    var body = {
-        paper_id: document.getElementById('pPaperId').value.trim(),
-        paper_type: document.getElementById('pType').value,
-        title: title,
-        authors: document.getElementById('pAuthors').value.trim(),
-        abstract: document.getElementById('pAbstract').value.trim(),
-        slot_start: document.getElementById('pSlotStart').value || null,
-        slot_end: document.getElementById('pSlotEnd').value || null,
-    };
+    var body = {};
+    if (currentPaperMode === 'link') {
+        var select = document.getElementById('pSelectPaper');
+        var paperUuid = select.value;
+        if (!paperUuid) {
+            alert('Please select a paper from the master list.');
+            return;
+        }
+
+        var selectedOpt = select.options[select.selectedIndex];
+        var linkedSessId = selectedOpt.getAttribute('data-session-id');
+        var linkedSessTitle = selectedOpt.getAttribute('data-session-title');
+
+        if (linkedSessId && linkedSessId !== CURRENT_SESSION_ID) {
+            if (!confirm('This paper is currently assigned to "' + linkedSessTitle + '". Do you want to move it to this session?')) {
+                return;
+            }
+        }
+
+        body.existing_paper_id = paperUuid;
+        body.slot_start = document.getElementById('pSlotStart').value || null;
+        body.slot_end = document.getElementById('pSlotEnd').value || null;
+    } else {
+        var title = document.getElementById('pTitle').value.trim();
+        if (!title) { alert('Paper Title is required'); return; }
+        body.paper_id = document.getElementById('pPaperId').value.trim();
+        body.paper_type = document.getElementById('pType').value;
+        body.title = title;
+        body.authors = document.getElementById('pAuthors').value.trim();
+        body.abstract = document.getElementById('pAbstract').value.trim();
+        body.slot_start = document.getElementById('pSlotStartCreate').value || null;
+        body.slot_end = document.getElementById('pSlotEndCreate').value || null;
+    }
+
     var res = await fetch('/panel/schedule/' + SESSION_PK + '/papers/add/', {
-        method: 'POST', headers: {'Content-Type': 'application/json', 'X-CSRFToken': CSRF}, body: JSON.stringify(body)
+        method: 'POST',
+        headers: {'Content-Type': 'application/json', 'X-CSRFToken': CSRF},
+        body: JSON.stringify(body)
     });
     var data = await res.json();
-    if (data.success) { location.reload(); }
-    else { alert('Error: ' + data.error); }
+    if (data.success) {
+        location.reload();
+    } else {
+        alert('Validation Error: ' + (data.error || 'Failed to link paper'));
+    }
 }
 
 async function deletePaper(id) {
-    if (!confirm('Remove this presentation slot?')) return;
+    if (!confirm('Unlink this presentation slot from schedule? (Paper will remain in master database)')) return;
     var res = await fetch('/panel/schedule/papers/' + id + '/delete/', {
-        method: 'POST', headers: {'X-CSRFToken': CSRF}
+        method: 'POST',
+        headers: {'X-CSRFToken': CSRF}
     });
     var data = await res.json();
     if (data.success) { 
         var row = document.getElementById('paperRow' + id);
         if (row) row.remove();
         location.reload();
+    } else {
+        alert('Error: ' + data.error);
     }
-    else { alert('Error: ' + data.error); }
 }
 {% endif %}
 </script>

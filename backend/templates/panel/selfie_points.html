@@ -371,6 +371,21 @@
                         {% if p.is_active %}<span class="badge badge-success">Active</span>{% else %}<span class="badge badge-secondary">Disabled</span>{% endif %}
                     </td>
                     <td style="text-align:right;">
+                        <button type="button" class="btn btn-sm btn-secondary" style="font-size:11px; padding:4px 8px; color:#2563EB; margin-right:2px;"
+                            <i class="fas fa-edit"></i>
+                        </button>
+                        <button type="button" class="btn btn-sm btn-secondary edit-cp-btn" style="font-size:11px; padding:4px 8px; color:#2563EB; margin-right:2px;"
+                            data-pk="{{ p.pk }}" data-name="{{ p.name }}" data-desc="{{ p.description|default:'' }}"
+                            data-type="{{ p.checkpoint_type }}"
+                            data-lat="{{ p.latitude|default:'' }}" data-lng="{{ p.longitude|default:'' }}"
+                            data-rad="{{ p.radius_meters }}"
+                            data-alat="{{ p.point_a_lat|default:'' }}" data-alng="{{ p.point_a_lng|default:'' }}"
+                            data-blat="{{ p.point_b_lat|default:'' }}" data-blng="{{ p.point_b_lng|default:'' }}"
+                            data-cw="{{ p.corridor_width_meters }}" data-pts="{{ p.points }}"
+                            data-active="{{ p.is_active|yesno:'1,0' }}"
+                            data-sponsors="{% for s in p.sponsors.all %}{{ s.pk }}{% if not forloop.last %},{% endif %}{% endfor %}">
+                            <i class="fas fa-edit"></i>
+                        </button>
                         <form method="post" style="display:inline;">
                             {% csrf_token %}
                             <input type="hidden" name="action" value="toggle">
@@ -394,6 +409,100 @@
         </table>
     </div>
 </div>
+
+
+
+
+<!-- Edit Checkpoint Modal -->
+<div id="editCpModal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.5); z-index:9999; align-items:center; justify-content:center;">
+  <div style="background:#fff; border-radius:14px; padding:24px; width:580px; max-width:95vw; max-height:90vh; overflow-y:auto;">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
+      <h3 style="margin:0; font-size:18px; font-weight:700;">Edit Checkpoint</h3>
+      <button type="button" onclick="document.getElementById('editCpModal').style.display='none'" style="background:none; border:none; font-size:20px; cursor:pointer;">&times;</button>
+    </div>
+    <form method="post" enctype="multipart/form-data">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="edit">
+      <input type="hidden" name="pk" id="ec_pk">
+      <div class="form-group-premium"><label class="form-label-premium">Name *</label><input class="form-control-premium" name="name" id="ec_name" required></div>
+      <div class="form-group-premium"><label class="form-label-premium">Description</label><textarea class="form-control-premium" name="description" id="ec_desc" rows="2"></textarea></div>
+      <div id="ec_selfie_fields">
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;" class="form-group-premium">
+          <div><label class="form-label-premium">Latitude</label><input class="form-control-premium" name="latitude" id="ec_lat" type="number" step="any"></div>
+          <div><label class="form-label-premium">Longitude</label><input class="form-control-premium" name="longitude" id="ec_lng" type="number" step="any"></div>
+        </div>
+        <div class="form-group-premium"><label class="form-label-premium">Radius (m)</label><input class="form-control-premium" name="radius_meters" id="ec_radius" type="number" value="20"></div>
+      </div>
+      <div id="ec_sponsor_fields" style="display:none;">
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;" class="form-group-premium">
+          <div><label class="form-label-premium">Point A Lat</label><input class="form-control-premium" name="point_a_lat" id="ec_a_lat" type="number" step="any"></div>
+          <div><label class="form-label-premium">Point A Lng</label><input class="form-control-premium" name="point_a_lng" id="ec_a_lng" type="number" step="any"></div>
+        </div>
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;" class="form-group-premium">
+          <div><label class="form-label-premium">Point B Lat</label><input class="form-control-premium" name="point_b_lat" id="ec_b_lat" type="number" step="any"></div>
+          <div><label class="form-label-premium">Point B Lng</label><input class="form-control-premium" name="point_b_lng" id="ec_b_lng" type="number" step="any"></div>
+        </div>
+        <div class="form-group-premium"><label class="form-label-premium">Corridor Width (m)</label><input class="form-control-premium" name="corridor_width_meters" id="ec_cw" type="number" value="30"></div>
+        <div class="form-group-premium">
+          <label class="form-label-premium">Sponsors in this Zone — <span id="ec_sp_count" style="color:var(--primary);">0</span> selected</label>
+          <div id="ec_sponsor_list" style="max-height:160px; overflow-y:auto; border:1px solid var(--border); border-radius:8px; padding:10px; background:var(--bg);">
+            {% for s in all_sponsors %}
+            <label style="display:flex; align-items:center; gap:8px; padding:5px 0; font-size:13px; cursor:pointer; border-bottom:1px solid var(--border-light);">
+              <input type="checkbox" name="sponsors" value="{{ s.pk }}" class="ec-sp-cb"> {{ s.name }}
+            </label>
+            {% empty %}
+            <div style="color:var(--text-sec); font-size:12px; padding:8px 0;">No sponsors added yet.</div>
+            {% endfor %}
+          </div>
+        </div>
+      </div>
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;" class="form-group-premium">
+        <div><label class="form-label-premium">Points</label><input class="form-control-premium" name="points" id="ec_pts" type="number" required></div>
+        <div><label class="form-label-premium">Active</label><br><input type="checkbox" name="is_active" id="ec_active" style="margin-top:8px;"> <span style="font-size:12px; color:var(--text-sec);">Enabled</span></div>
+      </div>
+      <div class="form-group-premium"><label class="form-label-premium">Replace Photos (optional)</label><input type="file" class="form-control-premium" name="sample_photos" accept="image/*" multiple style="padding:6px;"></div>
+      <div style="text-align:right; margin-top:12px;">
+        <button type="button" onclick="document.getElementById('editCpModal').style.display='none'" class="btn btn-sm btn-secondary" style="margin-right:8px;">Cancel</button>
+        <button type="submit" class="btn btn-sm" style="background:var(--primary); color:#fff; padding:8px 20px; border-radius:8px; border:none; font-weight:700;">Save Changes</button>
+      </div>
+    </form>
+  </div>
+</div>
+<script>
+document.addEventListener('click', function(e) {
+  var btn = e.target.closest('.edit-cp-btn');
+  if (!btn) return;
+  var d = btn.dataset;
+  document.getElementById('ec_pk').value = d.pk;
+  document.getElementById('ec_name').value = d.name;
+  document.getElementById('ec_desc').value = d.desc;
+  document.getElementById('ec_lat').value = d.lat;
+  document.getElementById('ec_lng').value = d.lng;
+  document.getElementById('ec_radius').value = d.rad;
+  document.getElementById('ec_a_lat').value = d.alat;
+  document.getElementById('ec_a_lng').value = d.alng;
+  document.getElementById('ec_b_lat').value = d.blat;
+  document.getElementById('ec_b_lng').value = d.blng;
+  document.getElementById('ec_cw').value = d.cw;
+  document.getElementById('ec_pts').value = d.pts;
+  document.getElementById('ec_active').checked = (d.active === '1');
+  document.getElementById('ec_selfie_fields').style.display = (d.type === 'selfie') ? 'block' : 'none';
+  document.getElementById('ec_sponsor_fields').style.display = (d.type === 'sponsor_zone') ? 'block' : 'none';
+  var selected = d.sponsors ? d.sponsors.split(',').filter(Boolean) : [];
+  var count = 0;
+  document.querySelectorAll('.ec-sp-cb').forEach(function(cb) {
+    cb.checked = selected.indexOf(cb.value) !== -1;
+    if (cb.checked) count++;
+  });
+  document.getElementById('ec_sp_count').textContent = count;
+  document.getElementById('editCpModal').style.display = 'flex';
+});
+document.addEventListener('change', function(e) {
+  if (e.target.classList.contains('ec-sp-cb')) {
+    document.getElementById('ec_sp_count').textContent = document.querySelectorAll('.ec-sp-cb:checked').length;
+  }
+});
+</script>
 
 <!-- Attendee Check-In Submissions -->
 <div class="premium-table-card">

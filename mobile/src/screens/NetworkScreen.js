@@ -43,6 +43,7 @@ if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental
 const _memCache = {
   attendees: null,
   speakers: null,
+  organizers: null,
   interests: null,
   discover: null,
 };
@@ -683,6 +684,7 @@ export default function NetworkScreen({
 
   const [attendees, setAttendees] = useState(_memCache.attendees || []);
   const [speakers, setSpeakers] = useState(_memCache.speakers || []);
+  const [organizers, setOrganizers] = useState(_memCache.organizers || []);
   const [interests, setInterests] = useState(_memCache.interests || []);
   const [discover, setDiscover] = useState(_memCache.discover || null);
   const [spotIdx, setSpotIdx] = useState(0);
@@ -765,10 +767,23 @@ export default function NetworkScreen({
         setIsCheckedIn(d.is_checked_in);
       }
       const list = (d.attendees || [])
-        .filter(a => a.role !== 'speaker')
+        .filter(a => a.role !== 'speaker' && !['super_admin', 'mgmt_admin', 'team_head', 'staff'].includes(a.role))
         .map(a => ({ ...a, profile_photo_url: fixMediaUrl(a.profile_photo_url) }));
 
       setAttendees(list);
+
+      if (Array.isArray(d.organizers) && d.organizers.length > 0) {
+        const orgList = d.organizers.map(o => ({ ...o, profile_photo_url: fixMediaUrl(o.profile_photo_url) }));
+        setOrganizers(orgList);
+        _memCache.organizers = orgList;
+      }
+
+      if (!isFiltered && Array.isArray(d.speakers)) {
+        const spkList = d.speakers.map(s => ({ ...s, profile_photo_url: fixMediaUrl(s.profile_photo_url) }));
+        setSpeakers(spkList);
+        _memCache.speakers = spkList;
+        setNetCache('speakers', spkList);
+      }
 
       if (!isFiltered) {
         const interests = d.interests || [];
@@ -778,7 +793,8 @@ export default function NetworkScreen({
         setNetCache('attendees', { list, interests });
       }
 
-      loadStatuses(list.map(a => a.id).filter(id => id !== user?.id));
+      loadStatuses([...new Set([...list, ...(d.speakers || []), ...(d.organizers || [])]
+        .map(a => a.id).filter(id => id !== user?.id))]);
       return list;
     } catch { return _memCache.attendees || []; }
   }, [tokens, user?.id, loadStatuses]);
@@ -839,7 +855,7 @@ export default function NetworkScreen({
 
   useEffect(() => {
     (async () => {
-      await verifyCheckInStatus();
+      verifyCheckInStatus();
       const [ca, cs, cd] = await Promise.all([
         getNetCache('attendees'),
         getNetCache('speakers'),
@@ -849,12 +865,11 @@ export default function NetworkScreen({
       if (cs) { _memCache.speakers = cs; setSpeakers(cs); }
       if (cd) { _memCache.discover = cd; setDiscover(cd); }
 
-      setLoading(true);
+      setLoading(!(_memCache.attendees?.length || ca?.list?.length));
       await Promise.all([
         fetchBlockedIds(),
         fetchAttendeesList('', '', false),
         fetchDiscoverData(),
-        fetchSpeakersList('', false),
       ]);
       setLoading(false);
     })();
@@ -959,17 +974,18 @@ export default function NetworkScreen({
     return blockedUserIds.has(String(id)) || connStatus[id]?.status === 'blocked';
   }, [blockedUserIds, connStatus]);
 
-  const visibleAttendees = useMemo(() => attendees.filter(a => !isBlocked(a.id)), [attendees, isBlocked]);
+  const visibleAttendees = useMemo(() => attendees.filter(a => !isBlocked(a.id) && a.role !== 'speaker' && !['super_admin', 'mgmt_admin', 'team_head', 'staff'].includes(a.role)), [attendees, isBlocked]);
   const visibleSpeakers = useMemo(() => speakers.filter(s => !isBlocked(s.id)), [speakers, isBlocked]);
+  const visibleOrganizers = useMemo(() => organizers.filter(o => !isBlocked(o.id)), [organizers, isBlocked]);
   const visibleMatches = useMemo(() => (discover?.matches || []).filter(m => !isBlocked(m.id)), [discover?.matches, isBlocked]);
 
   const universeParticipants = useMemo(() => {
     const map = new Map();
-    [...visibleAttendees, ...visibleSpeakers].forEach(p => {
+    [...visibleAttendees, ...visibleSpeakers, ...visibleOrganizers].forEach(p => {
       if (p?.id && !map.has(p.id)) map.set(p.id, p);
     });
     return Array.from(map.values());
-  }, [visibleAttendees, visibleSpeakers]);
+  }, [visibleAttendees, visibleSpeakers, visibleOrganizers]);
 
   if (!isCheckedIn) {
     return (

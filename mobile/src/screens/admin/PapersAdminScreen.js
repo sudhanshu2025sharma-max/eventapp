@@ -14,6 +14,7 @@ export default function PapersAdminScreen({ onBack }) {
   const [showForm, setShowForm] = useState(false);
   const [saving, setSaving] = useState(false);
   const [filter, setFilter] = useState('all');
+  const [editingId, setEditingId] = useState(null);
 
   const [title, setTitle] = useState('');
   const [authors, setAuthors] = useState('');
@@ -31,7 +32,7 @@ export default function PapersAdminScreen({ onBack }) {
       const res = await apiFetch('/schedule/admin/papers/');
       if (res.ok) {
         const d = await res.json();
-        setPapers(d.papers || []);
+        setPapers(d.papers || d.results || []);
       }
     } catch (e) {
       console.warn(e);
@@ -45,7 +46,22 @@ export default function PapersAdminScreen({ onBack }) {
   const resetForm = () => {
     setTitle(''); setAuthors(''); setPaperId(''); setType('paper');
     setDate(''); setTime(''); setAbstract(''); setTrack(''); setDoc(null);
+    setEditingId(null);
     setShowForm(false);
+  };
+
+  const handleEdit = (p) => {
+    setEditingId(p.id);
+    setTitle(p.title || '');
+    setAuthors(p.authors || '');
+    setPaperId(p.paper_id || '');
+    setType(p.paper_type || 'paper');
+    setDate(p.slot_start || '');
+    setTime(p.slot_end || '');
+    setAbstract(p.abstract || '');
+    setTrack(p.track || '');
+    setDoc(null);
+    setShowForm(true);
   };
 
   const handlePickDoc = async () => {
@@ -68,12 +84,13 @@ export default function PapersAdminScreen({ onBack }) {
     setSaving(true);
     try {
       const f = new FormData();
+      if (editingId) f.append('id', editingId);
       f.append('title', title.trim());
       f.append('authors', authors.trim());
       f.append('paper_id', paperId.trim());
       f.append('paper_type', type);
-      f.append('presentation_date', date.trim());
-      f.append('presentation_time', time.trim());
+      f.append('slot_start', date.trim());
+      f.append('slot_end', time.trim());
       f.append('abstract', abstract.trim());
       f.append('track', track.trim());
       if (doc) {
@@ -83,10 +100,11 @@ export default function PapersAdminScreen({ onBack }) {
           type: doc.mimeType || 'application/pdf',
         });
       }
-      const res = await apiFetch('/schedule/admin/papers/', { method: 'POST', body: f });
+      const method = editingId ? 'PATCH' : 'POST';
+      const res = await apiFetch('/schedule/admin/papers/', { method, body: f });
       const d = await res.json().catch(() => ({}));
       if (res.ok && d.success !== false) {
-        Alert.alert('Success', 'Submission saved.');
+        Alert.alert('Success', editingId ? 'Paper updated.' : 'Paper saved.');
         resetForm();
         fetchPapers();
       } else {
@@ -126,7 +144,7 @@ export default function PapersAdminScreen({ onBack }) {
           <Ionicons name="arrow-back" size={24} color="#fff" />
         </TouchableOpacity>
         <Text style={s.headerTitle}>Papers & Posters</Text>
-        <TouchableOpacity onPress={() => setShowForm(true)} style={s.addBtn}>
+        <TouchableOpacity onPress={() => { setEditingId(null); setShowForm(true); }} style={s.addBtn}>
           <Ionicons name="add" size={22} color="#fff" />
         </TouchableOpacity>
       </View>
@@ -153,13 +171,20 @@ export default function PapersAdminScreen({ onBack }) {
                 <View style={{ flexDirection: 'row', gap: 6, marginBottom: 4 }}>
                   <Text style={s.badge}>{p.paper_type}</Text>
                   {!!p.paper_id && <Text style={s.pid}>{p.paper_id}</Text>}
+                  {p.is_published === false && <Text style={s.draftBadge}>DRAFT</Text>}
                 </View>
                 <Text style={s.title}>{p.title}</Text>
                 <Text style={s.auth} numberOfLines={2}>{p.authors}</Text>
+                {!!p.track && <Text style={s.track}>{p.track}</Text>}
               </View>
-              <TouchableOpacity onPress={() => handleDelete(p.id, p.title)} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
-                <Ionicons name="trash-outline" size={20} color={COLORS.error || '#ef4444'} />
-              </TouchableOpacity>
+              <View style={{ flexDirection: 'column', gap: 12, marginLeft: 8 }}>
+                <TouchableOpacity onPress={() => handleEdit(p)} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
+                  <Ionicons name="create-outline" size={20} color={COLORS.brand || '#0333b6'} />
+                </TouchableOpacity>
+                <TouchableOpacity onPress={() => handleDelete(p.id, p.title)} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
+                  <Ionicons name="trash-outline" size={20} color={COLORS.error || '#ef4444'} />
+                </TouchableOpacity>
+              </View>
             </View>
           ))}
         </ScrollView>
@@ -171,7 +196,9 @@ export default function PapersAdminScreen({ onBack }) {
             <TouchableOpacity onPress={resetForm} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
               <Ionicons name="close" size={26} color={COLORS.text} />
             </TouchableOpacity>
-            <Text style={[s.headerTitle, { color: COLORS.text }]}>Add Submission</Text>
+            <Text style={[s.headerTitle, { color: COLORS.text }]}>
+              {editingId ? 'Edit Submission' : 'Add Submission'}
+            </Text>
             <View style={{ width: 26 }} />
           </View>
           <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 40 + BOTTOM }} keyboardShouldPersistTaps="handled">
@@ -191,21 +218,21 @@ export default function PapersAdminScreen({ onBack }) {
             <TextInput style={s.input} value={paperId} onChangeText={setPaperId} placeholder="ETD-042" />
             <Text style={s.label}>Track</Text>
             <TextInput style={s.input} value={track} onChangeText={setTrack} placeholder="AI & ETDs" />
-            <Text style={s.label}>Date (YYYY-MM-DD)</Text>
-            <TextInput style={s.input} value={date} onChangeText={setDate} placeholder="2026-10-24" />
-            <Text style={s.label}>Time / Room</Text>
-            <TextInput style={s.input} value={time} onChangeText={setTime} placeholder="11:15 AM @ Hall A" />
+            <Text style={s.label}>Date / Slot Start</Text>
+            <TextInput style={s.input} value={date} onChangeText={setDate} placeholder="2026-10-24 or datetime" />
+            <Text style={s.label}>Time / Slot End</Text>
+            <TextInput style={s.input} value={time} onChangeText={setTime} placeholder="11:15 AM or datetime" />
             <Text style={s.label}>Abstract</Text>
             <TextInput style={[s.input, { height: 90, textAlignVertical: 'top' }]} value={abstract} onChangeText={setAbstract} multiline />
             <Text style={s.label}>Document (PDF)</Text>
             <TouchableOpacity style={s.upload} onPress={handlePickDoc}>
               <Ionicons name="document-attach" size={18} color={doc ? COLORS.success : COLORS.brand} />
               <Text style={{ color: doc ? COLORS.success : COLORS.brand, fontWeight: '700', flex: 1 }} numberOfLines={1}>
-                {doc ? doc.name : 'Select PDF / Word file'}
+                {doc ? doc.name : editingId ? 'Leave blank to keep existing' : 'Select PDF / Word file'}
               </Text>
             </TouchableOpacity>
             <TouchableOpacity style={s.save} onPress={handleSave} disabled={saving}>
-              {saving ? <ActivityIndicator color="#fff" /> : <Text style={s.saveT}>Save</Text>}
+              {saving ? <ActivityIndicator color="#fff" /> : <Text style={s.saveT}>{editingId ? 'Update' : 'Save'}</Text>}
             </TouchableOpacity>
           </ScrollView>
         </View>
@@ -232,9 +259,11 @@ const s = StyleSheet.create({
     padding: 14, borderRadius: 12, marginBottom: 10, borderWidth: 1, borderColor: '#e2e8f0',
   },
   badge: { fontSize: 10, fontWeight: '800', color: '#0f766e', backgroundColor: '#ccfbf1', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, overflow: 'hidden', textTransform: 'uppercase' },
+  draftBadge: { fontSize: 10, fontWeight: '800', color: '#b45309', backgroundColor: '#fef3c7', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, overflow: 'hidden' },
   pid: { fontSize: 10, fontWeight: '700', color: '#94a3b8', fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace' },
   title: { fontSize: 14, fontWeight: '800', color: '#0f172a' },
   auth: { fontSize: 12, color: '#64748b', marginTop: 2 },
+  track: { fontSize: 11, color: '#8b5cf6', marginTop: 2, fontWeight: '600' },
   empty: { textAlign: 'center', color: '#94a3b8', marginTop: 40 },
   label: { fontSize: 12, fontWeight: '700', color: '#64748b', marginBottom: 6, marginTop: 4 },
   input: { borderWidth: 1, borderColor: '#e2e8f0', borderRadius: 10, padding: 12, marginBottom: 12, backgroundColor: '#fff', fontSize: 14 },

@@ -48,6 +48,61 @@
 .badge-poster { background: #FFE4E6; color: #BE123C; }
 </style>
 
+<!-- Edit Paper Modal -->
+<div id="editPaperModal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.5); z-index:9999; align-items:center; justify-content:center;">
+  <div style="background:#fff; border-radius:14px; padding:24px; width:640px; max-width:95vw; max-height:90vh; overflow-y:auto;">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
+      <h3 style="margin:0; font-size:18px; font-weight:700;">Edit Paper / Poster</h3>
+      <button type="button" onclick="document.getElementById('editPaperModal').style.display='none'" style="background:none; border:none; font-size:20px; cursor:pointer;">&times;</button>
+    </div>
+    <form method="post" enctype="multipart/form-data">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="edit">
+      <input type="hidden" name="pk" id="ep_pk">
+      <div class="grid-3">
+        <div class="form-group"><label>Type</label><select name="paper_type" id="ep_type" class="form-control"><option value="paper">Paper</option><option value="poster">Poster</option></select></div>
+        <div class="form-group"><label>Paper ID</label><input type="text" name="paper_id" id="ep_pid" class="form-control"></div>
+        <div class="form-group"><label>Track</label><input type="text" name="track" id="ep_track" class="form-control"></div>
+      </div>
+      <div class="form-group"><label>Title *</label><input type="text" name="title" id="ep_title" class="form-control" required></div>
+      <div class="form-group"><label>Authors *</label><input type="text" name="authors" id="ep_authors" class="form-control" required></div>
+      <div class="grid-2">
+        <div class="form-group"><label>Session</label><select name="session_id" id="ep_session" class="form-control"><option value="">— None —</option>{% for s in sessions %}<option value="{{ s.pk }}">Day {{ s.day }} · {{ s.title }} ({{ s.room }})</option>{% endfor %}</select></div>
+        <div class="form-group"><label>PDF URL</label><input type="url" name="pdf_url" id="ep_pdf" class="form-control"></div>
+      </div>
+      <div class="grid-2">
+        <div class="form-group"><label>Slot Start</label><input type="time" name="slot_start" id="ep_slots" class="form-control"></div>
+        <div class="form-group"><label>Slot End</label><input type="time" name="slot_end" id="ep_slote" class="form-control"></div>
+      </div>
+      <div class="form-group"><label>Abstract</label><textarea name="abstract" id="ep_abstract" class="form-control" rows="3"></textarea></div>
+      <div class="form-group"><label>Replace Document (optional)</label><input type="file" name="document" class="form-control"></div>
+      <div style="text-align:right; margin-top:12px;">
+        <button type="button" onclick="document.getElementById('editPaperModal').style.display='none'" class="btn btn-sm btn-secondary" style="margin-right:8px;">Cancel</button>
+        <button type="submit" class="btn btn-sm" style="background:#2563EB; color:#fff; padding:8px 20px; border-radius:8px; border:none; font-weight:700;">Save Changes</button>
+      </div>
+    </form>
+  </div>
+</div>
+<script>
+document.addEventListener('click', function(e) {
+  var btn = e.target.closest('.edit-paper-btn');
+  if (!btn) return;
+  var d = btn.dataset;
+  document.getElementById('ep_pk').value = d.pk;
+  document.getElementById('ep_type').value = d.type;
+  document.getElementById('ep_pid').value = d.pid;
+  document.getElementById('ep_title').value = d.title;
+  document.getElementById('ep_authors').value = d.authors;
+  document.getElementById('ep_track').value = d.track;
+  document.getElementById('ep_abstract').value = d.abstract;
+  document.getElementById('ep_pdf').value = d.pdf;
+  document.getElementById('ep_session').value = d.session;
+  document.getElementById('ep_slots').value = d.slots;
+  document.getElementById('ep_slote').value = d.slote;
+  document.getElementById('editPaperModal').style.display = 'flex';
+});
+</script>
+
 <div class="header-banner">
     <div>
         <h2>Accepted Papers & Posters</h2>
@@ -177,6 +232,21 @@
                     {% endif %}
                 </td>
                 <td style="text-align: right;">
+
+                                        <button type="button" class="btn btn-sm btn-secondary edit-paper-btn" style="color:#2563EB; margin-right:4px;"
+                        data-pk="{{ p.pk }}"
+                        data-type="{{ p.paper_type }}"
+                        data-pid="{{ p.paper_id|default:'' }}"
+                        data-title="{{ p.title|escape }}"
+                        data-authors="{{ p.authors|escape }}"
+                        data-track="{{ p.track|default:''|escape }}"
+                        data-abstract="{{ p.abstract|default:''|escape }}"
+                        data-pdf="{{ p.pdf_url|default:'' }}"
+                        data-session="{{ p.session_id|default:'' }}"
+                        data-slots="{{ p.slot_start|time:'H:i' }}"
+                        data-slote="{{ p.slot_end|time:'H:i' }}">
+                        <i class="fas fa-edit"></i>
+                    </button>
                     <form method="post" style="display:inline;" onsubmit="return confirm('Delete item?');">
                         {% csrf_token %}
                         <input type="hidden" name="action" value="delete">

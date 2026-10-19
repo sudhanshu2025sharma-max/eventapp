@@ -158,24 +158,36 @@ function ImageZoomModal({images,initialIndex,onClose}){
   );
 }
 
-function SpotDetailPanel({spot,distance,isInside,isUploading,onClose,onCapture,onNavigate,onExploreZone,onPreview}){
+function SpotDetailPanel({spot,distance,isInside,isUploading,onClose,onCapture,onNavigate,onExploreZone,onPreview,onDeleteSub}){
   const ty=useRef(new Animated.Value(H)).current;
   useEffect(()=>{
     if(spot)Animated.spring(ty,{toValue:0,friction:9,tension:80,useNativeDriver:true}).start();
     else Animated.timing(ty,{toValue:H,duration:200,useNativeDriver:true}).start();
   },[spot]);
   if(!spot)return null;
-  const isSelfie=spot.checkpoint_type==='selfie',sub=spot.submission;
-  const isPend=sub?.status==='pending',isRej=sub?.status==='rejected';
-  const accent=spot.completed?COLORS.success:isSelfie?COLORS.rose:COLORS.brand;
+  const isSelfie=spot.checkpoint_type==='selfie';
 
-  const samplePhotos=useMemo(()=>{
-    if(spot.sample_photo_urls?.length)return spot.sample_photo_urls;
-    if(spot.sample_photo_url)return[spot.sample_photo_url];
-    return[];
-  },[spot]);
+  const userSubmissions = useMemo(() => {
+    if (Array.isArray(spot.submissions) && spot.submissions.length > 0) {
+      return spot.submissions;
+    }
+    if (spot.submission && spot.submission.photo_url) {
+      return [spot.submission];
+    }
+    return [];
+  }, [spot]);
 
-  return(
+  const hasPending = userSubmissions.some(s => s.status === 'pending');
+  const hasRejected = userSubmissions.some(s => s.status === 'rejected');
+  const accent = spot.completed ? COLORS.success : isSelfie ? COLORS.rose : COLORS.brand;
+
+  const samplePhotos = useMemo(() => {
+    if (spot.sample_photo_urls?.length) return spot.sample_photo_urls;
+    if (spot.sample_photo_url) return [spot.sample_photo_url];
+    return [];
+  }, [spot]);
+
+  return (
     <Animated.View style={[$.spPanel,{transform:[{translateY:ty}]}]}>
       <View style={$.spHandleRow}>
         <View style={{flex:1}}/>
@@ -194,6 +206,12 @@ function SpotDetailPanel({spot,distance,isInside,isUploading,onClose,onCapture,o
         <View style={$.spMeta}>
           <View style={$.spPts}><Ionicons name="trophy" size={13} color={COLORS.accentDark}/><Text style={$.spPtsT}>+{spot.points} pts</Text></View>
           <Text style={$.spRad}>{isSelfie?`${spot.radius_meters}m radius`:`${spot.corridor_width_meters}m corridor`}</Text>
+          {isSelfie && (
+            <View style={$.spSubBadge}>
+              <Ionicons name="images-outline" size={12} color={COLORS.brand}/>
+              <Text style={$.spSubBadgeT}>{userSubmissions.length}/5 Uploads</Text>
+            </View>
+          )}
         </View>
 
         <View style={$.spProx}>
@@ -204,14 +222,16 @@ function SpotDetailPanel({spot,distance,isInside,isUploading,onClose,onCapture,o
           </Text>
         </View>
 
-        {(spot.completed||isPend||isRej)&&(
+        {(spot.completed||hasPending||hasRejected)&&(
           <View style={{flexDirection:'row',gap:6,marginTop:8,flexWrap:'wrap'}}>
             {spot.completed&&<View style={$.bDn}><Ionicons name="checkmark-circle" size={12} color={COLORS.success}/><Text style={$.bDnT}>Completed</Text></View>}
-            {isPend&&<View style={$.bPn}><Ionicons name="time" size={12} color={COLORS.accentDark}/><Text style={$.bPnT}>Under Review</Text></View>}
-            {isRej&&<View style={$.bRj}><Ionicons name="close-circle" size={12} color={COLORS.danger}/><Text style={$.bRjT}>Declined</Text></View>}
+            {hasPending&&<View style={$.bPn}><Ionicons name="time" size={12} color={COLORS.accentDark}/><Text style={$.bPnT}>Under Review</Text></View>}
+            {hasRejected&&<View style={$.bRj}><Ionicons name="close-circle" size={12} color={COLORS.danger}/><Text style={$.bRjT}>Declined</Text></View>}
           </View>
         )}
-        {Boolean(isRej&&sub?.rejected_reason)&&<Text style={$.rejR}>"{sub.rejected_reason}"</Text>}
+        {userSubmissions.filter(s => s.status === 'rejected' && s.rejected_reason).map((s, idx) => (
+          <Text key={s.id || idx} style={$.rejR}>"{s.rejected_reason}"</Text>
+        ))}
 
         {isSelfie&&samplePhotos.length>0&&(
           <View style={$.phSec}>
@@ -219,16 +239,45 @@ function SpotDetailPanel({spot,distance,isInside,isUploading,onClose,onCapture,o
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{gap:10,paddingVertical:4}}>
               {samplePhotos.map((url,i)=>(
                 <TouchableOpacity key={i} activeOpacity={0.85} onPress={()=>onPreview?.(samplePhotos,i)} style={$.phBox}>
-                  <Image source={{uri:fixMediaUrl(url)}} style={$.phImg}/>
+                  <Image source={{uri:fixMediaUrl(spot.sample_thumbnail_urls?.[i] || url)}} style={$.phImg} resizeMethod="resize"/>
                   <LinearGradient colors={['transparent','rgba(0,0,0,0.6)']} style={$.phLbl}><Text style={$.phLblT}>Target {i+1}</Text></LinearGradient>
                 </TouchableOpacity>
               ))}
-              {Boolean(sub?.photo_url)&&(
-                <TouchableOpacity activeOpacity={0.85} onPress={()=>onPreview?.([sub.photo_url],0)} style={[$.phBox,{borderColor:spot.completed?COLORS.success:COLORS.accent}]}>
-                  <Image source={{uri:fixMediaUrl(sub.photo_url)}} style={$.phImg}/>
-                  <LinearGradient colors={['transparent',spot.completed?'rgba(16,185,129,0.7)':'rgba(245,158,11,0.7)']} style={$.phLbl}><Text style={$.phLblT}>Yours</Text></LinearGradient>
-                </TouchableOpacity>
-              )}
+            </ScrollView>
+          </View>
+        )}
+
+        {isSelfie && userSubmissions.length > 0 && (
+          <View style={$.phSec}>
+            <View style={{flexDirection:'row',justifyContent:'space-between',alignItems:'center',marginBottom:6}}>
+              <Text style={$.phSecT}>Your Uploads ({userSubmissions.length}/5)</Text>
+            </View>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{gap:10,paddingVertical:4}}>
+              {userSubmissions.map((s, i) => {
+                const isApproved = s.status === 'approved';
+                const isPending = s.status === 'pending';
+                const borderColor = isApproved ? COLORS.success : isPending ? COLORS.accent : COLORS.danger;
+                const statusBg = isApproved ? 'rgba(16,185,129,0.85)' : isPending ? 'rgba(245,158,11,0.85)' : 'rgba(239,68,68,0.85)';
+                const statusText = isApproved ? 'Approved' : isPending ? 'Pending' : 'Declined';
+
+                return (
+                  <View key={s.id || i} style={[$.phBox, { borderColor, borderWidth: 2, position: 'relative' }]}>
+                    <TouchableOpacity activeOpacity={0.85} onPress={() => onPreview?.(userSubmissions.map(u => u.photo_url), i)} style={{flex:1}}>
+                      <Image source={{ uri: fixMediaUrl(s.thumbnail_url || s.photo_url) }} style={$.phImg} resizeMethod="resize" />
+                      <LinearGradient colors={['transparent', statusBg]} style={$.phLbl}>
+                        <Text style={$.phLblT}>{statusText}</Text>
+                      </LinearGradient>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={$.delSubBtn}
+                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                      onPress={() => onDeleteSub?.(s.id)}
+                    >
+                      <Ionicons name="trash-outline" size={13} color="#fff" />
+                    </TouchableOpacity>
+                  </View>
+                );
+              })}
             </ScrollView>
           </View>
         )}
@@ -242,7 +291,7 @@ function SpotDetailPanel({spot,distance,isInside,isUploading,onClose,onCapture,o
                 return(
                   <TouchableOpacity key={sp.id} activeOpacity={0.7} style={$.stGridCard} onPress={()=>onExploreZone?.(sp.id)}>
                     {sp.logo_url
-                      ?<Image source={{uri:fixMediaUrl(sp.logo_url)}} style={$.stGridLogo} resizeMode="contain"/>
+                      ?<Image source={{uri:fixMediaUrl(sp.thumbnail_url || sp.logo_url)}} style={$.stGridLogo} resizeMode="contain" resizeMethod="resize"/>
                       :<LinearGradient colors={g} style={$.stGridLogoFB}><Text style={$.stGridFBT}>{sp.name[0]}</Text></LinearGradient>}
                     <Text style={$.stGridName} numberOfLines={2}>{sp.name}</Text>
                     {Boolean(sp.stall_number)&&<Text style={$.stGridStall}>Stall {sp.stall_number}</Text>}
@@ -262,15 +311,13 @@ function SpotDetailPanel({spot,distance,isInside,isUploading,onClose,onCapture,o
             ?(spot.completed
               ?<View style={$.spDoneBtn}><Ionicons name="checkmark-done-circle" size={16} color={COLORS.success}/><Text style={$.spDoneT}>Completed</Text></View>
               :<View style={$.spAutoBtn}><Ionicons name="radio-outline" size={14} color={COLORS.brand}/><Text style={$.spAutoT}>Walk inside to auto check-in</Text></View>)
-            :!spot.completed&&!isPend
-              ?<TouchableOpacity style={[$.spCapBtn,(!isInside||isUploading)&&{opacity:0.45}]} disabled={!isInside||isUploading} activeOpacity={0.7} onPress={onCapture}>
+            :userSubmissions.length >= 5
+              ?<View style={$.spDoneBtn}><Ionicons name="checkmark-done-circle" size={16} color={COLORS.success}/><Text style={$.spDoneT}>5/5 Max Uploads</Text></View>
+              :<TouchableOpacity style={[$.spCapBtn,(!isInside||isUploading)&&{opacity:0.45}]} disabled={!isInside||isUploading} activeOpacity={0.7} onPress={onCapture}>
                 <LinearGradient colors={isInside?[COLORS.rose,'#be185d']:[COLORS.textTer,'#64748b']} style={$.spCapGrad}>
-                  {isUploading?<ActivityIndicator color="#fff" size="small"/>:<><Ionicons name="camera" size={15} color="#fff"/><Text style={$.spCapT}>{isInside?'Take Selfie':'Get Closer'}</Text></>}
+                  {isUploading?<ActivityIndicator color="#fff" size="small"/>:<><Ionicons name="camera" size={15} color="#fff"/><Text style={$.spCapT}>{isInside?`Take Selfie (${userSubmissions.length}/5)`:'Get Closer'}</Text></>}
                 </LinearGradient>
-              </TouchableOpacity>
-              :isPend
-                ?<View style={$.spPendBtn}><Ionicons name="hourglass-outline" size={15} color={COLORS.accentDark}/><Text style={$.spPendT}>Under Review</Text></View>
-                :<View style={$.spDoneBtn}><Ionicons name="checkmark-done-circle" size={16} color={COLORS.success}/><Text style={$.spDoneT}>Completed</Text></View>}
+              </TouchableOpacity>}
         </View>
       </ScrollView>
     </Animated.View>
@@ -282,7 +329,10 @@ function MissionGridCard({spot,distance,isInside,onPress}){
   const sub=spot.submission,isPend=sub?.status==='pending';
   const sc=useRef(new Animated.Value(1)).current;
   const displayImg=useMemo(()=>{
+    if(sub?.thumbnail_url)return sub.thumbnail_url;
     if(sub?.photo_url)return sub.photo_url;
+    if(spot.sample_thumbnail_urls?.[0])return spot.sample_thumbnail_urls[0];
+    if(spot.sample_thumbnail_url)return spot.sample_thumbnail_url;
     if(spot.sample_photo_urls?.[0])return spot.sample_photo_urls[0];
     if(spot.sample_photo_url)return spot.sample_photo_url.split(',')[0].trim();
     return null;
@@ -626,19 +676,90 @@ try {
     if(!perm.granted){Alert.alert('Camera','Allow camera access.');return}
     
     // SDK 57 array syntax
-    const result=await ImagePicker.launchCameraAsync({mediaTypes:['images'],quality:0.8,allowsEditing:true,aspect:[1,1]});
+    if (spot.submissions_count >= 5) {
+      Alert.alert('Limit Reached', 'You have reached the maximum limit of 5 submissions for this spot.');
+      return;
+    }
+    const result=await ImagePicker.launchCameraAsync({mediaTypes:['images'],quality:0.7,allowsEditing:true,aspect:[1,1],base64:true});
     if(result.canceled||!result.assets?.[0])return;
     const asset=result.assets[0];setUploadingId(spot.id);
     try{
-      const f=new FormData();f.append('selfie_point_id',spot.id);f.append('user_latitude',String(userLocation.latitude));f.append('user_longitude',String(userLocation.longitude));
-      if(Platform.OS==='web'&&asset.file)f.append('image',asset.file,'selfie.jpg');else f.append('image',{uri:asset.uri,type:asset.mimeType||'image/jpeg',name:'selfie.jpg'});
-      const r=await apiFetch('/photos/checkpoint-visit/',{method:'POST',body:f});const d=await r.json();
+      const payload={
+        selfie_point_id: spot.id,
+        user_latitude: String(userLocation.latitude),
+        user_longitude: String(userLocation.longitude),
+        image_base64: asset.base64 ? `data:image/jpeg;base64,${asset.base64}` : null
+      };
+      const r=await apiFetch('/photos/checkpoint-visit/',{
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify(payload)
+      });
+      const d=await r.json();
       if(!r.ok){Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(()=>{});Alert.alert('Failed',d.error||'Try again.');return}
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(()=>{});
       setToast({message:'Selfie submitted! Pending approval.',icon:'📤',color:COLORS.brand});
       setSelectedSpotId(null);fetchSpots();
     }catch{Alert.alert('Error','Upload failed.')}finally{setUploadingId(null)}
   },[userLocation,selfieOpen,fetchSpots]);
+
+  
+  const handleDeleteSubId = useCallback(async (subId, spotName) => {
+    Alert.alert(
+      "Delete Photo",
+      `Are you sure you want to delete this submission for "${spotName}"?`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              const r = await apiFetch(`/photos/checkpoint-submission/id/${subId}/delete/`, { method: 'POST' });
+              const d = await r.json();
+              if (r.ok) {
+                setToast({ message: 'Submission deleted.', icon: '🗑️', color: COLORS.error });
+                fetchSpots();
+              } else {
+                Alert.alert("Error", d.error || "Failed to delete submission.");
+              }
+            } catch (e) {
+              Alert.alert("Error", "Could not connect to server.");
+            }
+          }
+        }
+      ]
+    );
+  }, [fetchSpots]);
+
+  const handleDeleteSubmission = useCallback(async (spot) => {
+    Alert.alert(
+      "Delete Submission",
+      `Are you sure you want to delete your submission for "${spot.name}"?`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              const r = await apiFetch(`/photos/checkpoint-submission/${spot.id}/delete/`, { method: 'POST' });
+              const d = await r.json();
+              if (r.ok) {
+                setToast({ message: 'Submission deleted.', icon: '🗑️', color: COLORS.error });
+                setSelectedSpotId(null);
+                fetchSpots();
+              } else {
+                Alert.alert("Error", d.error || "Failed to delete submission.");
+              }
+            } catch (e) {
+              Alert.alert("Error", "Could not connect to server.");
+            }
+          }
+        }
+      ]
+    );
+  }, [fetchSpots]);
 
   if(detailSponsorId)return<SponsorDetailScreen sponsorId={detailSponsorId} onBack={()=>setDetailSponsorId(null)}/>;
 
@@ -719,6 +840,7 @@ try {
           onNavigate={()=>handleNavigate(selectedSpot)}
           onExploreZone={(id)=>{setSelectedSpotId(null);setDetailSponsorId(id)}}
           onPreview={(imgs,idx)=>setGalleryModal({images:imgs,index:idx})}
+          onDeleteSub={(subId)=>handleDeleteSubId(subId, selectedSpot.name)}
         />
       )}
 
@@ -851,6 +973,9 @@ const $=StyleSheet.create({
   spMeta:{flexDirection:'row',alignItems:'center',gap:12,marginTop:12},
   spPts:{flexDirection:'row',alignItems:'center',gap:4,backgroundColor:COLORS.accentLight,paddingHorizontal:10,paddingVertical:5,borderRadius:RADIUS.sm},
   spPtsT:{fontSize:FONT.sm,fontWeight:FONT.w8,color:COLORS.accentDark},
+  spSubBadge:{flexDirection:'row',alignItems:'center',gap:4,backgroundColor:COLORS.brandLight,paddingHorizontal:8,paddingVertical:4,borderRadius:RADIUS.sm},
+  spSubBadgeT:{fontSize:FONT.xs,fontWeight:FONT.w8,color:COLORS.brand},
+  delSubBtn:{position:'absolute',top:4,right:4,width:22,height:22,borderRadius:11,backgroundColor:'rgba(0,0,0,0.65)',alignItems:'center',justifyContent:'center',zIndex:10},
   spRad:{fontSize:FONT.xs,color:COLORS.textTer},
   spProx:{marginTop:14,backgroundColor:COLORS.bgAlt,borderRadius:RADIUS.md,padding:12},
   proxTrack:{height:4,backgroundColor:COLORS.border,borderRadius:2,overflow:'hidden'},

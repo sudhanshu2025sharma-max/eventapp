@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import {
   View, Text, TouchableOpacity, ScrollView,
   TextInput, StyleSheet, Platform, KeyboardAvoidingView,
-  BackHandler,
+  BackHandler, Modal,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS, FONT, SPACE, RADIUS, SHADOW } from '../theme';
@@ -33,8 +33,6 @@ export default function TopicPickerModal({ visible, onClose, onConfirm, title = 
     return () => handler.remove();
   }, [visible]);
 
-  if (!visible) return null;
-
   const handleConfirm = () => {
     if (selected === 'other' && !custom.trim()) return;
     onConfirm?.({ topic: selected, custom_topic: selected === 'other' ? custom.trim() : '' });
@@ -49,7 +47,8 @@ export default function TopicPickerModal({ visible, onClose, onConfirm, title = 
   };
 
   return (
-    <View style={s.overlay} pointerEvents="auto">
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={handleClose}>
+      <View style={s.overlay} pointerEvents="auto">
       <KeyboardAvoidingView
         style={s.kav}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
@@ -127,14 +126,13 @@ export default function TopicPickerModal({ visible, onClose, onConfirm, title = 
         </View>
       </KeyboardAvoidingView>
     </View>
+    </Modal>
   );
 }
 
 const s = StyleSheet.create({
   overlay: {
-    ...StyleSheet.absoluteFillObject,
-    zIndex: 99999,
-    elevation: 99999,
+    flex: 1,
     justifyContent: 'flex-end',
     backgroundColor: 'transparent',
   },

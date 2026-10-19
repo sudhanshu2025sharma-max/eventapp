@@ -2,7 +2,7 @@
   "expo": {
     "name": "ETD 2026",
     "slug": "etd2026",
-    "version": "1.0.2",
+    "version": "2.0.0",
     "orientation": "portrait",
     "userInterfaceStyle": "light",
     "icon": "./assets/icon.png",
@@ -16,11 +16,11 @@
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.etd2026.app",
-      "buildNumber": "2",
+      "buildNumber": "4",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
         "NSCameraUsageDescription": "ETD 2026 requires camera access to scan attendee QR codes for event check-in and capture photos for your profile and conference feed.",
-        "NSPhotoLibraryUsageDescription": "ETD 2026 requires photo library access to select and upload your profile picture, session presentations, and conference gallery photos.",
+        "NSPhotoLibraryUsageDescription": "ETD 2026 requires photo library access to select and upload your profile picture, session presentations, andconference gallery photos.",
         "NSLocationWhenInUseUsageDescription": "ETD 2026 uses your location during the symposium to verify campus checkpoint attendance and navigate interactive selfie spots.",
         "NSMotionUsageDescription": "ETD 2026 uses motion sensors for the shake-to-connect networking feature with nearby attendees.",
         "NSAppTransportSecurity": {
@@ -47,7 +47,7 @@
         "android.permission.READ_MEDIA_VIDEO",
         "android.permission.READ_MEDIA_AUDIO"
       ],
-      "versionCode": 3,
+      "versionCode": 4,
       "edgeToEdgeEnabled": true
     },
     "plugins": [

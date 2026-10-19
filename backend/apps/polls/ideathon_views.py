@@ -9,6 +9,7 @@ from .ideathon_models import (
 )
 from apps.checkins.models import CheckIn
 from apps.accounts.models import User
+from apps.accounts.permissions_helper import user_has_module_access
 
 
 def _user_detail(user, request=None):
@@ -490,7 +491,8 @@ def update_team(request, pk):
 # ── Admin CRUD ────────────────────────────────────────────────────────────────
 
 def _is_admin(user):
-    return getattr(user, 'role', '') in ('super_admin', 'mgmt_admin', 'team_head', 'staff') or user.is_superuser
+    return (getattr(user, 'role', '') in ('super_admin', 'mgmt_admin', 'team_head', 'staff')
+            and user_has_module_access(user, 'ideathon'))
 
 
 @api_view(['POST'])

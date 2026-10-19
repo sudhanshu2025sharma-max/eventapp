@@ -51,6 +51,9 @@ urlpatterns = [
     path('shake/', views.shake_connect, name='chat_shake_singular'),
     path('shakes/', views.shake_connect, name='chat_shake_plural'),
 
+    # Scan & Connect (QR-based instant connection)
+    path('scan-connect/', views.scan_and_connect, name='chat_scan_connect'),
+
     # Staff Coordination & Calls
     path('staff-group/', views.staff_group_chat_view, name='staff_group_chat'),
     path('call-logs/', views.call_logs_api, name='call_logs_api'),

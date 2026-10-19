@@ -6,7 +6,8 @@ from django.utils import timezone
 from django.utils.dateparse import parse_datetime
 from zoneinfo import ZoneInfo
 
-from apps.accounts.admin_views import admin_required
+from django.contrib.auth.decorators import login_required
+from apps.accounts.permissions_helper import module_required
 from .models import Poll, PollOption, Vote, PollAuditLog
 
 IST = ZoneInfo("Asia/Kolkata")
@@ -48,7 +49,8 @@ def _notify_poll_live(poll, request):
 
 # ── Poll List ────────────────────────────────────────────────────────────────
 
-@admin_required
+@login_required(login_url="/panel/login/")
+@module_required("polls")
 def polls_panel(request):
     polls = Poll.objects.prefetch_related('options').all()
     stats = {
@@ -74,7 +76,8 @@ def polls_panel(request):
 
 # ── Create / Edit ────────────────────────────────────────────────────────────
 
-@admin_required
+@login_required(login_url="/panel/login/")
+@module_required("polls")
 def poll_create(request):
     from apps.schedule.models import ScheduleSession
     sessions = ScheduleSession.objects.filter(is_published=True).order_by('day', 'start_time')
@@ -118,7 +121,8 @@ def poll_create(request):
     })
 
 
-@admin_required
+@login_required(login_url="/panel/login/")
+@module_required("polls")
 def poll_edit(request, pk):
     poll = get_object_or_404(Poll, pk=pk)
     from apps.schedule.models import ScheduleSession
@@ -153,7 +157,8 @@ def poll_edit(request, pk):
     })
 
 
-@admin_required
+@login_required(login_url="/panel/login/")
+@module_required("polls")
 def poll_delete(request, pk):
     poll = get_object_or_404(Poll, pk=pk)
     if request.method == 'POST':
@@ -168,7 +173,8 @@ def poll_delete(request, pk):
 
 # ── Start / Close / Reopen ───────────────────────────────────────────────────
 
-@admin_required
+@login_required(login_url="/panel/login/")
+@module_required("polls")
 def poll_start(request, pk):
     poll = get_object_or_404(Poll, pk=pk)
     if request.method == 'POST':
@@ -185,7 +191,8 @@ def poll_start(request, pk):
     return redirect('polls_panel')
 
 
-@admin_required
+@login_required(login_url="/panel/login/")
+@module_required("polls")
 def poll_close(request, pk):
     poll = get_object_or_404(Poll, pk=pk)
     if request.method == 'POST':
@@ -198,7 +205,8 @@ def poll_close(request, pk):
     return redirect('polls_panel')
 
 
-@admin_required
+@login_required(login_url="/panel/login/")
+@module_required("polls")
 def poll_reopen(request, pk):
     poll = get_object_or_404(Poll, pk=pk)
     if request.method == 'POST':
@@ -213,7 +221,8 @@ def poll_reopen(request, pk):
 
 # ── Results / Analytics ──────────────────────────────────────────────────────
 
-@admin_required
+@login_required(login_url="/panel/login/")
+@module_required("polls")
 def poll_results(request, pk):
     from .models import Vote
     from apps.accounts.models import User as AuthUser
@@ -272,7 +281,8 @@ def poll_results(request, pk):
     })
 
 
-@admin_required
+@login_required(login_url="/panel/login/")
+@module_required("polls")
 def poll_export(request, pk):
     poll = get_object_or_404(Poll, pk=pk)
     response = HttpResponse(content_type='text/csv')

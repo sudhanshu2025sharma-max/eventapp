@@ -2,11 +2,14 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, Animated,
   Easing, FlatList, Image, Vibration, Dimensions, PanResponder,
+  Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Accelerometer } from 'expo-sensors';
 import * as Haptics from 'expo-haptics';
+import * as Location from 'expo-location';
+import { CameraView, useCameraPermissions } from 'expo-camera';
 import { COLORS, SPACE, TOP, BOTTOM, API_URL, API_HEADERS, fixMediaUrl } from '../theme';
 import { GradientAvatar } from '../components';
 
@@ -233,14 +236,319 @@ const _swipe = StyleSheet.create({
 });
 
 /* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   SCAN-N-CONNECT PANEL
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+function ScanConnectPanel({ tokens, onConnected }) {
+  const [permission, requestPermission] = useCameraPermissions();
+  const [scanPhase, setScanPhase] = useState('idle'); // idle | scanning | loading | success | error | already
+  const [scanned, setScanned] = useState(false);
+  const [connected, setConnected] = useState(null);
+  const [errorMsg, setErrorMsg] = useState('');
+  const [showConfetti, setShowConfetti] = useState(false);
+  const successScale = useRef(new Animated.Value(0.8)).current;
+
+  const reset = () => {
+    setScanPhase('idle');
+    setScanned(false);
+    setConnected(null);
+    setErrorMsg('');
+    setShowConfetti(false);
+    successScale.setValue(0.8);
+  };
+
+  const handleBarcode = async ({ data }) => {
+    if (scanned) return;
+    setScanned(true);
+    setScanPhase('loading');
+
+    const raw = String(data || '').trim();
+    if (!raw) {
+      setErrorMsg('Empty QR code. Please scan a valid badge.');
+      setScanPhase('error');
+      return;
+    }
+
+    try {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+      const r = await fetch(`${API_URL}/chat/scan-connect/`, {
+        method: 'POST',
+        headers: { ...API_HEADERS, Authorization: `Bearer ${tokens?.access}` },
+        body: JSON.stringify({ registration_id: raw, qr_data: raw }),
+      });
+      let d = {};
+      try {
+        d = await r.json();
+      } catch (e) {
+        d = { success: false, error: 'Invalid response from server' };
+      }
+
+      if (!r.ok || !d.success) {
+        setErrorMsg(d?.error || (r.status === 404 ? 'Endpoint not found. Make sure backend is running.' : 'Could not connect. Please try again.'));
+        setScanPhase('error');
+        return;
+      }
+
+      const person = d.connected_with
+        ? { ...d.connected_with, profile_photo_url: fixMediaUrl(d.connected_with.profile_photo_url) }
+        : null;
+
+      setConnected({ ...d, connected_with: person });
+
+      if (d.already_connected) {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(() => {});
+        setScanPhase('already');
+      } else {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+        Vibration.vibrate([0, 70, 50, 90]);
+        setShowConfetti(true);
+        Animated.spring(successScale, { toValue: 1, tension: 150, friction: 9, useNativeDriver: true }).start();
+        setScanPhase('success');
+      }
+    } catch {
+      setErrorMsg('Network error. Please try again.');
+      setScanPhase('error');
+    }
+  };
+
+  // ─ Permission not yet granted ─
+  if (!permission) {
+    return <View style={_sc.center}><Text style={_sc.msgText}>Checking camera permission…</Text></View>;
+  }
+  if (!permission.granted) {
+    return (
+      <View style={_sc.center}>
+        <Ionicons name="camera-outline" size={54} color="#c4b5fd" style={{ marginBottom: 16 }} />
+        <Text style={_sc.msgTitle}>Camera Access Needed</Text>
+        <Text style={_sc.msgText}>Grant camera permission to scan badges and connect with people.</Text>
+        <TouchableOpacity onPress={requestPermission} activeOpacity={0.85} style={{ marginTop: 22 }}>
+          <LinearGradient colors={['#7c3aed', '#4f46e5']} style={_s.primaryBtn}>
+            <Ionicons name="camera" size={18} color="#fff" />
+            <Text style={_s.primaryBtnT}>Grant Camera Access</Text>
+          </LinearGradient>
+        </TouchableOpacity>
+      </View>
+    );
+  }
+
+  // ─ Idle ─
+  if (scanPhase === 'idle') {
+    return (
+      <View style={{ flex: 1, alignItems: 'center', paddingHorizontal: SPACE.xl }}>
+        <View style={_sc.howBox}>
+          <View style={_sc.stepRow}>
+            <View style={_sc.stepNum}><Text style={_sc.stepNumT}>1</Text></View>
+            <Text style={_sc.stepText}>Ask the other person to show their ID badge QR code</Text>
+          </View>
+          <View style={_sc.stepRow}>
+            <View style={_sc.stepNum}><Text style={_sc.stepNumT}>2</Text></View>
+            <Text style={_sc.stepText}>Tap the button below and point your camera at their QR</Text>
+          </View>
+          <View style={_sc.stepRow}>
+            <View style={_sc.stepNum}><Text style={_sc.stepNumT}>3</Text></View>
+            <Text style={_sc.stepText}>Instantly connected — no matching delay needed!</Text>
+          </View>
+        </View>
+        <TouchableOpacity onPress={() => setScanPhase('scanning')} activeOpacity={0.85} style={{ marginTop: 28 }}>
+          <LinearGradient colors={['#7c3aed', '#4f46e5']} style={_s.primaryBtn}>
+            <Ionicons name="qr-code" size={20} color="#fff" />
+            <Text style={_s.primaryBtnT}>Scan Their Badge</Text>
+          </LinearGradient>
+        </TouchableOpacity>
+        <Text style={_sc.supportText}>Works with all badge types: ETD-2026-R-xxx, speaker IDs, organiser IDs, invited guest IDs</Text>
+      </View>
+    );
+  }
+
+  // ─ Scanning ─
+  if (scanPhase === 'scanning') {
+    return (
+      <View style={{ flex: 1, width: '100%' }}>
+        <View style={_sc.cameraWrap}>
+          <CameraView
+            style={{ flex: 1 }}
+            facing="back"
+            onBarcodeScanned={scanned ? undefined : handleBarcode}
+            barcodeScannerSettings={{ barcodeTypes: ['qr'] }}
+          />
+          {/* Viewfinder overlay */}
+          <View style={StyleSheet.absoluteFill} pointerEvents="none">
+            <View style={_sc.finder} />
+          </View>
+          <TouchableOpacity onPress={() => { setScanned(false); setScanPhase('idle'); }} style={_sc.cancelScanBtn}>
+            <Ionicons name="close-circle" size={32} color="#fff" />
+          </TouchableOpacity>
+          <View style={_sc.scanLabel}>
+            <Text style={_sc.scanLabelT}>Point camera at their badge QR code</Text>
+          </View>
+        </View>
+      </View>
+    );
+  }
+
+  // ─ Loading ─
+  if (scanPhase === 'loading') {
+    return (
+      <View style={_sc.center}>
+        <Animated.View style={{ marginBottom: 20 }}>
+          <Ionicons name="qr-code" size={64} color="#a78bfa" />
+        </Animated.View>
+        <Text style={_sc.msgTitle}>Connecting…</Text>
+        <Text style={_sc.msgText}>Looking up badge and creating connection</Text>
+      </View>
+    );
+  }
+
+  // ─ Success ─
+  if (scanPhase === 'success' && connected) {
+    return (
+      <View style={{ flex: 1, position: 'relative' }}>
+        {showConfetti && <ConfettiBlast />}
+        <Animated.View style={[_sc.center, { transform: [{ scale: successScale }] }]}>
+          <PointsBurst pts={15} />
+          <Text style={{ fontSize: 72, marginBottom: 10 }}>🎉</Text>
+          <Text style={_s.successTitle}>Connected!</Text>
+          {connected.connected_with?.profile_photo_url
+            ? <Image source={{ uri: connected.connected_with.profile_photo_url }} style={_sc.successPhoto} />
+            : <GradientAvatar name={connected.connected_with?.name || '?'} size={72} radius={22} />}
+          <Text style={_s.successName}>{connected.connected_with?.name}</Text>
+          <TouchableOpacity
+            activeOpacity={0.9}
+            onPress={() => onConnected?.(connected.conversation_id)}
+            style={{ marginTop: 22 }}
+          >
+            <LinearGradient colors={['#7c3aed', '#4f46e5']} style={_s.primaryBtn}>
+              <Ionicons name="chatbubble" size={18} color="#fff" />
+              <Text style={_s.primaryBtnT}>Say Hi!</Text>
+            </LinearGradient>
+          </TouchableOpacity>
+          <TouchableOpacity onPress={reset} style={{ marginTop: 14 }}>
+            <Text style={_s.secondaryBtnT}>Scan another badge</Text>
+          </TouchableOpacity>
+        </Animated.View>
+      </View>
+    );
+  }
+
+  // ─ Already Connected ─
+  if (scanPhase === 'already' && connected) {
+    return (
+      <View style={_sc.center}>
+        <View style={_s.alreadyBadgeWrap}>
+          <Ionicons name="checkmark-circle" size={48} color="#10B981" />
+        </View>
+        <Text style={_s.successTitle}>Already Connected!</Text>
+        <Text style={_s.successName}>{connected.connected_with?.name}</Text>
+        <Text style={_s.alreadySub}>You're already connected. Tap below to chat!</Text>
+        <TouchableOpacity
+          activeOpacity={0.9}
+          onPress={() => onConnected?.(connected.conversation_id)}
+          style={{ marginTop: 22 }}
+        >
+          <LinearGradient colors={['#10B981', '#059669']} style={_s.primaryBtn}>
+            <Ionicons name="chatbubble-ellipses" size={18} color="#fff" />
+            <Text style={_s.primaryBtnT}>Open Conversation</Text>
+          </LinearGradient>
+        </TouchableOpacity>
+        <TouchableOpacity onPress={reset} style={{ marginTop: 14 }}>
+          <Text style={_s.secondaryBtnT}>Scan another badge</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
+
+  // ─ Error ─
+  return (
+    <View style={_sc.center}>
+      <Text style={{ fontSize: 56 }}>😕</Text>
+      <Text style={_s.errorTitle}>Scan Failed</Text>
+      <Text style={_s.errorSub}>{errorMsg}</Text>
+      <View style={{ marginTop: 16, padding: 12, backgroundColor: 'rgba(56,189,248,0.12)', borderRadius: 14, borderWidth: 1, borderColor: 'rgba(56,189,248,0.25)', maxWidth: 300 }}>
+        <Text style={{ fontSize: 12, fontWeight: '600', color: '#e0f2fe', textAlign: 'center', lineHeight: 18 }}>
+          💡 Can't scan? Switch to the 🤝 Shake tab and enable GPS Nearby Filter to find people around you!
+        </Text>
+      </View>
+      <TouchableOpacity activeOpacity={0.9} onPress={reset} style={{ marginTop: 18 }}>
+        <LinearGradient colors={['#7c3aed', '#4f46e5']} style={_s.primaryBtn}>
+          <Ionicons name="refresh" size={18} color="#fff" />
+          <Text style={_s.primaryBtnT}>Try Again</Text>
+        </LinearGradient>
+      </TouchableOpacity>
+    </View>
+  );
+}
+
+const _sc = StyleSheet.create({
+  center: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: SPACE.xl },
+  msgTitle: { fontSize: 22, fontWeight: '900', color: '#fff', textAlign: 'center', marginTop: 8 },
+  msgText: { fontSize: 14, color: 'rgba(255,255,255,0.6)', textAlign: 'center', marginTop: 8, lineHeight: 22, maxWidth: 300 },
+  howBox: { marginTop: 10, gap: 14, width: '100%' },
+  stepRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 12 },
+  stepNum: { width: 28, height: 28, borderRadius: 10, backgroundColor: 'rgba(124,58,237,0.18)', borderWidth: 1, borderColor: 'rgba(167,139,250,0.22)', alignItems: 'center', justifyContent: 'center', marginTop: 1 },
+  stepNumT: { fontSize: 13, fontWeight: '900', color: '#c4b5fd' },
+  stepText: { fontSize: 13, fontWeight: '600', color: 'rgba(255,255,255,0.65)', flex: 1, lineHeight: 20 },
+  supportText: { fontSize: 11, color: 'rgba(255,255,255,0.35)', textAlign: 'center', marginTop: 20, lineHeight: 18, maxWidth: 300 },
+  cameraWrap: { flex: 1, overflow: 'hidden', borderRadius: 0 },
+  finder: {
+    flex: 1,
+    backgroundColor: 'transparent',
+    borderWidth: 0,
+  },
+  cancelScanBtn: { position: 'absolute', top: 20, right: 20, backgroundColor: 'rgba(0,0,0,0.45)', borderRadius: 999, padding: 4 },
+  scanLabel: { position: 'absolute', bottom: 40, left: 0, right: 0, alignItems: 'center' },
+  scanLabelT: { fontSize: 14, fontWeight: '700', color: '#fff', backgroundColor: 'rgba(0,0,0,0.55)', paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20 },
+  successPhoto: { width: 72, height: 72, borderRadius: 22, marginTop: 14, marginBottom: 4 },
+});
+
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
    MAIN COMPONENT
    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
 export default function ShakeConnectScreen({ tokens, user, onConnected, onBack }) {
+  const [activeMode, setActiveMode] = useState('shake'); // 'shake' | 'scan'
   const [phase, setPhase] = useState('idle');
   const [shakers, setShakers] = useState([]);
   const [connected, setConnected] = useState(null);
   const [errorMsg, setErrorMsg] = useState('');
   const [showConfetti, setShowConfetti] = useState(false);
+
+  const [gpsEnabled, setGpsEnabled] = useState(false);
+  const [coords, setCoords] = useState(null);
+  const [gpsLoading, setGpsLoading] = useState(false);
+  const coordsRef = useRef(null);
+
+  const toggleGps = async () => {
+    if (gpsEnabled) {
+      setGpsEnabled(false);
+      setCoords(null);
+      coordsRef.current = null;
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+      return;
+    }
+
+    try {
+      setGpsLoading(true);
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== 'granted') {
+        setGpsLoading(false);
+        Alert.alert(
+          'Location Optional',
+          'GPS is completely optional. Turn on location permissions in settings if you want to filter out anyone shaking further than 100 meters away.'
+        );
+        return;
+      }
+      const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+      if (loc?.coords) {
+        const c = { lat: loc.coords.latitude, lng: loc.coords.longitude };
+        setCoords(c);
+        coordsRef.current = c;
+        setGpsEnabled(true);
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+      }
+    } catch {
+      Alert.alert('GPS Notice', 'Could not obtain current location. You can still shake to connect without GPS or use QR Scan.');
+    } finally {
+      setGpsLoading(false);
+    }
+  };
 
   const iconShift = useRef(new Animated.Value(0)).current;
   const fade = useRef(new Animated.Value(0)).current;
@@ -275,19 +583,29 @@ export default function ShakeConnectScreen({ tokens, user, onConnected, onBack }
   };
 
   const postShake = async () => {
+    const payload = { action: 'shake' };
+    if (coordsRef.current) {
+      payload.lat = coordsRef.current.lat;
+      payload.lng = coordsRef.current.lng;
+    }
     const r = await fetch(`${API_URL}/chat/shake/`, {
       method: 'POST',
       headers: authH(tokens),
-      body: JSON.stringify({ action: 'shake' }),
+      body: JSON.stringify(payload),
     });
     return r.json();
   };
 
   const postStatus = async () => {
+    const payload = { action: 'status' };
+    if (coordsRef.current) {
+      payload.lat = coordsRef.current.lat;
+      payload.lng = coordsRef.current.lng;
+    }
     const r = await fetch(`${API_URL}/chat/shake/`, {
       method: 'POST',
       headers: authH(tokens),
-      body: JSON.stringify({ action: 'status' }),
+      body: JSON.stringify(payload),
     });
     return r.json();
   };
@@ -445,6 +763,34 @@ export default function ShakeConnectScreen({ tokens, user, onConnected, onBack }
           </View>
         </Animated.View>
 
+        {/* ── Mode Tab Switcher ───────────────────────────────── */}
+        <View style={_s.modeTabBar}>
+          <TouchableOpacity
+            style={[_s.modeTab, activeMode === 'shake' && _s.modeTabActive]}
+            onPress={() => setActiveMode('shake')}
+            activeOpacity={0.8}
+          >
+            <Text style={{ fontSize: 14 }}>🤝</Text>
+            <Text style={[_s.modeTabT, activeMode === 'shake' && _s.modeTabTActive]}>Shake</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[_s.modeTab, activeMode === 'scan' && _s.modeTabActive]}
+            onPress={() => setActiveMode('scan')}
+            activeOpacity={0.8}
+          >
+            <Text style={{ fontSize: 14 }}>📷</Text>
+            <Text style={[_s.modeTabT, activeMode === 'scan' && _s.modeTabTActive]}>Scan QR</Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* ── Scan-n-Connect Panel ────────────────────────────── */}
+        {activeMode === 'scan' && (
+          <ScanConnectPanel tokens={tokens} onConnected={onConnected} />
+        )}
+
+        {/* ── Shake Connect Content ───────────────────────────── */}
+        {activeMode === 'shake' && <>
+
         {/* ── Idle / Waiting ────────────────────────────────── */}
         {(phase === 'idle' || phase === 'waiting') && (
           <View style={_s.heroWrap}>
@@ -487,6 +833,40 @@ export default function ShakeConnectScreen({ tokens, user, onConnected, onBack }
               </View>
             )}
 
+            {/* GPS Nearby Filter Toggle (Optional) */}
+            <TouchableOpacity
+              style={[_s.gpsBar, gpsEnabled && _s.gpsBarActive]}
+              onPress={toggleGps}
+              activeOpacity={0.85}
+            >
+              <LinearGradient
+                colors={gpsEnabled ? ['rgba(16,185,129,0.22)', 'rgba(5,150,105,0.18)'] : ['rgba(255,255,255,0.08)', 'rgba(255,255,255,0.03)']}
+                style={_s.gpsBarGrad}
+              >
+                <View style={[_s.gpsIconWrap, gpsEnabled && _s.gpsIconWrapActive]}>
+                  <Ionicons name={gpsEnabled ? "location" : "location-outline"} size={16} color={gpsEnabled ? "#34d399" : "#c4b5fd"} />
+                </View>
+                <View style={{ flex: 1, marginLeft: 10 }}>
+                  <Text style={[_s.gpsBarT, gpsEnabled && _s.gpsBarTActive]}>
+                    {gpsLoading ? 'Acquiring GPS location...' : gpsEnabled ? 'Nearby Filter ON (Within 100m)' : 'Filter Nearby (GPS Optional)'}
+                  </Text>
+                  <Text style={_s.gpsBarSub}>
+                    {gpsEnabled ? 'Matching only phones within 100 meters' : 'Tap to filter out anyone shaking from >100m away'}
+                  </Text>
+                </View>
+                <View style={[_s.gpsSwitch, gpsEnabled && _s.gpsSwitchActive]}>
+                  <View style={[_s.gpsSwitchKnob, gpsEnabled && _s.gpsSwitchKnobActive]} />
+                </View>
+              </LinearGradient>
+            </TouchableOpacity>
+
+            {phase === 'waiting' && !gpsEnabled && (
+              <TouchableOpacity onPress={toggleGps} style={_s.gpsHintBtn} activeOpacity={0.8}>
+                <Ionicons name="location-outline" size={13} color="#a78bfa" />
+                <Text style={_s.gpsHintT}>Unable to match? Tap to enable GPS Nearby Filter</Text>
+              </TouchableOpacity>
+            )}
+
             <SwipeToConnect onComplete={onShakeDetected} />
           </View>
         )}
@@ -500,6 +880,15 @@ export default function ShakeConnectScreen({ tokens, user, onConnected, onBack }
                 <Text style={_s.panelTitle}>{shakers.length} people shook nearby!</Text>
                 <Text style={_s.panelSub}>Connect with individuals or all at once</Text>
               </View>
+
+              {!gpsEnabled && (
+                <TouchableOpacity onPress={toggleGps} style={_s.pickingGpsPrompt} activeOpacity={0.85}>
+                  <Ionicons name="location" size={15} color="#38bdf8" />
+                  <Text style={_s.pickingGpsPromptT}>
+                    Seeing people from far away? <Text style={{ textDecorationLine: 'underline', fontWeight: '800' }}>Turn on GPS</Text> to filter within 100m.
+                  </Text>
+                </TouchableOpacity>
+              )}
 
               {/* Connect with All Button */}
               {shakers.length > 1 && (
@@ -529,12 +918,20 @@ export default function ShakeConnectScreen({ tokens, user, onConnected, onBack }
                       <View style={{ flex: 1, marginLeft: 12 }}>
                         <Text style={_s.shakerName} numberOfLines={1}>{item.name}</Text>
                         {!!item.affiliation && <Text style={_s.shakerAff} numberOfLines={1}>{item.affiliation}</Text>}
-                        {item.already_connected && (
-                          <View style={_s.connectedChip}>
-                            <Ionicons name="checkmark-circle" size={12} color="#10B981" />
-                            <Text style={_s.connectedChipText}>Already Connected</Text>
-                          </View>
-                        )}
+                        <View style={{ flexDirection: 'row', gap: 6, flexWrap: 'wrap', marginTop: 4 }}>
+                          {item.distance_meters != null && (
+                            <View style={_s.distChip}>
+                              <Ionicons name="navigate" size={10} color="#38bdf8" />
+                              <Text style={_s.distChipT}>~{item.distance_meters}m away</Text>
+                            </View>
+                          )}
+                          {item.already_connected && (
+                            <View style={_s.connectedChip}>
+                              <Ionicons name="checkmark-circle" size={12} color="#10B981" />
+                              <Text style={_s.connectedChipText}>Already Connected</Text>
+                            </View>
+                          )}
+                        </View>
                       </View>
                       <LinearGradient colors={['#7c3aed', '#4f46e5']} style={_s.shakerPickBtn}>
                         <Ionicons name="link" size={16} color="#fff" />
@@ -617,7 +1014,13 @@ export default function ShakeConnectScreen({ tokens, user, onConnected, onBack }
             <Text style={{ fontSize: 64 }}>😕</Text>
             <Text style={_s.errorTitle}>Something went wrong</Text>
             <Text style={_s.errorSub}>{errorMsg}</Text>
-            <TouchableOpacity activeOpacity={0.9} onPress={reset} style={{ marginTop: 22 }}>
+            {!gpsEnabled && (
+              <TouchableOpacity onPress={toggleGps} style={{ marginTop: 14, padding: 12, backgroundColor: 'rgba(52,211,153,0.12)', borderRadius: 14, borderWidth: 1, borderColor: 'rgba(52,211,153,0.3)', flexDirection: 'row', alignItems: 'center', gap: 8, maxWidth: 300, alignSelf: 'center' }} activeOpacity={0.85}>
+                <Ionicons name="location" size={16} color="#34d399" />
+                <Text style={{ fontSize: 12, fontWeight: '700', color: '#d1fae5', flex: 1 }}>Enable GPS to find nearby shakers within 100m</Text>
+              </TouchableOpacity>
+            )}
+            <TouchableOpacity activeOpacity={0.9} onPress={reset} style={{ marginTop: 16 }}>
               <LinearGradient colors={['#7c3aed', '#4f46e5']} style={_s.primaryBtn}>
                 <Ionicons name="refresh" size={18} color="#fff" />
                 <Text style={_s.primaryBtnT}>Try Again</Text>
@@ -635,6 +1038,7 @@ export default function ShakeConnectScreen({ tokens, user, onConnected, onBack }
             </View>
           </View>
         )}
+        </>}
       </LinearGradient>
     </Animated.View>
   );
@@ -658,6 +1062,31 @@ const _s = StyleSheet.create({
   },
   headerCenter: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   headerTitle: { fontSize: 17, fontWeight: '900', color: '#fff', letterSpacing: -0.2 },
+
+  modeTabBar: {
+    flexDirection: 'row',
+    marginHorizontal: SPACE.xl,
+    marginTop: 6,
+    marginBottom: 4,
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.10)',
+    borderRadius: 16,
+    padding: 4,
+    gap: 4,
+  },
+  modeTab: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 10,
+    borderRadius: 12,
+  },
+  modeTabActive: { backgroundColor: 'rgba(124,58,237,0.30)', borderWidth: 1, borderColor: 'rgba(167,139,250,0.35)' },
+  modeTabT: { fontSize: 13, fontWeight: '800', color: 'rgba(255,255,255,0.45)' },
+  modeTabTActive: { color: '#c4b5fd' },
 
   heroWrap: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: SPACE.xl },
   coreOuter: { marginBottom: 28 },
@@ -750,4 +1179,124 @@ const _s = StyleSheet.create({
     borderRadius: 14, padding: 12, justifyContent: 'center',
   },
   tipText: { fontSize: 12, fontWeight: '500', color: 'rgba(255,255,255,0.4)' },
+
+  // GPS Nearby Filter Styles
+  gpsBar: {
+    width: '100%',
+    maxWidth: 320,
+    marginTop: 20,
+    borderRadius: 18,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.12)',
+  },
+  gpsBarActive: {
+    borderColor: 'rgba(52,211,153,0.45)',
+  },
+  gpsBarGrad: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+  },
+  gpsIconWrap: {
+    width: 34,
+    height: 34,
+    borderRadius: 11,
+    backgroundColor: 'rgba(124,58,237,0.22)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  gpsIconWrapActive: {
+    backgroundColor: 'rgba(16,185,129,0.25)',
+  },
+  gpsBarT: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#e2e8f0',
+  },
+  gpsBarTActive: {
+    color: '#34d399',
+  },
+  gpsBarSub: {
+    fontSize: 11,
+    fontWeight: '500',
+    color: 'rgba(255,255,255,0.5)',
+    marginTop: 2,
+  },
+  gpsSwitch: {
+    width: 40,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    padding: 2,
+    justifyContent: 'center',
+  },
+  gpsSwitchActive: {
+    backgroundColor: '#10b981',
+  },
+  gpsSwitchKnob: {
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: '#fff',
+  },
+  gpsSwitchKnobActive: {
+    alignSelf: 'flex-end',
+  },
+
+  gpsHintBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 14,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    backgroundColor: 'rgba(124,58,237,0.15)',
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(167,139,250,0.25)',
+  },
+  gpsHintT: {
+    fontSize: 11.5,
+    fontWeight: '700',
+    color: '#c4b5fd',
+  },
+
+  distChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: 'rgba(56,189,248,0.14)',
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(56,189,248,0.25)',
+  },
+  distChipT: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#38bdf8',
+  },
+
+  pickingGpsPrompt: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: 'rgba(56,189,248,0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(56,189,248,0.25)',
+    borderRadius: 14,
+    padding: 10,
+    marginBottom: 12,
+  },
+  pickingGpsPromptT: {
+    flex: 1,
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#e0f2fe',
+    lineHeight: 16,
+  },
 });
+

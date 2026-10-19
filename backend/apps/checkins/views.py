@@ -15,6 +15,7 @@ from apps.checkins.models import CheckIn, MealPass, MealWindow
 from apps.checkins.meal_utils import sync_meal_window, deduce_meal_name
 from apps.checkins.push import push_to_checked_in
 from apps.leaderboard.utils import award_points
+from confhub.media import preview_url
 
 IST = ZoneInfo("Asia/Kolkata")
 
@@ -29,9 +30,15 @@ def _user_detail(user, request=None):
     photo_url = None
     if getattr(user, 'profile_photo', None):
         try:
-            photo_url = request.build_absolute_uri(user.profile_photo.url) if request else user.profile_photo.url
+            photo_url = preview_url(user.profile_photo, request, size=256)
         except Exception:
             photo_url = user.profile_photo.url
+
+    if not photo_url and getattr(user, 'speaker_profile', None) and user.speaker_profile.photo:
+        try:
+            photo_url = preview_url(user.speaker_profile.photo, request, size=256)
+        except Exception:
+            photo_url = user.speaker_profile.photo.url
 
     raw_ri = getattr(user, 'research_interests', '') or ''
     if isinstance(raw_ri, list):
@@ -184,7 +191,24 @@ def scan_meal(request):
     raw_qr = request.data.get('qr_data') or request.data.get('qr_code') or request.data.get('registration_id') or ''
     raw_qr = str(raw_qr).strip()
 
-    target_user = User.objects.filter(models.Q(registration_id__iexact=raw_qr) | models.Q(email__iexact=raw_qr)).first()
+    user_id = request.data.get("user_id")
+    target_user = None
+    if user_id:
+        target_user = User.objects.filter(id=user_id).first()
+    elif len(raw_qr) == 36 and '-' in raw_qr:
+        target_user = User.objects.filter(id=raw_qr).first()
+
+    if not target_user:
+        users = list(User.objects.filter(models.Q(registration_id__iexact=raw_qr) | models.Q(email__iexact=raw_qr)))
+        if not users:
+            try:
+                import uuid
+                fallback_pass = MealPass.objects.filter(id=uuid.UUID(raw_qr)).first()
+                if fallback_pass and fallback_pass.user: users = [fallback_pass.user]
+            except Exception: pass
+        if len(users) > 1:
+            return Response({"success": True, "multiple": True, "users": [{"id": str(u.id), "name": u.get_full_name() or u.email, "email": u.email, "category": getattr(u, "category", "") or getattr(u, "role", ""), "temp_password": getattr(u, "temp_password", "") if getattr(u, "must_change_password", False) else "Changed"} for u in users]})
+        target_user = users[0] if users else None
     
     if not target_user:
         try:
@@ -273,7 +297,30 @@ def reset_meal_scan(request):
 def scan_checkin(request):
     raw_code = request.data.get('registration_id') or request.data.get('qr_data') or request.data.get('qr_code') or ''
     raw_code = str(raw_code).strip()
-    target_user = User.objects.filter(models.Q(registration_id__iexact=raw_code) | models.Q(email__iexact=raw_code)).first()
+    user_id = request.data.get("user_id")
+    
+    target_user = None
+    if user_id:
+        target_user = User.objects.filter(id=user_id).first()
+    elif len(raw_code) == 36 and '-' in raw_code:
+        target_user = User.objects.filter(id=raw_code).first()
+
+    if not target_user:
+        users = list(User.objects.filter(models.Q(registration_id__iexact=raw_code) | models.Q(email__iexact=raw_code)))
+        if len(users) > 1:
+            return Response({
+                "success": True, 
+                "multiple": True, 
+                "users": [{
+                    "id": str(u.id), 
+                    "name": u.get_full_name() or u.email, 
+                    "email": u.email, 
+                    "registration_id": getattr(u, 'registration_id', '') or '',
+                    "category": getattr(u, "category", "") or u.get_role_display(), 
+                    "temp_password": getattr(u, "temp_password", "") if getattr(u, "must_change_password", False) else "Changed"
+                } for u in users]
+            })
+        target_user = users[0] if users else None
     if not target_user:
         return Response({"success": False, "error": f"Participant '{raw_code}' not found."}, status=404)
 
@@ -379,33 +426,42 @@ def checkin_list(request):
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def network_list(request):
+    from django.core.cache import cache
+
     role = (request.GET.get('role') or '').strip()
     search = (request.GET.get('search') or '').strip()
     interest = (request.GET.get('interest') or '').strip()
+    category = (request.GET.get('category') or '').strip()
 
-    is_staff_user = getattr(request.user, 'role', '') in ['super_admin', 'mgmt_admin', 'team_head', 'staff']
+    ORGANIZING_ROLES = ['super_admin', 'mgmt_admin', 'team_head', 'staff']
+    SPEAKER_ROLES = ['speaker']
+    PARTICIPANT_ROLES = ['participant', 'sponsor_del', 'guest', 'invited_guest']
+
+    is_staff_user = getattr(request.user, 'role', '') in ORGANIZING_ROLES
     user_is_checked_in = is_staff_user or CheckIn.objects.filter(user=request.user).exists()
 
-    if role == 'speaker':
-        users = User.objects.filter(role='speaker', is_active=True)
-    else:
-        checkin_user_ids = list(CheckIn.objects.values_list('user_id', flat=True))
-        users = User.objects.filter(
-            models.Q(id__in=checkin_user_ids) | models.Q(role='speaker'),
-            is_active=True,
-        )
+    # Cached checked-in user IDs (TTL: 15s for high concurrency efficiency)
+    checked_in_ids = cache.get('network:checked_in_ids')
+    if checked_in_ids is None:
+        checked_in_ids = set(CheckIn.objects.filter(checkin_type='conference').values_list('user_id', flat=True))
+        cache.set('network:checked_in_ids', checked_in_ids, 15)
+
+    base_qs = User.objects.filter(is_active=True).select_related('speaker_profile')
 
     if getattr(request.user, 'is_authenticated', False):
-        users = users.exclude(id=request.user.id)
+        base_qs = base_qs.exclude(id=request.user.id)
         from apps.chat.models import BlockedUser
         blocked_ids = set(BlockedUser.objects.filter(blocker=request.user).values_list('blocked_id', flat=True))
         blocked_by_ids = set(BlockedUser.objects.filter(blocked=request.user).values_list('blocker_id', flat=True))
         all_blocked = blocked_ids | blocked_by_ids
         if all_blocked:
-            users = users.exclude(id__in=all_blocked)
+            base_qs = base_qs.exclude(id__in=all_blocked)
+
+    if category:
+        base_qs = base_qs.filter(category__iexact=category)
 
     if search:
-        users = users.filter(
+        base_qs = base_qs.filter(
             models.Q(first_name__icontains=search) |
             models.Q(last_name__icontains=search) |
             models.Q(affiliation__icontains=search) |
@@ -414,30 +470,84 @@ def network_list(request):
         )
 
     if interest:
-        users = users.filter(research_interests__icontains=interest)
+        base_qs = base_qs.filter(research_interests__icontains=interest)
 
-    all_interests_raw = User.objects.filter(
-        models.Q(id__in=CheckIn.objects.values_list('user_id', flat=True)) | models.Q(role='speaker'),
-        is_active=True,
-    ).exclude(research_interests='').values_list('research_interests', flat=True)
+    # 1. Attendees: checked-in participants + ALL speakers + ALL organizing team
+    attendees_qs = base_qs.filter(
+        models.Q(id__in=checked_in_ids, role__in=PARTICIPANT_ROLES) |
+        models.Q(role__in=SPEAKER_ROLES) |
+        models.Q(role__in=ORGANIZING_ROLES)
+    )
 
-    tag_counts = {}
-    for raw in all_interests_raw:
-        tags = raw if isinstance(raw, list) else str(raw or '').split(',')
-        for t in tags:
-            cleaned = str(t).strip()
-            if cleaned:
-                tag_counts[cleaned] = tag_counts.get(cleaned, 0) + 1
+    # 2. Speakers query: all speakers
+    speakers_qs = base_qs.filter(role__in=SPEAKER_ROLES)
 
-    sorted_interests = [tag for tag, _ in sorted(tag_counts.items(), key=lambda x: -x[1])]
-    attendees_data = [_user_detail(u, request) for u in users[:120]]
+    # 3. Organizing team query: all staff / team heads / admins
+    organizers_qs = base_qs.filter(role__in=ORGANIZING_ROLES)
+
+    # If specific role requested:
+    if role == 'speaker':
+        target_list = [_user_detail(u, request) for u in speakers_qs[:120]]
+        attendees_data = target_list
+        organizers_data = []
+        speakers_data = target_list
+    elif role in ('organizer', 'staff'):
+        target_list = [_user_detail(u, request) for u in organizers_qs[:120]]
+        attendees_data = []
+        organizers_data = target_list
+        speakers_data = []
+    elif role == 'universe':
+        # Universe = checked-in participants + speakers + organizing team
+        universe_qs = base_qs.filter(
+            models.Q(id__in=checked_in_ids, role__in=PARTICIPANT_ROLES) |
+            models.Q(role__in=SPEAKER_ROLES) |
+            models.Q(role__in=ORGANIZING_ROLES)
+        )
+        target_list = [_user_detail(u, request) for u in universe_qs[:200]]
+        attendees_data = target_list
+        organizers_data = [_user_detail(u, request) for u in organizers_qs[:60]]
+        speakers_data = [_user_detail(u, request) for u in speakers_qs[:80]]
+    else:
+        # Default: Attendees tab gets ONLY checked-in participants!
+        attendees_data = [_user_detail(u, request) for u in attendees_qs[:120]]
+        speakers_data = [_user_detail(u, request) for u in speakers_qs[:80]]
+        organizers_data = [_user_detail(u, request) for u in organizers_qs[:60]]
+
+    # Interests tag counts (cached for 60s)
+    sorted_interests = cache.get('network:sorted_interests')
+    if sorted_interests is None:
+        all_interests_raw = User.objects.filter(
+            is_active=True,
+        ).exclude(research_interests='').values_list('research_interests', flat=True)
+
+        tag_counts = {}
+        for raw in all_interests_raw:
+            tags = raw if isinstance(raw, list) else str(raw or '').split(',')
+            for t in tags:
+                cleaned = str(t).strip()
+                if cleaned:
+                    tag_counts[cleaned] = tag_counts.get(cleaned, 0) + 1
+
+        sorted_interests = [tag for tag, _ in sorted(tag_counts.items(), key=lambda x: -x[1])][:25]
+        cache.set('network:sorted_interests', sorted_interests, 60)
+
+    # Build combined universe list: checked-in participants + speakers + organizing team
+    seen_ids = set()
+    universe_data = []
+    for u in attendees_data + speakers_data + organizers_data:
+        if u['id'] and u['id'] not in seen_ids:
+            seen_ids.add(u['id'])
+            universe_data.append(u)
 
     return Response({
         "success": True,
         "is_checked_in": user_is_checked_in,
         "attendees": attendees_data,
+        "speakers": speakers_data,
+        "organizers": organizers_data,
+        "universe": universe_data,
         "users": attendees_data,
-        "interests": sorted_interests[:25],
+        "interests": sorted_interests,
     })
 
 @api_view(['POST'])
@@ -616,3 +726,40 @@ def my_meal_passes(request):
     today = timezone.now().astimezone(IST).date()
     passes = MealPass.objects.filter(user=request.user, date=today)
     return Response({"success": True, "passes": [{"id": str(p.id), "qr_data": str(p.id), "meal_type": p.meal_type, "used": p.used} for p in passes]})
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def all_participants_directory(request):
+    """API for the mobile app People tab to list all users, categories, and credentials."""
+    qs = User.objects.filter(is_active=True).exclude(role='super_admin')
+    
+    # Calculate stats
+    total = qs.count()
+    checked_in = CheckIn.objects.filter(checkin_type='conference').count()
+    
+    # Get categories
+    categories = list(qs.exclude(category='').values_list('category', flat=True).distinct())
+    if not categories:
+        # Fallback to roles if no custom categories exist
+        categories = list(qs.values_list('role', flat=True).distinct())
+    
+    # Fetch Users
+    users_data = []
+    for u in qs.order_by('first_name')[:500]: # Limit to 500 for mobile performance, rely on search for others
+        users_data.append({
+            "id": str(u.id),
+            "name": u.get_full_name() or u.email,
+            "email": u.email,
+            "registration_id": u.registration_id or '',
+            "category": u.category or u.get_role_display(),
+            "temp_password": u.temp_password if u.must_change_password else "(Password Changed)",
+            "photo": u.profile_photo.url if getattr(u, 'profile_photo', None) else None
+        })
+        
+    return Response({
+        "success": True,
+        "stats": {"total": total, "checked_in": checked_in},
+        "categories": sorted(categories),
+        "users": users_data
+    })

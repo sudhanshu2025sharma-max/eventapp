@@ -4,6 +4,7 @@ from . import views
 urlpatterns = [
     # Mobile App API
     path('feed/', views.feed_list, name='feed_list_api'),
+    path('feed/<uuid:pk>/answer/', views.answer_quiz, name='feed_quiz_answer_api'),
     path('feed/<uuid:pk>/react/', views.react_post, name='feed_react_api'),
     path('feed/<uuid:pk>/comments/', views.post_comments, name='feed_comments_api'),
     

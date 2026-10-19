@@ -135,6 +135,7 @@ def checkin_list_view(request):
 
 @csrf_exempt
 @login_required
+@module_required('checkin_scanner')
 def panel_scan(request):
     if request.method != 'POST':
         return JsonResponse({"success": False, "message": "POST required"}, status=405)
@@ -143,9 +144,30 @@ def panel_scan(request):
     except Exception:
         data = request.POST
     code = str(data.get('registration_id') or data.get('qr_data') or data.get('qr_code') or '').strip()
-    target_user = User.objects.filter(
-        models.Q(registration_id=code) | models.Q(email__iexact=code)
-    ).first()
+    user_id = data.get('user_id')
+
+    target_user = None
+    if user_id:
+        target_user = User.objects.filter(id=user_id).first()
+    elif len(code) == 36 and '-' in code:
+        target_user = User.objects.filter(id=code).first()
+
+    if not target_user:
+        users = list(User.objects.filter(models.Q(registration_id__iexact=code) | models.Q(email__iexact=code)))
+        if len(users) > 1:
+            return JsonResponse({
+                "success": True,
+                "multiple": True,
+                "users": [{
+                    "id": str(u.id),
+                    "name": u.get_full_name() or u.email,
+                    "email": u.email,
+                    "registration_id": getattr(u, 'registration_id', '') or '',
+                    "category": getattr(u, 'category', '') or u.get_role_display(),
+                    "temp_password": getattr(u, 'temp_password', '') if getattr(u, 'must_change_password', False) else "Changed"
+                } for u in users]
+            })
+        target_user = users[0] if users else None
     if not target_user:
         return JsonResponse({"success": False, "message": "Participant not found"}, status=404)
     checkin, created = CheckIn.objects.get_or_create(
@@ -167,6 +189,7 @@ def panel_scan(request):
 
 @csrf_exempt
 @login_required
+@module_required('checkin_scanner')
 def panel_goodies(request):
     if request.method != 'POST':
         return JsonResponse({"success": False, "message": "POST required"}, status=405)
@@ -205,6 +228,7 @@ def panel_goodies(request):
 
 
 @login_required
+@module_required('meal_scanner')
 def panel_meal_window_status(request):
     try:
         sync_meal_window()
@@ -226,6 +250,7 @@ def panel_meal_window_status(request):
 
 @csrf_exempt
 @login_required
+@module_required('meal_scanner')
 def panel_meal_window_toggle(request):
     action = None
     meal_type = 'Lunch'
@@ -275,6 +300,7 @@ def panel_meal_window_toggle(request):
 
 @csrf_exempt
 @login_required
+@module_required('meal_scanner')
 def panel_meal_push(request):
     """Re-broadcast push notification for active meal service."""
     today = _today()
@@ -293,6 +319,7 @@ def panel_meal_push(request):
 
 @csrf_exempt
 @login_required
+@module_required('meal_scanner')
 def panel_meal_window_schedule(request):
     return JsonResponse({"success": True})
 
@@ -302,6 +329,7 @@ panel_meal_schedule = panel_meal_window_schedule
 
 @csrf_exempt
 @login_required
+@module_required('meal_scanner')
 def panel_meal_scan(request):
     if request.method != 'POST':
         return JsonResponse({"success": False, "message": "POST required"}, status=405)
@@ -313,7 +341,20 @@ def panel_meal_scan(request):
     
     raw_qr = str(data.get('qr_data') or data.get('qr_code') or data.get('registration_id') or '').strip()
     
-    target_user = User.objects.filter(models.Q(registration_id__iexact=raw_qr) | models.Q(email__iexact=raw_qr)).first()
+    user_id = data.get("user_id")
+    if user_id:
+        target_user = User.objects.filter(id=user_id).first()
+    else:
+        users = list(User.objects.filter(models.Q(registration_id__iexact=raw_qr) | models.Q(email__iexact=raw_qr)))
+        if not users:
+            try:
+                import uuid
+                fallback_pass = MealPass.objects.filter(id=uuid.UUID(raw_qr)).first()
+                if fallback_pass and fallback_pass.user: users = [fallback_pass.user]
+            except Exception: pass
+        if len(users) > 1:
+            return JsonResponse({"success": True, "multiple": True, "users": [{"id": str(u.id), "name": u.get_full_name() or u.email, "email": u.email, "category": getattr(u, "category", "") or getattr(u, "role", ""), "temp_password": getattr(u, "temp_password", "") if getattr(u, "must_change_password", False) else "Changed"} for u in users]})
+        target_user = users[0] if users else None
     
     if not target_user:
         try:
@@ -361,6 +402,7 @@ def panel_meal_scan(request):
 
 
 @login_required
+@module_required('checkin_scanner')
 def panel_stats(request):
     today = _today()
     total = User.objects.filter(

@@ -9,10 +9,10 @@ from django.core.cache import cache
 
 # Endpoints to rate-limit and their rules: {path_prefix: (max_requests, window_seconds)}
 RATE_LIMIT_RULES = {
-    '/api/v1/auth/login/':          (5, 60),    # 5 attempts per minute
-    '/api/v1/auth/token/refresh/':  (10, 60),   # 10 refreshes per minute
-    '/api/v1/auth/change-password/': (3, 300),  # 3 changes per 5 minutes
-    '/api/v1/notifications/send/':  (10, 60),   # 10 sends per minute
+    '/api/v1/auth/login/':          (50, 60),   # 50 attempts per minute (shared proxy)
+    '/api/v1/auth/token/refresh/':  (100, 60),  # 100 refreshes per minute (all mobile users)
+    '/api/v1/auth/change-password/': (10, 300),  # 10 changes per 5 minutes
+    '/api/v1/notifications/send/':  (50, 60),   # 50 sends per minute
 }
 
 def get_client_ip(request):

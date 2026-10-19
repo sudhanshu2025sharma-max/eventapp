@@ -20,11 +20,17 @@ class FeedPost(models.Model):
         ('update',       'Update'),
         ('alert',        'Alert'),
         ('general',      'General'),
+        ('quiz',         'Quiz'),
     ]
 
     id             = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    title          = models.CharField(max_length=300)
+    title          = models.CharField(max_length=300, blank=True)
     body           = models.TextField()
+    link_url       = models.URLField(max_length=2000, blank=True)
+    quiz_type      = models.CharField(max_length=20, blank=True, choices=[('multiple_choice', 'Multiple choice'), ('true_false', 'True / False')])
+    quiz_question  = models.CharField(max_length=500, blank=True)
+    quiz_options   = models.JSONField(default=list, blank=True)
+    quiz_correct_option = models.PositiveSmallIntegerField(null=True, blank=True)
     post_type      = models.CharField(max_length=20, choices=POST_TYPES, default='general')
     image          = models.ImageField(upload_to='feed/', null=True, blank=True)
     pinned         = models.BooleanField(default=False)
@@ -72,6 +78,16 @@ class FeedPost(models.Model):
         if not self.scheduled_at and not self.published_at:
             self.published_at = timezone.now()
         super().save(*args, **kwargs)
+
+
+class FeedQuizResponse(models.Model):
+    post = models.ForeignKey(FeedPost, on_delete=models.CASCADE, related_name='quiz_responses')
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    selected_option = models.PositiveSmallIntegerField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=['post', 'user'], name='unique_feed_quiz_response')]
 
 
 class FeedReaction(models.Model):

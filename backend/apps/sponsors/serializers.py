@@ -1,5 +1,6 @@
 from rest_framework import serializers
 from .models import Sponsor
+from confhub.media import preview_url
 
 
 class SponsorListSerializer(serializers.ModelSerializer):
@@ -17,20 +18,10 @@ class SponsorListSerializer(serializers.ModelSerializer):
         ]
 
     def get_logo_url(self, obj):
-        req = self.context.get('request')
-        if obj.logo and req:
-            return req.build_absolute_uri(obj.logo.url)
-        if obj.logo:
-            return obj.logo.url
-        return None
+        return preview_url(obj.logo, self.context.get('request'), size=480)
 
     def get_stall_photo_url(self, obj):
-        req = self.context.get('request')
-        if obj.stall_photo and req:
-            return req.build_absolute_uri(obj.stall_photo.url)
-        if obj.stall_photo:
-            return obj.stall_photo.url
-        return None
+        return preview_url(obj.stall_photo, self.context.get('request'), size=768)
 
 
 class SponsorDetailSerializer(serializers.ModelSerializer):

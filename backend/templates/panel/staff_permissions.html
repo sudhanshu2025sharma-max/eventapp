@@ -7,6 +7,9 @@
 .staff-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 1rem; margin-top: 1.5rem; }
 .s-card { background: #fff; border-radius: 12px; border: 1px solid #e2e8f0; padding: 1.25rem; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
 .s-card-head { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
+.drag-handle { cursor: grab; color: #cbd5e1; font-size: 1.2rem; padding: 4px 8px 4px 0; }
+.drag-handle:active { cursor: grabbing; }
+.sortable-ghost { opacity: 0.4; background: #f8fafc; border: 2px dashed #cbd5e1; }
 .s-avatar { width: 48px; height: 48px; border-radius: 50%; object-fit: cover; border: 2px solid #4f46e5; }
 .s-avatar-ph { width: 48px; height: 48px; border-radius: 50%; background: #4f46e5; color: #fff; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 16px; }
 .s-name { font-weight: 700; font-size: 1rem; color: #1e293b; margin: 0; }
@@ -36,19 +39,23 @@
 .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 </style>
 
+<!-- SortableJS CDN for Drag & Drop -->
+<script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
+
 <div style="display: flex; justify-content: space-between; align-items: center;">
   <span style="color: #64748b; font-size: 0.9rem;">
-    <i class="fas fa-users"></i> {{ staff_users|length }} staff members
+    <i class="fas fa-users"></i> {{ staff_users|length }} staff members (Drag handles to reorder)
   </span>
-  <button class="s-btn s-btn-add" onclick="openModal('add', '', '', '', '', '', '', '', 'staff', 'staff', '', '', '', '1')">
+  <button class="s-btn s-btn-add" onclick="openModal('add', '', '', '', '', '', '', '', 'staff', 'staff', '', '', '', '1', '0', '')">
     <i class="fas fa-plus"></i> Add Staff Member
   </button>
 </div>
 
 <div class="staff-grid">
   {% for s in staff_users %}
-  <div class="s-card">
+  <div class="s-card" data-id="{{ s.id }}">
     <div class="s-card-head">
+      <div class="drag-handle" title="Drag to reorder"><i class="fas fa-grip-vertical"></i></div>
       {% if s.staff_profile.photo %}
         <img src="{{ s.staff_profile.photo.url }}" class="s-avatar" alt="">
       {% else %}
@@ -61,6 +68,7 @@
         </div>
         <div class="s-desig">{{ s.staff_profile.designation }}</div>
         <div class="s-email">{{ s.email }} &bull; {{ s.staff_profile.phone }}</div>
+        {% if s.registration_id %}<div style="font-size:0.7rem;color:#4f46e5;font-weight:600;margin-top:2px;"><i class="fas fa-id-badge"></i> {{ s.registration_id }}</div>{% endif %}
       </div>
     </div>
 
@@ -83,13 +91,13 @@
     {% endwith %}
 
     <div class="s-actions">
-      <button class="s-btn s-btn-edit" onclick="openModal('edit', '{{ s.id }}', '{{ s.first_name }}', '{{ s.last_name }}', '{{ s.email }}', '{{ s.staff_profile.phone }}', '{{ s.staff_profile.designation }}', '{{ s.staff_profile.department }}', '{{ s.staff_profile.tier }}', '{{ s.role }}', '{{ s.staff_profile.linkedin_url }}', '{{ s.staff_profile.profile_url }}', '{{ s.staff_profile.scholar_url }}', '{{ s.staff_profile.is_public|yesno:"1,0" }}')">
+      <button class="s-btn s-btn-edit" onclick="openModal('edit', '{{ s.id }}', '{{ s.first_name|escapejs }}', '{{ s.last_name|escapejs }}', '{{ s.email|escapejs }}', '{{ s.staff_profile.phone|escapejs }}', '{{ s.staff_profile.designation|escapejs }}', '{{ s.staff_profile.department|escapejs }}', '{{ s.staff_profile.tier }}', '{{ s.role }}', '{{ s.staff_profile.linkedin_url|escapejs }}', '{{ s.staff_profile.profile_url|escapejs }}', '{{ s.staff_profile.scholar_url|escapejs }}', '{{ s.staff_profile.is_public|yesno:"1,0" }}', '{{ s.staff_profile.order|default:0 }}', '{{ s.registration_id|default:""|escapejs }}')">
         <i class="fas fa-pen"></i> Edit
       </button>
-      <button type="button" class="s-btn s-btn-perm" onclick="openPermsModal('{{ s.id }}', '{{ s.get_full_name }}')">
+      <button type="button" class="s-btn s-btn-perm" onclick="openPermsModal('{{ s.id }}', '{{ s.get_full_name|escapejs }}')">
         <i class="fas fa-shield-alt"></i> Permissions
       </button>
-      <form method="POST" style="display: inline;" onsubmit="return confirm('Delete {{ s.get_full_name }}?');">
+      <form method="POST" style="display: inline;" onsubmit="return confirm('Delete {{ s.get_full_name|escapejs }}?');">
         {% csrf_token %}
         <input type="hidden" name="action" value="delete">
         <input type="hidden" name="user_id" value="{{ s.id }}">
@@ -127,6 +135,10 @@
         <label>Email *</label>
         <input type="email" name="email" id="fEmail" required>
       </div>
+      <div class="form-group">
+        <label>Registration ID</label>
+        <input type="text" name="registration_id" id="fRegId" placeholder="Auto-generated if blank">
+      </div>
       <div class="form-row">
         <div class="form-group">
           <label>Phone</label>
@@ -137,9 +149,15 @@
           <input type="text" name="password" id="fPassword" placeholder="Staff@123">
         </div>
       </div>
-      <div class="form-group">
-        <label>Designation</label>
-        <input type="text" name="designation" id="fDesignation">
+      <div class="form-row">
+        <div class="form-group">
+          <label>Designation</label>
+          <input type="text" name="designation" id="fDesignation">
+        </div>
+        <div class="form-group">
+          <label>Display Order</label>
+          <input type="number" name="order" id="fOrder" value="0">
+        </div>
       </div>
       <div class="form-group">
         <label>Department</label>
@@ -187,13 +205,10 @@
         </div>
 
         <label>Photo</label>
-        
         <input type="file" name="photo" accept="image/*">
       </div>
       <div style="display: flex; gap: 8px; margin-top: 16px;">
-        
-            
-<button type="submit" class="s-btn s-btn-add" style="flex: 1;">Save</button>
+        <button type="submit" class="s-btn s-btn-add" style="flex: 1;">Save</button>
         <button type="button" class="s-btn s-btn-del" onclick="closeModal()">Cancel</button>
       </div>
     </form>
@@ -218,7 +233,7 @@
 </div>
 
 <script>
-function openModal(mode, id, fn, ln, em, ph, desig, dept, tier, role, linkedin, profile, scholar, isPublic) {
+function openModal(mode, id, fn, ln, em, ph, desig, dept, tier, role, linkedin, profile, scholar, isPublic, order, regId) {
   document.getElementById('modalTitle').textContent = mode === 'edit' ? 'Edit Staff' : 'Add Staff Member';
   document.getElementById('formAction').value = mode === 'edit' ? 'edit' : 'create';
   document.getElementById('formUserId').value = id || '';
@@ -229,13 +244,14 @@ function openModal(mode, id, fn, ln, em, ph, desig, dept, tier, role, linkedin, 
   document.getElementById('fDesignation').value = desig || '';
   document.getElementById('fDepartment').value = dept || '';
   document.getElementById('fTier').value = tier || 'staff';
-  document.getElementById('fIsPublic').checked = (isPublic === '1' || isPublic === 'True' || isPublic === 'true' || isPublic === true);
   document.getElementById('fIsPublic').checked = (mode === 'add' || isPublic === 'True' || isPublic === 'true' || isPublic === '1' || isPublic === true);
   document.getElementById('fRole').value = role || 'staff';
   document.getElementById('fPassword').value = '';
   document.getElementById('fLinkedin').value = linkedin || '';
   document.getElementById('fProfile').value = profile || '';
   document.getElementById('fScholar').value = scholar || '';
+  document.getElementById('fOrder').value = order || '0';
+  document.getElementById('fRegId').value = regId || '';
   document.getElementById('staffModal').classList.add('active');
 }
 
@@ -292,6 +308,38 @@ window.addEventListener('DOMContentLoaded', () => {
   if (editPermsUserId) {
     const btn = document.querySelector(`button[onclick*="${editPermsUserId}"]`);
     if (btn) btn.click();
+  }
+
+  // Drag and Drop Initialization
+  const grid = document.querySelector('.staff-grid');
+  if (grid) {
+    Sortable.create(grid, {
+      handle: '.drag-handle',
+      animation: 150,
+      ghostClass: 'sortable-ghost',
+      onEnd: function (evt) {
+        const itemEls = grid.querySelectorAll('.s-card');
+        const orderedIds = Array.from(itemEls).map(el => el.getAttribute('data-id'));
+        
+        const formData = new FormData();
+        formData.append('action', 'reorder');
+        formData.append('ordered_ids', JSON.stringify(orderedIds));
+        formData.append('csrfmiddlewaretoken', document.querySelector('[name=csrfmiddlewaretoken]').value);
+
+        fetch(window.location.href, {
+          method: 'POST',
+          body: formData,
+          headers: { 'X-Requested-With': 'XMLHttpRequest' }
+        }).then(res => res.json())
+          .then(data => {
+            if(data.success) {
+              grid.style.transition = 'background 0.3s';
+              grid.style.background = '#f0fdf4';
+              setTimeout(() => grid.style.background = 'transparent', 500);
+            }
+          }).catch(err => console.error(err));
+      }
+    });
   }
 });
 </script>

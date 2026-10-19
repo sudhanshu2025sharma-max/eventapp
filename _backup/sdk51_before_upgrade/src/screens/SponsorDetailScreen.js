@@ -157,7 +157,7 @@ export default function SponsorDetailScreen({ sponsorId, onBack }) {
 
           {(sponsor.linkedin_url || sponsor.twitter_url || sponsor.facebook_url || sponsor.instagram_url || sponsor.youtube_url) && (
             <View style={st.card}>
-              <Text style={st.sectionTitle}>Connect</Text>
+              <Text style={st.sectionTitle}>Connect with Spnonsor</Text>
               <View style={{ flexDirection: 'row', gap: SPACE.md, flexWrap: 'wrap' }}>
                 <SocialBtn icon="logo-linkedin"  url={sponsor.linkedin_url}  color="#0a66c2" />
                 <SocialBtn icon="logo-twitter"   url={sponsor.twitter_url}   color="#1DA1F2" />

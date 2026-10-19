@@ -3,13 +3,29 @@ from django.contrib.auth.decorators import login_required
 from django.contrib import messages
 from django.utils import timezone
 from django.db.models import Count, Q
-from apps.accounts.admin_views import admin_required
+from django.db import transaction
+from django.core.paginator import Paginator
+from django.core.exceptions import ValidationError
+from .quiz import apply_feed_extras, apply_feed_content
 from .models import FeedPost, FeedComment, FeedReaction
 from apps.schedule.models import ScheduleSession
+from apps.accounts.permissions_helper import module_required
+
+
+def _quiz_form_context(request, post=None):
+    if request.method == 'POST':
+        return {'type': request.POST.get('quiz_type', ''),
+                'question': request.POST.get('quiz_question', ''),
+                'options': request.POST.getlist('quiz_option'),
+                'correct': request.POST.get('quiz_correct_option', '')}
+    return {'type': post.quiz_type if post else '',
+            'question': post.quiz_question if post else '',
+            'options': post.quiz_options if post else [],
+            'correct': post.quiz_correct_option if post else None}
 
 
 @login_required
-@admin_required
+@module_required('feed')
 def feed_panel(request):
     tab = request.GET.get('tab', 'published')
 
@@ -43,7 +59,56 @@ def feed_panel(request):
 
 
 @login_required
-@admin_required
+@module_required('feed')
+def feed_quiz_stats(request, pk=None):
+    quizzes = FeedPost.objects.filter(post_type='quiz').annotate(
+        response_count=Count('quiz_responses')).order_by('-created_at')
+    if pk is None:
+        return render(request, 'panel/feed_quiz_stats.html', {
+            'quiz_page': Paginator(quizzes, 25).get_page(request.GET.get('page')),
+            'quiz_count': quizzes.count(),
+            'response_count': FeedPost.objects.filter(post_type='quiz').aggregate(
+                total=Count('quiz_responses'))['total'],
+        })
+
+    post = get_object_or_404(quizzes, pk=pk)
+    counts = dict(post.quiz_responses.values('selected_option').annotate(
+        total=Count('id')).values_list('selected_option', 'total'))
+    options = [{
+        'index': i, 'label': label, 'count': counts.get(i, 0),
+        'percent': round(counts.get(i, 0) * 100 / post.response_count, 1) if post.response_count else 0,
+        'correct': post.quiz_correct_option == i,
+        'selected': request.GET.get('option') == str(i),
+    } for i, label in enumerate(post.quiz_options)]
+    answers = post.quiz_responses.select_related('user').order_by('-created_at', '-pk')
+    search = request.GET.get('q', '').strip()[:200]
+    selected_option = request.GET.get('option', '')
+    if search:
+        answers = answers.filter(
+            Q(user__first_name__icontains=search) | Q(user__last_name__icontains=search)
+            | Q(user__email__icontains=search) | Q(user__registration_id__icontains=search))
+    if selected_option:
+        if selected_option.isdigit() and int(selected_option) < len(post.quiz_options):
+            answers = answers.filter(selected_option=int(selected_option))
+        else:
+            answers = answers.none()
+    page = Paginator(answers, 50).get_page(request.GET.get('page'))
+    rows = [{
+        'user': answer.user,
+        'option': post.quiz_options[answer.selected_option],
+        'created_at': answer.created_at,
+        'correct': answer.selected_option == post.quiz_correct_option,
+    } for answer in page]
+    return render(request, 'panel/feed_quiz_stats.html', {
+        'post': post, 'options': options, 'rows': rows, 'response_page': page,
+        'has_correct_answer': post.quiz_correct_option is not None,
+        'correct_count': counts.get(post.quiz_correct_option, 0),
+        'search': search, 'selected_option': selected_option,
+    })
+
+
+@login_required
+@module_required('feed')
 def feed_create(request):
     sessions = ScheduleSession.objects.filter(is_published=True).order_by('day', 'date', 'start_time')
     if request.method == 'POST':
@@ -61,15 +126,17 @@ def feed_create(request):
             return redirect(f'/panel/feed/?tab={"scheduled" if post.scheduled_at else "published"}')
     return render(request, 'panel/feed_form.html', {
         'mode': 'create',
+        'quiz_form': _quiz_form_context(request),
         'sessions': sessions,
         'post_types': FeedPost.POST_TYPES,
     })
 
 
 @login_required
-@admin_required
+@module_required('feed')
+@transaction.atomic
 def feed_edit(request, pk):
-    post = get_object_or_404(FeedPost, pk=pk)
+    post = get_object_or_404(FeedPost.objects.select_for_update(), pk=pk)
     sessions = ScheduleSession.objects.filter(is_published=True).order_by('day', 'date', 'start_time')
     if request.method == 'POST':
         updated = _save_post(request, post)
@@ -78,6 +145,9 @@ def feed_edit(request, pk):
             return redirect('/panel/feed/')
     return render(request, 'panel/feed_form.html', {
         'mode': 'edit',
+        'quiz_form': _quiz_form_context(request, post),
+        'quiz_results': [{'option': option, 'count': post.quiz_responses.filter(selected_option=i).count()}
+                         for i, option in enumerate(post.quiz_options)],
         'post': post,
         'sessions': sessions,
         'post_types': FeedPost.POST_TYPES,
@@ -85,7 +155,7 @@ def feed_edit(request, pk):
 
 
 @login_required
-@admin_required
+@module_required('feed')
 def feed_delete(request, pk):
     post = get_object_or_404(FeedPost, pk=pk)
     if request.method == 'POST':
@@ -95,7 +165,7 @@ def feed_delete(request, pk):
 
 
 @login_required
-@admin_required
+@module_required('feed')
 def feed_pin_toggle(request, pk):
     post = get_object_or_404(FeedPost, pk=pk)
     if request.method == 'POST':
@@ -105,7 +175,7 @@ def feed_pin_toggle(request, pk):
 
 
 @login_required
-@admin_required
+@module_required('feed')
 def feed_comments(request, pk):
     post = get_object_or_404(FeedPost, pk=pk)
     comments = FeedComment.objects.filter(post=post, parent__isnull=True).select_related('user').prefetch_related('replies__user').order_by('created_at')
@@ -122,6 +192,8 @@ def feed_comments(request, pk):
     })
 
 
+@login_required(login_url='/panel/login/')
+@module_required('feed')
 def _save_post(request, post):
     title      = request.POST.get('title', '').strip()
     body       = request.POST.get('body', '').strip()
@@ -132,8 +204,15 @@ def _save_post(request, post):
     session_id = request.POST.get('session_id') or None
     scheduled  = request.POST.get('scheduled_at', '').strip() or None
 
-    if not title or not body:
-        messages.error(request, 'Title and body are required.')
+    extra_data = request.POST.copy()
+    if post_type == 'quiz':
+        import json
+        extra_data['quiz_options'] = json.dumps(request.POST.getlist('quiz_option'))
+    try:
+        apply_feed_extras(post, extra_data)
+        apply_feed_content(post, extra_data)
+    except ValidationError as exc:
+        messages.error(request, ' '.join(exc.messages))
         return None
 
     post.title         = title

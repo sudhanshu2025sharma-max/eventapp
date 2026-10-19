@@ -1,7 +1,7 @@
 {% extends "panel/base.html" %}
 {% block title %}Import Participants — ETD 2026{% endblock %}
 {% block page_title %}Import Participants{% endblock %}
-{% block page_subtitle %}Upload CSV or Excel file with participant details{% endblock %}
+{% block page_subtitle %}Upload CSV or Excel file to create user accounts in bulk{% endblock %}
 
 {% block content %}
 {% if messages %}
@@ -13,7 +13,8 @@
   {% endfor %}
 {% endif %}
 
-<div style="display:grid;grid-template-columns:1fr 1fr;gap:24px;max-width:900px;">
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:24px;max-width:1080px;">
+  <!-- Upload Card -->
   <div class="card">
     <div class="card-header">
       <h3>Upload File</h3>
@@ -24,9 +25,27 @@
     <div class="card-body">
       <form method="post" enctype="multipart/form-data">
         {% csrf_token %}
+        
+        <div style="margin-bottom:16px;">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+            <label class="form-label" style="font-weight:700;margin:0;">Target Category for this Upload</label>
+            <button type="button" onclick="document.getElementById('new-cat-modal').style.display='flex';" class="btn btn-sm btn-secondary" style="font-size:11px;padding:2px 8px;background:#4f46e5;color:#fff;border-color:#4f46e5;">
+              <i class="fas fa-plus"></i> Add New Category
+            </button>
+          </div>
+          <select name="default_category" class="form-control" style="font-weight:600;color:var(--primary);">
+            {% for cat in categories %}
+              <option value="{{ cat }}">{{ cat }}</option>
+            {% endfor %}
+          </select>
+          <span style="font-size:12px;color:var(--text-tertiary);margin-top:4px;display:block;">
+            Applies to rows that do not explicitly specify a <code>Category</code> column in the CSV.
+          </span>
+        </div>
+
         <div style="margin-bottom:20px;">
           <label class="form-label">Select CSV or Excel file</label>
-          <div id="drop-zone" style="border:2px dashed var(--border);border-radius:12px;padding:40px 20px;text-align:center;cursor:pointer;transition:all 0.2s;background:var(--bg);position:relative;"
+          <div id="drop-zone" style="border:2px dashed var(--border);border-radius:12px;padding:32px 20px;text-align:center;cursor:pointer;transition:all 0.2s;background:var(--bg);position:relative;"
                onclick="document.getElementById('file-input').click();">
             <i class="fas fa-cloud-arrow-up" style="font-size:36px;color:var(--text-tertiary);display:block;margin-bottom:12px;"></i>
             <p style="font-size:14px;color:var(--text-secondary);margin-bottom:4px;font-weight:600;">
@@ -39,6 +58,7 @@
                  style="display:none;"
                  onchange="var n=this.files[0]?.name||'';document.getElementById('file-name').textContent=n;if(n){document.getElementById('drop-zone').style.borderColor='var(--primary)';document.getElementById('drop-zone').style.background='var(--primary-light)';}">
         </div>
+
         <button type="submit" class="btn btn-primary" style="width:100%;">
           <i class="fas fa-upload"></i> Upload &amp; Preview
         </button>
@@ -46,51 +66,77 @@
     </div>
   </div>
 
+  <!-- Available Categories & Instructions Column -->
   <div>
+    <!-- Available Categories Card -->
     <div class="card" style="margin-bottom:20px;">
-      <div class="card-header">
-        <h3>Required Columns</h3>
+      <div class="card-header" style="display:flex;justify-content:space-between;align-items:center;">
+        <h3>🏷️ Active User Categories</h3>
+        <button type="button" onclick="document.getElementById('new-cat-modal').style.display='flex';" class="btn btn-sm btn-primary" style="font-size:12px;">
+          <i class="fas fa-plus"></i> New Category
+        </button>
       </div>
       <div class="card-body">
         <div style="display:flex;flex-wrap:wrap;gap:8px;">
-          <span class="badge badge-info">Full Name *</span>
-          <span class="badge badge-info">Email ID *</span>
-          <span class="badge" style="background:var(--bg);color:var(--text-secondary);">Salutation</span>
-          <span class="badge" style="background:var(--bg);color:var(--text-secondary);">Registration ID</span>
-          <span class="badge" style="background:var(--bg);color:var(--text-secondary);">Gender</span>
-          <span class="badge" style="background:var(--bg);color:var(--text-secondary);">Designation</span>
-          <span class="badge" style="background:var(--bg);color:var(--text-secondary);">Organisation / Institute</span>
-          <span class="badge" style="background:var(--bg);color:var(--text-secondary);">Mobile Number</span>
-          <span class="badge" style="background:var(--bg);color:var(--text-secondary);">Address</span>
-          <span class="badge" style="background:var(--bg);color:var(--text-secondary);">PIN / Postal Code</span>
+          {% for cname, count in category_stats.items %}
+            <div style="background:var(--surface);border:1px solid var(--border);padding:6px 12px;border-radius:8px;display:flex;align-items:center;gap:8px;font-size:13px;">
+              <span style="font-weight:600;color:var(--text);">{{ cname }}</span>
+              <span style="background:var(--primary-light);color:var(--primary);font-weight:700;font-size:11px;padding:2px 6px;border-radius:12px;">{{ count }} users</span>
+              {% if count == 0 %}
+                <form method="post" style="margin:0;display:inline;">
+                  {% csrf_token %}
+                  <input type="hidden" name="action" value="delete_category">
+                  <input type="hidden" name="category_name" value="{{ cname }}">
+                  <button type="submit" onclick="return confirm('Delete unused category {{ cname }}?');" style="background:none;border:none;color:#ef4444;cursor:pointer;padding:0 2px;" title="Delete Category">
+                    <i class="fas fa-times-circle"></i>
+                  </button>
+                </form>
+              {% endif %}
+            </div>
+          {% endfor %}
         </div>
-        <p style="margin-top:14px;font-size:13px;color:var(--text-tertiary);">
-          Fields marked with <strong>*</strong> are mandatory. Registration ID (e.g. ETD-2026-R-001) is imported from the file.
-        </p>
       </div>
     </div>
 
+    <!-- Category Instructions -->
     <div class="card">
       <div class="card-header">
-        <h3>How it works</h3>
+        <h3>💡 Category Import Options</h3>
       </div>
-      <div class="card-body">
-        <div style="display:flex;flex-direction:column;gap:16px;">
-          <div style="display:flex;gap:12px;align-items:flex-start;">
-            <div style="width:28px;height:28px;border-radius:50%;background:var(--primary-light);color:var(--primary);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;flex-shrink:0;">1</div>
-            <div><h4 style="font-size:14px;font-weight:600;">Upload</h4><p style="font-size:13px;color:var(--text-tertiary);">Upload CSV/Excel with participant data</p></div>
-          </div>
-          <div style="display:flex;gap:12px;align-items:flex-start;">
-            <div style="width:28px;height:28px;border-radius:50%;background:var(--primary-light);color:var(--primary);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;flex-shrink:0;">2</div>
-            <div><h4 style="font-size:14px;font-weight:600;">Review</h4><p style="font-size:13px;color:var(--text-tertiary);">Check parsed rows, remove errors</p></div>
-          </div>
-          <div style="display:flex;gap:12px;align-items:flex-start;">
-            <div style="width:28px;height:28px;border-radius:50%;background:var(--primary-light);color:var(--primary);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;flex-shrink:0;">3</div>
-            <div><h4 style="font-size:14px;font-weight:600;">Confirm</h4><p style="font-size:13px;color:var(--text-tertiary);">Create accounts — optionally send login credentials via email</p></div>
-          </div>
+      <div class="card-body" style="font-size:13px;line-height:1.6;color:var(--text-secondary);">
+        <div style="background:var(--bg);padding:12px;border-radius:8px;border:1px solid var(--border);margin-bottom:12px;">
+          <strong style="color:var(--text);">Option 1: Add a "Category" column in your CSV</strong>
+          <p style="font-size:12px;color:var(--text-tertiary);margin-top:4px;">
+            Add a column named <code>Category</code> or <code>Role</code> in your spreadsheet to assign custom categories per row (e.g., <em>Sponsor Delegate</em>, <em>Invited Guest</em>).
+          </p>
+        </div>
+
+        <div style="background:var(--bg);padding:12px;border-radius:8px;border:1px solid var(--border);">
+          <strong style="color:var(--text);">Option 2: Select Target Category from dropdown</strong>
+          <p style="font-size:12px;color:var(--text-tertiary);margin-top:4px;">
+            Choose a category above before uploading. All rows without a category column will belong to that group.
+          </p>
         </div>
       </div>
     </div>
+  </div>
+</div>
+
+<!-- Modal for Creating New Category -->
+<div id="new-cat-modal" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);z-index:999;align-items:center;justify-content:center;">
+  <div style="background:#fff;border-radius:16px;padding:24px;width:100%;max-width:420px;box-shadow:0 20px 25px -5px rgba(0,0,0,0.1);">
+    <h3 style="margin-top:0;margin-bottom:8px;font-size:18px;">Create New Category</h3>
+    <p style="font-size:13px;color:var(--text-tertiary);margin-bottom:16px;">Add a new category name to group users during single creation or bulk import.</p>
+    <form method="post">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="add_category">
+      <label class="form-label" style="font-weight:700;">Category Name *</label>
+      <input type="text" name="new_category_name" required placeholder="e.g. Media Press, Exhibitor, VIP Guest" class="form-control" style="margin-bottom:20px;">
+      <div style="display:flex;justify-content:flex-end;gap:10px;">
+        <button type="button" onclick="document.getElementById('new-cat-modal').style.display='none';" class="btn btn-secondary">Cancel</button>
+        <button type="submit" class="btn btn-primary"><i class="fas fa-check"></i> Create Category</button>
+      </div>
+    </form>
   </div>
 </div>
 {% endblock %}

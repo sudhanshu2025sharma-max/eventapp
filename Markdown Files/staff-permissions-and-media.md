@@ -1,0 +1,13 @@
+# Staff Ideathon access and media performance
+
+Ideathon web administration, registration changes, and team management honor the `ideathon` staff permission. Poll management separately honors `polls`. Admins and team heads retain their existing full module access. Revoking a permission takes effect on the next request.
+
+The mobile registration endpoint accepts `{"registration_open": true}` or `false`. Sending the same desired state twice does not reverse the state or enqueue another opening announcement. Older mobile clients can still use the original toggle request. Push delivery starts after the configuration commits, outside the HTTP request; a push timeout cannot hold up registration. Notification delivery status comes from the sender, so failed pushes remain failed. The existing session reminder worker recovers registration announcements left pending for over a minute after a worker restart; it does not dispatch unrelated notification drafts.
+
+`confhub/media.py` creates cached, versioned image previews without overwriting originals. Network portraits and speaker/sponsor lists use these previews in their existing URL fields. Photo gallery and checkpoint payloads add separate thumbnail fields, and the updated mobile grids use them while full-screen views keep original images. Transparent logos stay transparent. Versioned thumbnails have immutable cache headers and conditional ETags; ordinary public images have a one-hour cache duration. Chat attachments, documents, and error-report files are excluded from the new public caching policy.
+
+Network API queries preload speaker profiles, and speaker lists aggregate talk counts in SQL. The updated mobile Network screen reuses the speakers returned with the initial directory response instead of fetching that directory twice. Photo filters no longer refetch all auxiliary lists or duplicate the gallery request, and outdated filter responses cannot replace the latest results.
+
+The backend changes are active. Mobile grid changes and explicit registration-state requests need a new mobile build. Existing clients benefit immediately from the backend permission, notification timeout, list-preview, query, and cache changes.
+
+Focused tests: `apps.polls.tests.IdeathonPermissionTests`, `confhub.test_media.MediaPreviewTests`, and `confhub.test_media.MediaApiTests`. Run them against an isolated test database and local caches. They cover permission assignment/revocation, idempotent registration updates, deferred notification dispatch and failure status, preview size/transparency/concurrency/cache validation, original image URLs, and directory query counts.

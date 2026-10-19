@@ -19,6 +19,8 @@ class Command(BaseCommand):
     help = 'Send session and paper reminder push notifications'
 
     def handle(self, *args, **options):
+        from apps.polls.registration import recover_registration_notifications
+        recover_registration_notifications()
         from apps.schedule.models import ScheduleSession, SessionBookmark, PaperBookmark
         from apps.notifications.models import DeviceToken
         from apps.notifications.fcm import send_to_tokens

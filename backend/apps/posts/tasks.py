@@ -48,7 +48,7 @@ def send_post_push(post_id):
         'general':      '📌 Post',
     }
     title = type_labels.get(post.post_type, '📌 Post')
-    body  = post.title
+    body  = post.title or post.quiz_question
 
     tokens = list(
         DeviceToken.objects.filter(is_active=True)

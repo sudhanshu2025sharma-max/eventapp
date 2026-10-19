@@ -7,6 +7,8 @@ from django.http import HttpResponse, HttpResponseForbidden
 from django.utils import timezone
 from datetime import timedelta
 from functools import wraps
+from django.contrib.auth.decorators import login_required
+from apps.accounts.permissions_helper import module_required
 
 from .models import (
     Conversation, Message, ConnectionRequest,
@@ -14,19 +16,10 @@ from .models import (
 )
 
 
-def admin_required(view_func):
-    @wraps(view_func)
-    def wrapper(request, *args, **kwargs):
-        if not request.user.is_authenticated:
-            from django.conf import settings
-            return redirect(settings.LOGIN_URL)
-        if not hasattr(request.user, 'role') or request.user.role not in ('super_admin', 'mgmt_admin'):
-            return HttpResponseForbidden('Admin access required.')
-        return view_func(request, *args, **kwargs)
-    return wrapper
 
 
-@admin_required
+@login_required(login_url="/panel/login/")
+@module_required("chat")
 def chat_panel(request):
     search = request.GET.get('search', '').strip()
 
@@ -65,7 +58,8 @@ def chat_panel(request):
     })
 
 
-@admin_required
+@login_required(login_url="/panel/login/")
+@module_required("chat")
 def chat_thread(request, conversation_id):
     conv = get_object_or_404(Conversation, id=conversation_id)
     msgs = conv.messages.select_related('sender', 'reply_to', 'reply_to__sender').prefetch_related('reactions', 'reports').order_by('created_at')
@@ -94,7 +88,8 @@ def chat_thread(request, conversation_id):
     })
 
 
-@admin_required
+@login_required(login_url="/panel/login/")
+@module_required("chat")
 def chat_requests_panel(request):
     search = request.GET.get('search', '').strip()
     status_filter = request.GET.get('status', '').strip()
@@ -122,7 +117,8 @@ def chat_requests_panel(request):
     })
 
 
-@admin_required
+@login_required(login_url="/panel/login/")
+@module_required("chat")
 def chat_reports_panel(request):
     status_filter = request.GET.get('status', '').strip()  # 'pending' or 'reviewed'
 
@@ -148,7 +144,8 @@ def chat_reports_panel(request):
     })
 
 
-@admin_required
+@login_required(login_url="/panel/login/")
+@module_required("chat")
 def chat_report_action(request, report_id):
     if request.method != 'POST':
         return redirect('chat_reports_panel')
@@ -215,7 +212,8 @@ def chat_report_action(request, report_id):
     return redirect('chat_reports_panel')
 
 
-@admin_required
+@login_required(login_url="/panel/login/")
+@module_required("chat")
 def chat_analytics(request):
     now = timezone.now()
     today = now.date()
@@ -264,7 +262,8 @@ def chat_analytics(request):
     })
 
 
-@admin_required
+@login_required(login_url="/panel/login/")
+@module_required("chat")
 def chat_export(request):
     fmt = request.GET.get('format', 'csv')
 
@@ -334,7 +333,8 @@ def chat_export(request):
     return response
 
 
-@admin_required
+@login_required(login_url="/panel/login/")
+@module_required("chat")
 def chat_shakes_panel(request):
     from django.db.models import Q
     from django.shortcuts import render
@@ -346,7 +346,7 @@ def chat_shakes_panel(request):
 
     qs = ShakeLog.objects.select_related('user', 'partner').order_by('-created_at')
 
-    if event_type in ('shake', 'connect'):
+    if event_type in ('shake', 'connect', 'scan_connect'):
         qs = qs.filter(event_type=event_type)
 
     if date_str:
@@ -369,6 +369,7 @@ def chat_shakes_panel(request):
     total_count = qs.count()
     shake_count = qs.filter(event_type='shake').count()
     connect_count = qs.filter(event_type='connect').count()
+    scan_count = qs.filter(event_type='scan_connect').count()
 
     rows = []
     for log in logs:
@@ -392,10 +393,12 @@ def chat_shakes_panel(request):
         'total_count': total_count,
         'shake_count': shake_count,
         'connect_count': connect_count,
+        'scan_count': scan_count,
     })
 
 
-@admin_required
+@login_required(login_url="/panel/login/")
+@module_required("chat")
 def call_logs_panel(request):
     """Call logs dashboard — shows all voice call sessions."""
     from apps.chat.models import CallSession

@@ -1,6 +1,6 @@
 from rest_framework.decorators import api_view, permission_classes, parser_classes
 from rest_framework.permissions import IsAuthenticated, AllowAny
-from rest_framework.parsers import MultiPartParser, FormParser
+from rest_framework.parsers import JSONParser, MultiPartParser, FormParser
 from rest_framework.response import Response
 from django.utils import timezone
 from django.db.models import Count, Q
@@ -21,10 +21,15 @@ from apps.checkins.models import CheckIn
 from apps.leaderboard.utils import award_points
 from apps.leaderboard.models import PointAction
 from .models import Photo, PhotoSettings, ScheduleSession, SelfiePoint, SelfiePointImage, SelfieSubmission
+from confhub.media import preview_url
 
 
 def _is_checked_in(user):
-    return CheckIn.objects.filter(user=user, checkin_type='conference').exists()
+    if not user or not user.is_authenticated:
+        return False
+    if getattr(user, 'role', '') in ('super_admin', 'mgmt_admin', 'team_head', 'staff', 'speaker'):
+        return True
+    return CheckIn.objects.filter(user=user).exists()
 
 
 def _photo_data(photo, request):
@@ -37,6 +42,7 @@ def _photo_data(photo, request):
     return {
         'id': photo.id,
         'image_url': request.build_absolute_uri(photo.image.url) if photo.image else None,
+        'thumbnail_url': preview_url(photo.image, request, size=512),
         'caption': photo.caption,
         'tags': list(dict.fromkeys(tags)),
         'session_id': str(photo.session_id) if photo.session_id else None,
@@ -62,19 +68,43 @@ def _is_in_corridor(lat_p, lng_p, lat_a, lng_a, lat_b, lng_b, width_meters):
     return math.sqrt((px - cx) ** 2 + (py - cy) ** 2) <= (width_meters / 2.0)
 
 
-def _selfie_point_data(sp, request, completed=False, submission=None):
+def _selfie_point_data(sp, request, completed=False, submissions=None):
+    if submissions is None and request and request.user.is_authenticated:
+        submissions = list(SelfieSubmission.objects.filter(user=request.user, selfie_point=sp).exclude(status='rejected'))
+    elif submissions is None:
+        submissions = []
+
+    sub_list = []
+    approved_count = 0
+    for s in submissions:
+        if s.status == 'approved':
+            approved_count += 1
+        sub_list.append({
+            'id': s.id,
+            'photo_url': request.build_absolute_uri(s.photo.url) if s.photo else None,
+            'thumbnail_url': preview_url(s.photo, request, size=480),
+            'distance_meters': s.distance_meters,
+            'verified_in_geofence': s.verified_in_geofence,
+            'status': s.status,
+            'points_awarded': s.points_awarded,
+            'rejected_reason': s.rejected_reason,
+            'created_at': s.created_at.isoformat(),
+        })
+
     sample = None
+    sample_preview = preview_url(sp.sample_photo, request, size=768)
     if sp.sample_photo:
         try:
             sample = request.build_absolute_uri(sp.sample_photo.url)
         except Exception:
             sample = sp.sample_photo.url
 
-    # Multi-image support — returns array of URLs
     sample_urls = []
+    sample_previews = []
     for img in sp.images.all():
         try:
             sample_urls.append(request.build_absolute_uri(img.image.url))
+            sample_previews.append(preview_url(img.image, request, size=768))
         except Exception:
             pass
     if not sample_urls and sample:
@@ -87,10 +117,12 @@ def _selfie_point_data(sp, request, completed=False, submission=None):
                 'id': s.id,
                 'name': s.name,
                 'logo_url': request.build_absolute_uri(s.logo.url) if s.logo else None,
+                'thumbnail_url': preview_url(s.logo, request, size=256),
                 'tier': s.tier,
                 'stall_number': getattr(s, 'stall_number', None)
             })
 
+    active_count = len(sub_list)
     return {
         'id': sp.id,
         'name': sp.name,
@@ -107,24 +139,17 @@ def _selfie_point_data(sp, request, completed=False, submission=None):
         'points': sp.points,
         'sample_photo_url': sample,
         'sample_photo_urls': sample_urls,
+        'sample_thumbnail_url': sample_preview,
+        'sample_thumbnail_urls': sample_previews or ([sample_preview] if sample_preview else []),
         'is_active': sp.is_active,
-        'completed': completed,
+        'completed': completed or (active_count >= 5),
         'sponsors': sponsors_list,
-        'submission': (
-            {
-                'id': submission.id,
-                'photo_url': request.build_absolute_uri(submission.photo.url) if submission.photo else None,
-                'distance_meters': submission.distance_meters,
-                'verified_in_geofence': submission.verified_in_geofence,
-                'status': submission.status,
-                'points_awarded': submission.points_awarded,
-                'rejected_reason': submission.rejected_reason,
-                'created_at': submission.created_at.isoformat(),
-            }
-            if submission else None
-        ),
+        'submissions_count': active_count,
+        'max_submissions': 5,
+        'can_submit': active_count < 5,
+        'submissions': sub_list,
+        'submission': sub_list[0] if sub_list else None,
     }
-
 
 # ── Public / Gallery ────────────────────────────────────────────────
 
@@ -171,6 +196,25 @@ def upload(request):
         return Response({'error': 'Photo uploads are currently closed by admin.'}, status=403)
 
     image = request.FILES.get('image')
+    image_b64 = request.data.get('image_base64')
+    if not image and image_b64:
+        import base64, uuid
+        from django.core.files.base import ContentFile
+        try:
+            if 'base64,' in image_b64:
+                header, data_str = image_b64.split('base64,', 1)
+                ext = 'png' if 'image/png' in header else 'jpg'
+            else:
+                data_str = image_b64; ext = 'jpg'
+            data_str = data_str.encode('ascii', 'ignore').decode('ascii').strip()
+            missing_padding = len(data_str) % 4
+            if missing_padding:
+                data_str += '=' * (4 - missing_padding)
+            img_bytes = base64.b64decode(data_str)
+            file_name = f"selfie_{request.user.id}_{uuid.uuid4().hex[:6]}.{ext}"
+            image = ContentFile(img_bytes, name=file_name)
+        except Exception as e:
+            return Response({'error': f'Invalid image upload: {str(e)}'}, status=400)
     image_b64 = request.data.get('image_base64')
 
     if not image and image_b64:
@@ -447,16 +491,27 @@ def _haversine_m(lat1, lon1, lat2, lon2):
 def selfie_points_list(request):
     cfg = PhotoSettings.get()
     points = SelfiePoint.objects.filter(is_active=True).prefetch_related('images', 'sponsors').order_by('name')
-    mine = {s.selfie_point_id: s for s in SelfieSubmission.objects.filter(user=request.user).select_related('selfie_point')}
+    
+    from collections import defaultdict
+    user_subs = defaultdict(list)
+    for s in SelfieSubmission.objects.filter(user=request.user).exclude(status='rejected'):
+        user_subs[s.selfie_point_id].append(s)
+
+    results = []
+    for sp in points:
+        subs = user_subs.get(sp.id, [])
+        is_completed = any(s.status == 'approved' for s in subs) or (len(subs) >= 5)
+        results.append(_selfie_point_data(sp, request, completed=is_completed, submissions=subs))
+
     return Response({
         'selfie_upload_open': cfg.selfie_upload_open,
-        'points': [_selfie_point_data(sp, request, completed=(sp.id in mine and mine[sp.id].status == 'approved'), submission=mine.get(sp.id)) for sp in points]
+        'points': results
     })
 
 
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
-@parser_classes([MultiPartParser, FormParser])
+@parser_classes([MultiPartParser, FormParser, JSONParser])
 def selfie_upload(request):
     if not _is_checked_in(request.user):
         return Response({'error': 'Conference check-in required'}, status=403)
@@ -467,6 +522,25 @@ def selfie_upload(request):
     user_lat = request.data.get('user_latitude')
     user_lng = request.data.get('user_longitude')
     image = request.FILES.get('image')
+    image_b64 = request.data.get('image_base64')
+    if not image and image_b64:
+        import base64, uuid
+        from django.core.files.base import ContentFile
+        try:
+            if 'base64,' in image_b64:
+                header, data_str = image_b64.split('base64,', 1)
+                ext = 'png' if 'image/png' in header else 'jpg'
+            else:
+                data_str = image_b64; ext = 'jpg'
+            data_str = data_str.encode('ascii', 'ignore').decode('ascii').strip()
+            missing_padding = len(data_str) % 4
+            if missing_padding:
+                data_str += '=' * (4 - missing_padding)
+            img_bytes = base64.b64decode(data_str)
+            file_name = f"selfie_{request.user.id}_{uuid.uuid4().hex[:6]}.{ext}"
+            image = ContentFile(img_bytes, name=file_name)
+        except Exception as e:
+            return Response({'error': f'Invalid image upload: {str(e)}'}, status=400)
     if not point_id:
         return Response({'error': 'selfie_point_id is required'}, status=400)
     if user_lat is None or user_lng is None:
@@ -475,7 +549,9 @@ def selfie_upload(request):
         sp = SelfiePoint.objects.get(pk=point_id, is_active=True)
     except SelfiePoint.DoesNotExist:
         return Response({'error': 'Checkpoint not found or inactive'}, status=404)
-    if SelfieSubmission.objects.filter(user=request.user, selfie_point=sp).exists():
+    active_count = SelfieSubmission.objects.filter(user=request.user, selfie_point=sp).exclude(status='rejected').count()
+    if active_count >= 5:
+        return Response({'error': 'Maximum limit of 5 submissions reached for this spot.'}, status=400)
         return Response({'error': 'You already submitted a check-in for this spot.'}, status=400)
     try:
         lat, lng = float(user_lat), float(user_lng)
@@ -502,7 +578,7 @@ def selfie_upload(request):
             return Response({'error': 'You already submitted a check-in for this spot.'}, status=400)
         return Response({'success': True, 'verified_in_geofence': True, 'status': 'pending', 'points_awarded': 0,
                          'message': 'Selfie submitted! Awaiting admin verification.',
-                         'submission': _selfie_point_data(sp, request, completed=False, submission=sub)['submission']}, status=201)
+                         'submission': _selfie_point_data(sp, request, completed=False, submissions=[sub])['submission']}, status=201)
     else:
         inside = _is_in_corridor(lat, lng, sp.point_a_lat, sp.point_a_lng, sp.point_b_lat, sp.point_b_lng, sp.corridor_width_meters)
         if not inside:
@@ -521,7 +597,7 @@ def selfie_upload(request):
             return Response({'error': 'You already checked into this sponsor zone.'}, status=400)
         return Response({'success': True, 'verified_in_geofence': True, 'status': 'approved', 'points_awarded': pts,
                          'message': f'Welcome to {sp.name}! +{pts} points credited.',
-                         'submission': _selfie_point_data(sp, request, completed=True, submission=sub)['submission']}, status=201)
+                         'submission': _selfie_point_data(sp, request, completed=True, submissions=[sub])['submission']}, status=201)
 
 
 # ── Mobile Admin API ───────────────────────────────────────────────
@@ -538,7 +614,7 @@ def admin_sponsors_flat(request):
 
 @api_view(['GET', 'POST'])
 @permission_classes([IsAuthenticated])
-@parser_classes([MultiPartParser, FormParser])
+@parser_classes([MultiPartParser, FormParser, JSONParser])
 def admin_checkpoints_list_create(request):
     if not _is_admin(request.user):
         return Response({'error': 'Forbidden'}, status=403)
@@ -627,3 +703,32 @@ def admin_checkpoint_delete(request, pk):
         return Response({'success': True})
     except SelfiePoint.DoesNotExist:
         return Response({'error': 'Not found'}, status=404)
+
+@api_view(['POST', 'DELETE'])
+@permission_classes([IsAuthenticated])
+def delete_my_submission(request, point_id):
+    try:
+        sub = SelfieSubmission.objects.get(user=request.user, selfie_point_id=point_id)
+        if sub.status == 'approved' and sub.points_awarded > 0:
+            award_points(request.user, PointAction.PHOTO_UPLOAD, note=f'Revoked: {sub.selfie_point.name}', points_override=-sub.points_awarded)
+        # Delete associated photo from gallery wall if exists
+        Photo.objects.filter(uploader=request.user, caption__icontains=sub.selfie_point.name).delete()
+        sub.delete()
+        return Response({'success': True, 'message': 'Submission deleted successfully.'})
+    except SelfieSubmission.DoesNotExist:
+        return Response({'error': 'Submission not found.'}, status=404)
+
+@api_view(['POST', 'DELETE'])
+@permission_classes([IsAuthenticated])
+def delete_my_submission_by_id(request, sub_id):
+    try:
+        sub = SelfieSubmission.objects.get(pk=sub_id, user=request.user)
+        if sub.status == 'approved' and sub.points_awarded > 0:
+            award_points(request.user, PointAction.PHOTO_UPLOAD, note=f'Revoked: {sub.selfie_point.name}', points_override=-sub.points_awarded)
+        # Delete associated gallery photo if present
+        if sub.photo:
+            Photo.objects.filter(uploader=request.user, caption__icontains=sub.selfie_point.name, image=sub.photo).delete()
+        sub.delete()
+        return Response({'success': True, 'message': 'Submission deleted successfully.'})
+    except SelfieSubmission.DoesNotExist:
+        return Response({'error': 'Submission not found or not yours.'}, status=404)

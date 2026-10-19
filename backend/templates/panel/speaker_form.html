@@ -9,13 +9,6 @@
 .form-group { display:flex; flex-direction:column; }
 .form-group.full { grid-column:1/-1; }
 .form-section { margin-bottom:28px; }
-.form-section-title {
-    font-size:13px; font-weight:700; text-transform:uppercase;
-    letter-spacing:0.8px; color:var(--text-tertiary);
-    margin-bottom:16px; padding-bottom:8px; border-bottom:1px solid var(--border);
-    display:flex; align-items:center; gap:8px;
-}
-.form-section-title i { color:var(--primary); }
 .photo-preview {
     width:96px; height:96px; border-radius:14px; object-fit:cover;
     border:2px solid var(--border); margin-bottom:10px;
@@ -31,11 +24,6 @@
 .toggle-label { flex:1; }
 .toggle-label span { display:block; font-size:14px; font-weight:600; color:var(--text); }
 .toggle-label small { font-size:12px; color:var(--text-tertiary); }
-.toggle { width:44px; height:24px; background:var(--border); border-radius:12px; position:relative; cursor:pointer; transition:background 0.2s; }
-.toggle.on { background:var(--primary); }
-.toggle-thumb { width:18px; height:18px; background:#fff; border-radius:9px; position:absolute; top:3px; left:3px; transition:left 0.2s; box-shadow:0 1px 4px rgba(0,0,0,0.2); }
-.toggle.on .toggle-thumb { left:23px; }
-input[type=checkbox] { width:18px; height:18px; accent-color:var(--primary); cursor:pointer; }
 
 /* Talk cards */
 .talk-card {
@@ -73,7 +61,7 @@ input[type=checkbox] { width:18px; height:18px; accent-color:var(--primary); cur
     <!-- IDENTITY -->
     <div class="card form-section">
       <div class="card-header">
-        <h3><i class="fas fa-user" style="margin-right:8px;color:var(--primary);"></i>Identity</h3>
+        <h3><i class="fas fa-user" style="margin-right:8px;color:var(--primary);"></i>Identity & Registration</h3>
       </div>
       <div class="card-body">
         <div class="form-grid">
@@ -88,9 +76,11 @@ input[type=checkbox] { width:18px; height:18px; accent-color:var(--primary); cur
           </div>
 
           <div class="form-group">
-            <label class="form-label">Display Order</label>
-            <input type="number" name="display_order" class="form-control" min="0"
-                   value="{{ speaker.display_order|default:0 }}" />
+            <label class="form-label"><i class="fas fa-id-badge" style="margin-right:6px;color:var(--primary);"></i>Registration ID</label>
+            <input type="text" name="registration_id" class="form-control"
+                   value="{% if speaker.user and speaker.user.registration_id %}{{ speaker.user.registration_id }}{% endif %}" 
+                   placeholder="e.g. ETD-2026-SPK01" />
+            <small style="color:var(--text-tertiary);margin-top:4px;">Unique ID for speaker check-in scanner</small>
           </div>
 
           <div class="form-group">
@@ -103,6 +93,12 @@ input[type=checkbox] { width:18px; height:18px; accent-color:var(--primary); cur
             <label class="form-label">Last Name *</label>
             <input type="text" name="last_name" class="form-control" required
                    value="{{ speaker.last_name|default:'' }}" placeholder="e.g. Fox" />
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Display Order</label>
+            <input type="number" name="display_order" class="form-control" min="0"
+                   value="{{ speaker.display_order|default:0 }}" />
           </div>
 
           <div class="form-group full">
@@ -196,7 +192,6 @@ input[type=checkbox] { width:18px; height:18px; accent-color:var(--primary); cur
       </div>
     </div>
 
-
     <!-- LOGIN ACCOUNT (Create mode only) -->
     {% if not speaker %}
     <div class="card form-section">
@@ -212,9 +207,9 @@ input[type=checkbox] { width:18px; height:18px; accent-color:var(--primary); cur
           </div>
         </label>
         <div class="form-group full">
-          <label class="form-label"><i class="fas fa-at" style="margin-right:6px;color:var(--primary);"></i>Login Email *</label>
+          <label class="form-label"><i class="fas fa-at" style="margin-right:6px;color:var(--primary);"></i>Login Email (Optional)</label>
           <input type="email" name="login_email" class="form-control" placeholder="speaker@iitd.ac.in" />
-          <small style="color:var(--text-tertiary);margin-top:4px;">A temporary password will be generated and shown to you after creating.</small>
+          <small style="color:var(--text-tertiary);margin-top:4px;">Leave empty to auto-generate placeholder email if email is unknown.</small>
         </div>
       </div>
     </div>
@@ -252,10 +247,10 @@ input[type=checkbox] { width:18px; height:18px; accent-color:var(--primary); cur
     </div>
   </form>
 
-  <!-- Right: Talks panel (only on edit) -->
+  <!-- Right: Credentials & Talks panel (only on edit) -->
   <div>
     {% if speaker %}
-        <!-- LOGIN CREDENTIALS CARD -->
+    <!-- LOGIN CREDENTIALS CARD -->
     <div class="card" style="margin-bottom:20px;">
       <div class="card-header">
         <h3><i class="fas fa-key" style="margin-right:8px;color:var(--primary);"></i>Login Account</h3>
@@ -272,6 +267,7 @@ input[type=checkbox] { width:18px; height:18px; accent-color:var(--primary); cur
             <div style="font-size:14px;font-weight:600;color:var(--text);word-break:break-all;">{{ speaker.user.email }}</div>
             {% if speaker.user.must_change_password %}
               <div style="margin-top:8px;font-size:11px;color:var(--warning);"><i class="fas fa-exclamation-triangle"></i> Password change required on next login</div>
+              <div style="margin-top:4px;font-size:12px;font-weight:700;color:var(--danger);font-family:monospace;">Temp Pwd: {{ speaker.user.temp_password }}</div>
             {% endif %}
             {% if speaker.user.last_login %}
               <div style="margin-top:6px;font-size:11px;color:var(--text-tertiary);">Last login: {{ speaker.user.last_login|date:"M d, Y H:i" }}</div>
@@ -281,7 +277,6 @@ input[type=checkbox] { width:18px; height:18px; accent-color:var(--primary); cur
           </div>
           
           <!-- Change Email -->
-          <!-- Change Email + Reset Password (Combined) -->
           <form method="post" action="{% url 'speaker_credentials' speaker.pk %}" style="margin-bottom:12px;"
                 onsubmit="return confirm('Change email + generate new password?');">
             {% csrf_token %}
@@ -291,10 +286,9 @@ input[type=checkbox] { width:18px; height:18px; accent-color:var(--primary); cur
             <button type="submit" class="btn btn-primary btn-sm" style="width:100%;">
               <i class="fas fa-envelope"></i> Change Email + Reset Password
             </button>
-            <small style="color:var(--text-tertiary);margin-top:6px;display:block;">Sets new email AND generates fresh temp password.</small>
           </form>
 
-          <!-- Reset Password Only (keep same email) -->
+          <!-- Reset Password Only -->
           <form method="post" action="{% url 'speaker_credentials' speaker.pk %}" style="margin-bottom:10px;"
                 onsubmit="return confirm('Reset password only (keep same email)?');">
             {% csrf_token %}
@@ -304,10 +298,9 @@ input[type=checkbox] { width:18px; height:18px; accent-color:var(--primary); cur
             </button>
           </form>
           
-          
           <!-- Unlink -->
           <form method="post" action="{% url 'speaker_credentials' speaker.pk %}"
-                onsubmit="return confirm('Unlink user account? The account will still exist, just not linked to this speaker.');">
+                onsubmit="return confirm('Unlink user account?');">
             {% csrf_token %}
             <input type="hidden" name="action" value="unlink" />
             <button type="submit" class="btn btn-secondary btn-sm" style="width:100%;background:var(--danger-light);color:var(--danger);">
@@ -320,8 +313,9 @@ input[type=checkbox] { width:18px; height:18px; accent-color:var(--primary); cur
             {% csrf_token %}
             <input type="hidden" name="action" value="create_account" />
             <div class="form-group" style="margin-bottom:10px;">
-              <label class="form-label" style="font-size:12px;">Login Email *</label>
-              <input type="email" name="login_email" class="form-control" required placeholder="speaker@iitd.ac.in" />
+              <label class="form-label" style="font-size:12px;">Login Email (Optional)</label>
+              <input type="email" name="login_email" class="form-control" placeholder="speaker@iitd.ac.in" />
+              <small style="color:var(--text-tertiary);display:block;margin-top:4px;">Leave blank if email is unknown.</small>
             </div>
             <button type="submit" class="btn btn-primary btn-sm" style="width:100%;">
               <i class="fas fa-plus"></i> Create Login Account
@@ -330,6 +324,8 @@ input[type=checkbox] { width:18px; height:18px; accent-color:var(--primary); cur
         {% endif %}
       </div>
     </div>
+
+    <!-- TALKS CARD -->
     <div class="card" style="margin-bottom:20px;">
       <div class="card-header">
         <h3><i class="fas fa-microphone" style="margin-right:8px;color:var(--primary);"></i>Talks</h3>
@@ -397,21 +393,8 @@ input[type=checkbox] { width:18px; height:18px; accent-color:var(--primary); cur
         </div>
       </div>
     </div>
-    {% else %}
-    <div class="card">
-      <div class="card-body" style="text-align:center;padding:32px;color:var(--text-tertiary);">
-        <i class="fas fa-microphone-slash" style="font-size:32px;margin-bottom:12px;opacity:0.3;display:block;"></i>
-        <p style="font-size:13px;">Save the speaker first, then you can add their talks.</p>
-      </div>
-    </div>
     {% endif %}
   </div>
 
 </div><!-- end grid -->
-{% endblock %}
-
-{% block scripts %}
-<script>
-// Pass title choices to template context
-</script>
 {% endblock %}

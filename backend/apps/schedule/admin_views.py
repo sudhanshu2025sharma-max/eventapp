@@ -6,7 +6,7 @@ from django.http import JsonResponse
 from django.views.decorators.http import require_http_methods
 from django.utils import timezone
 
-from apps.accounts.admin_views import admin_required
+from django.contrib.auth.decorators import login_required
 from apps.accounts.permissions_helper import module_required
 from apps.checkins.meal_utils import sync_meal_window
 from .models import (
@@ -18,7 +18,7 @@ from .utils import (
 )
 
 
-@admin_required
+@login_required(login_url="/panel/login/")
 @module_required('schedule')
 def schedule_panel(request):
     day_filter = request.GET.get('day', '')
@@ -42,7 +42,7 @@ def schedule_panel(request):
     })
 
 
-@admin_required
+@login_required(login_url="/panel/login/")
 @module_required('schedule')
 @require_http_methods(['GET', 'POST'])
 def session_create(request):
@@ -86,7 +86,7 @@ def session_create(request):
     })
 
 
-@admin_required
+@login_required(login_url="/panel/login/")
 @module_required('schedule')
 @require_http_methods(['GET', 'POST'])
 def session_edit(request, pk):
@@ -126,17 +126,19 @@ def session_edit(request, pk):
         except Exception as e:
             messages.error(request, f'Error: {e}')
 
+    available_papers = AcceptedPaper.objects.all().select_related('session').order_by('paper_type', 'paper_id', 'title')
     return render(request, 'panel/schedule_form.html', {
-        'session':       sess,
-        'mode':          'edit',
-        'session_types': SESSION_TYPE.choices,
-        'days':          [(1,'Day 1'),(2,'Day 2'),(3,'Day 3')],
-        'sub_sessions':  sess.sub_sessions.all(),
-        'papers':        sess.papers.all().order_by('slot_start', 'slot_order'),
+        'session':          sess,
+        'mode':             'edit',
+        'session_types':    SESSION_TYPE.choices,
+        'days':             [(1,'Day 1'),(2,'Day 2'),(3,'Day 3')],
+        'sub_sessions':     sess.sub_sessions.all(),
+        'papers':           sess.papers.all().order_by('slot_start', 'slot_order'),
+        'available_papers': available_papers,
     })
 
 
-@admin_required
+@login_required(login_url="/panel/login/")
 @module_required('schedule')
 @require_http_methods(['POST'])
 def session_delete(request, pk):
@@ -147,7 +149,7 @@ def session_delete(request, pk):
     return redirect('schedule_panel')
 
 
-@admin_required
+@login_required(login_url="/panel/login/")
 @module_required('schedule')
 @require_http_methods(['POST'])
 def subsession_add(request, session_pk):
@@ -166,7 +168,7 @@ def subsession_add(request, session_pk):
         return JsonResponse({'success': False, 'error': str(e)}, status=400)
 
 
-@admin_required
+@login_required(login_url="/panel/login/")
 @module_required('schedule')
 @require_http_methods(['POST'])
 def subsession_delete(request, pk):
@@ -175,7 +177,7 @@ def subsession_delete(request, pk):
     return JsonResponse({'success': True})
 
 
-@admin_required
+@login_required(login_url="/panel/login/")
 @module_required('schedule')
 def feedback_manage(request, session_pk):
     sess = get_object_or_404(ScheduleSession, pk=session_pk)
@@ -191,7 +193,7 @@ def feedback_manage(request, session_pk):
     })
 
 
-@admin_required
+@login_required(login_url="/panel/login/")
 @module_required('schedule')
 @require_http_methods(['POST'])
 def feedback_question_add(request, session_pk):
@@ -211,7 +213,7 @@ def feedback_question_add(request, session_pk):
         return JsonResponse({'success': False, 'error': str(e)}, status=400)
 
 
-@admin_required
+@login_required(login_url="/panel/login/")
 @module_required('schedule')
 @require_http_methods(['POST'])
 def feedback_question_delete(request, pk):
@@ -220,7 +222,7 @@ def feedback_question_delete(request, pk):
     return JsonResponse({'success': True})
 
 
-@admin_required
+@login_required(login_url="/panel/login/")
 @module_required('schedule')
 @require_http_methods(['POST'])
 def feedback_toggle(request, session_pk):
@@ -243,7 +245,7 @@ def feedback_toggle(request, session_pk):
         return JsonResponse({'success': False, 'error': str(e)}, status=400)
 
 
-@admin_required
+@login_required(login_url="/panel/login/")
 @module_required('schedule')
 def feedback_analytics(request, session_pk):
     from django.db.models import Avg
@@ -276,7 +278,7 @@ def feedback_analytics(request, session_pk):
     })
 
 
-@admin_required
+@login_required(login_url="/panel/login/")
 @module_required('papers')
 def accepted_papers_panel(request):
     if request.method == 'POST':
@@ -310,6 +312,30 @@ def accepted_papers_panel(request):
             )
             messages.success(request, "Paper / Poster added successfully!")
             return redirect('accepted_papers_panel')
+        elif action == 'edit':
+            pk = request.POST.get('pk')
+            paper = get_object_or_404(AcceptedPaper, pk=pk)
+            doc = request.FILES.get('document')
+            if doc:
+                doc_err = _validate_document(doc)
+                if doc_err:
+                    messages.error(request, doc_err)
+                    return redirect('accepted_papers_panel')
+                paper.document = doc
+            session_id = request.POST.get('session_id') or None
+            paper.session = ScheduleSession.objects.filter(pk=session_id).first() if session_id else None
+            paper.paper_id = request.POST.get('paper_id', '').strip()
+            paper.title = request.POST.get('title', '').strip()
+            paper.authors = request.POST.get('authors', '').strip()
+            paper.abstract = request.POST.get('abstract', '').strip()
+            paper.track = request.POST.get('track', '').strip()
+            paper.paper_type = request.POST.get('paper_type', 'paper')
+            paper.slot_start = request.POST.get('slot_start') or None
+            paper.slot_end = request.POST.get('slot_end') or None
+            paper.pdf_url = request.POST.get('pdf_url', '').strip()
+            paper.save()
+            messages.success(request, "Paper / Poster updated successfully!")
+            return redirect('accepted_papers_panel')
         elif action == 'delete':
             pk = request.POST.get('pk')
             AcceptedPaper.objects.filter(pk=pk).delete()
@@ -325,7 +351,7 @@ def accepted_papers_panel(request):
         'poster_count': papers.filter(paper_type='poster').count(),
     })
 
-@admin_required
+@login_required(login_url="/panel/login/")
 @module_required('schedule')
 @require_http_methods(['POST'])
 def session_paper_add(request, session_pk):
@@ -334,6 +360,31 @@ def session_paper_add(request, session_pk):
         body = json.loads(request.body)
         slot_s = _parse_panel_dt(body.get('slot_start')).time() if body.get('slot_start') else None
         slot_e = _parse_panel_dt(body.get('slot_end')).time() if body.get('slot_end') else None
+
+        # Validate slot times against session bounds
+        if slot_s and slot_e and slot_s >= slot_e:
+            return JsonResponse({'success': False, 'error': f'Slot Start time ({slot_s.strftime("%H:%M")}) must be before Slot End time ({slot_e.strftime("%H:%M")}).'}, status=400)
+
+        if slot_s and (slot_s < sess.start_time or slot_s > sess.end_time):
+            return JsonResponse({'success': False, 'error': f'Slot Start time ({slot_s.strftime("%H:%M")}) is outside session time ({sess.start_time.strftime("%H:%M")} - {sess.end_time.strftime("%H:%M")}).'}, status=400)
+
+        if slot_e and (slot_e < sess.start_time or slot_e > sess.end_time):
+            return JsonResponse({'success': False, 'error': f'Slot End time ({slot_e.strftime("%H:%M")}) is outside session time ({sess.start_time.strftime("%H:%M")} - {sess.end_time.strftime("%H:%M")}).'}, status=400)
+
+        target_paper_id = body.get('existing_paper_id') or body.get('paper_uuid')
+        if target_paper_id:
+            paper = get_object_or_404(AcceptedPaper, pk=target_paper_id)
+            prev_session = paper.session
+            paper.session = sess
+            if slot_s:
+                paper.slot_start = slot_s
+            if slot_e:
+                paper.slot_end = slot_e
+            paper.save()
+            msg = f'Linked "{paper.title[:30]}..."'
+            if prev_session and prev_session.id != sess.id:
+                msg += f' (Moved from {prev_session.title[:25]})'
+            return JsonResponse({'success': True, 'id': str(paper.id), 'title': paper.title, 'message': msg})
 
         paper = AcceptedPaper.objects.create(
             session=sess,
@@ -352,10 +403,13 @@ def session_paper_add(request, session_pk):
         return JsonResponse({'success': False, 'error': str(e)}, status=400)
 
 
-@admin_required
+@login_required(login_url="/panel/login/")
 @module_required('schedule')
 @require_http_methods(['POST'])
 def session_paper_delete(request, pk):
     paper = get_object_or_404(AcceptedPaper, pk=pk)
-    paper.delete()
+    paper.session = None
+    paper.slot_start = None
+    paper.slot_end = None
+    paper.save()
     return JsonResponse({'success': True})

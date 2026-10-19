@@ -52,7 +52,7 @@ const WAYS_TO_SCORE = [
     action: 'checkin',
     title: 'Conference Check-in',
     desc: 'Scan your registration QR at the main venue desk to unlock rankings.',
-    pts: '+50',
+    pts: '+20',
     freq: 'Event entry',
     icon: ACTION_ICONS.checkin,
     color: ACTION_COLORS.checkin,
@@ -72,7 +72,7 @@ const WAYS_TO_SCORE = [
     action: 'networking',
     title: 'Attendee Networking',
     desc: 'Connect and exchange badges with other participants at the venue.',
-    pts: '+30',
+    pts: '+15',
     freq: 'Per connection',
     icon: ACTION_ICONS.networking,
     color: ACTION_COLORS.networking,
@@ -92,7 +92,7 @@ const WAYS_TO_SCORE = [
     action: 'photo_upload',
     title: 'Photo Wall Upload',
     desc: 'Share conference moments and highlights to the community gallery.',
-    pts: '+20',
+    pts: '+15',
     freq: 'Per photo',
     icon: ACTION_ICONS.photo_upload,
     color: ACTION_COLORS.photo_upload,
@@ -102,7 +102,7 @@ const WAYS_TO_SCORE = [
     action: 'poll_vote',
     title: 'Live Poll Voting',
     desc: 'Participate in real-time interactive audience polls during sessions.',
-    pts: '+15',
+    pts: '+20',
     freq: 'Per poll',
     icon: ACTION_ICONS.poll_vote,
     color: ACTION_COLORS.poll_vote,
@@ -132,7 +132,7 @@ const WAYS_TO_SCORE = [
     action: 'signup',
     title: 'Account Registration',
     desc: 'Welcome bonus awarded automatically when you join the conference app.',
-    pts: '+25',
+    pts: '+10',
     freq: 'Welcome bonus',
     icon: ACTION_ICONS.signup,
     color: ACTION_COLORS.signup,
@@ -247,7 +247,7 @@ function CompactRankHeader({ rank, points, gap, nextName, eligible, onOpenWays }
               style={hero.rankBadge}
             >
               <Text style={hero.rankLabel}>RANK</Text>
-              <Text style={hero.rankValue}>{rankLabel || (eligible && rank ? `#${rank}` : '—')}</Text>
+              <Text style={hero.rankValue}>{eligible && rank ? `#${rank}` : '—'}</Text>
             </LinearGradient>
           </Animated.View>
 

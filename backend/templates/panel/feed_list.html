@@ -16,6 +16,7 @@
             Draft <span style="opacity:.7;">({{ stats.draft }})</span>
         </a>
     </div>
+    <a href="{% url 'feed_quiz_stats' %}" class="btn btn-secondary">Question Statistics</a>
     <a href="{% url 'feed_create' %}" class="btn btn-primary">
         <i class="fas fa-plus"></i> New Post
     </a>
@@ -67,7 +68,7 @@
                 <td style="max-width:280px;">
                     <div style="font-weight:600;font-size:14px;">
                         {% if post.pinned %}<span style="color:#f59e0b;margin-right:4px;">📌</span>{% endif %}
-                        {{ post.title }}
+                        {% if post.title %}{{ post.title }}{% else %}{{ post.quiz_question }}{% endif %}
                     </div>
                     <div style="font-size:12px;color:var(--text-tertiary);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:260px;">
                         {{ post.body|truncatechars:80 }}
@@ -118,6 +119,9 @@
                 </td>
                 <td style="text-align:right;white-space:nowrap;">
                     <div style="display:flex;gap:6px;justify-content:flex-end;">
+                        {% if post.post_type == 'quiz' %}
+                        <a href="{% url 'feed_quiz_stats_detail' post.pk %}" class="btn btn-secondary btn-sm">Responses</a>
+                        {% endif %}
                         <form method="post" action="{% url 'feed_pin_toggle' post.pk %}">
                             {% csrf_token %}
                             <button type="submit" class="btn btn-secondary btn-sm" title="{% if post.pinned %}Unpin{% else %}Pin{% endif %}">

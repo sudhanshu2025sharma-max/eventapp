@@ -265,6 +265,9 @@ export default function MainApp({
   const [warningText, setWarningText] = useState('');
   const [pendingRequests, setPendingRequests] = useState(0);
   const [chatUnread, setChatUnread] = useState(0);
+  const notificationUnread = useRef(0);
+  const [showWebNotificationBanner, setShowWebNotificationBanner] = useState(false);
+  const hasInitialNotificationCount = useRef(false);
   const [keyboardVisible, setKeyboardVisible] = useState(false);
   const [ackLoading, setAckLoading] = useState(false);
 
@@ -320,10 +323,24 @@ export default function MainApp({
         apiFetch('/chat/conversations/'),
       ]);
       if (reqRes.ok && convRes.ok) {
-        const reqData = await reqRes.json();
-        const convData = await convRes.json();
+        const [reqData, convData] = await Promise.all([
+          reqRes.json(), convRes.json(),
+        ]);
         setPendingRequests(reqData.pending_count || 0);
         setChatUnread(convData.total_unread || 0);
+      }
+    } catch { /* silent */ }
+    if (Platform.OS !== 'web') return;
+    try {
+      const notificationRes = await apiFetch('/notifications/unread-count/');
+      if (notificationRes.ok) {
+        const notificationData = await notificationRes.json();
+        const count = notificationData.unread_count || 0;
+        if (hasInitialNotificationCount.current && count > notificationUnread.current) {
+          setShowWebNotificationBanner(true);
+        }
+        hasInitialNotificationCount.current = true;
+        notificationUnread.current = count;
       }
     } catch { /* silent */ }
   }, []);
@@ -554,6 +571,18 @@ export default function MainApp({
         onAcknowledge={handleAcknowledgeWarning}
         loading={ackLoading}
       />
+
+      {Platform.OS === 'web' && showWebNotificationBanner && !subScreen && (
+        <Pressable
+          accessibilityRole="button"
+          onPress={() => { setShowWebNotificationBanner(false); openSubScreen('notifications'); }}
+          style={{ position: 'absolute', top: 16, left: 16, right: 16, zIndex: 200, padding: 14, borderRadius: 16, backgroundColor: '#0f172a', flexDirection: 'row', alignItems: 'center', gap: 10, shadowColor: '#000', shadowOpacity: 0.2, shadowRadius: 12 }}
+        >
+          <Ionicons name="notifications" size={20} color="#fff" />
+          <Text style={{ color: '#fff', fontWeight: '700', flex: 1 }}>You have a new conference notification</Text>
+          <Text style={{ color: '#bfdbfe', fontWeight: '800' }}>Open</Text>
+        </Pressable>
+      )}
 
       {!subScreen && !keyboardVisible && (
         <BottomTabBar active={tab} onTab={setTab} tabs={tabs} networkBadge={pendingRequests} bottomInset={insets.bottom} />

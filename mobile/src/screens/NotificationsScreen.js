@@ -5,6 +5,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS, FONT, SPACE, RADIUS, API_URL, API_HEADERS, TOP, BOTTOM } from '../theme';
+import { apiFetch } from '../api';
 
 function timeAgo(dateStr) {
   if (!dateStr) return '';
@@ -70,22 +71,23 @@ function NotificationDetail({ notif, onBack }) {
 export default function NotificationsScreen({ tokens, onBack }) {
   const [notifications, setNotifications] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
   const [refreshing, setRefreshing] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
   const [selected, setSelected] = useState(null);
 
   const fetchNotifications = useCallback(async () => {
     try {
-      const res = await fetch(`${API_URL}/notifications/my/`, {
-        headers: { ...API_HEADERS, Authorization: `Bearer ${tokens.access}` },
-      });
+      setLoadError('');
+      const res = await apiFetch('/notifications/my/');
+      if (!res.ok) throw new Error(`Could not load notifications (HTTP ${res.status}). Pull down to retry.`);
       const data = await res.json();
       if (data.notifications) {
         setNotifications(data.notifications);
         setUnreadCount(data.unread_count || 0);
       }
     } catch (err) {
-      console.log('notifications fetch failed:', err.message);
+      setLoadError(err.message || 'Could not load notifications. Please retry.');
     }
     setLoading(false);
     setRefreshing(false);
@@ -121,13 +123,13 @@ export default function NotificationsScreen({ tokens, onBack }) {
     // optimistic local update
     setNotifications((prev) =>
       prev.map((n) =>
-        n.notification_id === notif.notification_id ? { ...n, read: true } : n
+        (n.notification_id || n.id) === (notif.notification_id || notif.id) ? { ...n, read: true } : n
       )
     );
     setUnreadCount((prev) => Math.max(0, prev - 1));
 
     // background API call
-    markAsReadInBackground(notif.notification_id);
+    markAsReadInBackground(notif.notification_id || notif.id);
   };
 
   const markAllRead = async () => {
@@ -163,6 +165,8 @@ export default function NotificationsScreen({ tokens, onBack }) {
           </TouchableOpacity>
         )}
       </View>
+
+      {!!loadError && <TouchableOpacity onPress={fetchNotifications} style={{ padding: SPACE.lg }}><Text style={{ color: COLORS.error }}>{loadError} Tap to retry.</Text></TouchableOpacity>}
 
       {loading ? (
         <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>

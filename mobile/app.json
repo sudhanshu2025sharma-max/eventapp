@@ -7,6 +7,14 @@
     "userInterfaceStyle": "light",
     "icon": "./assets/icon.png",
     "scheme": "etd2026",
+    "web": {
+      "bundler": "metro",
+      "output": "single",
+      "favicon": "./assets/icon.png"
+    },
+    "experiments": {
+      "baseUrl": "/app"
+    },
     "owner": "coder2026s-team",
     "extra": {
       "eas": {
@@ -52,6 +60,13 @@
     },
     "plugins": [
       "./plugins/withNetworkSecurity.js",
+      [
+        "expo-notifications",
+        {
+          "color": "#0333b6",
+          "defaultChannel": "default"
+        }
+      ],
       "expo-video",
       [
         "expo-camera",

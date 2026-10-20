@@ -26,7 +26,8 @@
             <th>Cover</th>
             <th>Files</th>
             <th>Status</th>
-            <th>Delivered</th>
+            <th>Push accepted / failed</th>
+            <th>Inboxes</th>
             <th>Read</th>
             <th>Time</th>
             <th>Actions</th>
@@ -58,10 +59,11 @@
               {% endwith %}
             </td>
             <td>
-              {% if n.status == 'sent' %}<span class="badge badge-success">Sent</span>
-              {% elif n.status == 'failed' %}<span class="badge badge-danger">Failed</span>
+              {% if n.status == 'sent' %}<span class="badge badge-success">{% if n.provider_logged %}Provider accepted{% else %}Legacy send{% endif %}</span>
+              {% elif n.status == 'failed' %}<span class="badge badge-danger">{% if n.sent_count == 0 and n.failed_count == 0 %}No registered devices{% else %}Failed{% endif %}</span>
               {% else %}<span class="badge badge-warning">Pending</span>{% endif %}
             </td>
+            <td style="font-size:13px;">{{ n.sent_count }} / {{ n.failed_count }}</td>
             <td style="font-size:13px;">{{ n.delivered }}</td>
             <td style="font-size:13px;">{{ n.seen }}</td>
             <td style="font-size:12px;color:var(--text-tertiary);white-space:nowrap;">{{ n.created_at|date:"M d, H:i" }}</td>

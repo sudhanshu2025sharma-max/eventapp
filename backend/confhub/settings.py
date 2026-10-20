@@ -224,6 +224,10 @@ EMAIL_HOST_PASSWORD = config('EMAIL_HOST_PASSWORD', default='')
 DEFAULT_FROM_EMAIL  = config('DEFAULT_FROM_EMAIL', default=EMAIL_HOST_USER)
 EMAIL_TIMEOUT  = 30
 
+WEBPUSH_VAPID_PUBLIC_KEY = config('WEBPUSH_VAPID_PUBLIC_KEY', default='')
+WEBPUSH_VAPID_PRIVATE_KEY = config('WEBPUSH_VAPID_PRIVATE_KEY', default='')
+WEBPUSH_VAPID_SUBJECT = config('WEBPUSH_VAPID_SUBJECT', default='mailto:admin@etd2026.iitd.ac.in')
+
 CELERY_BROKER_URL = REDIS_URL
 CELERY_RESULT_BACKEND = REDIS_URL
 CELERY_ACCEPT_CONTENT = ["json"]
@@ -231,6 +235,10 @@ CELERY_TASK_SERIALIZER = "json"
 CELERY_RESULT_SERIALIZER = "json"
 CELERY_TIMEZONE = "UTC"
 CELERY_BEAT_SCHEDULE = {
+    "collect-expo-push-receipts": {
+        "task": "apps.notifications.tasks.collect_expo_push_receipts",
+        "schedule": 300.0,
+    },
     "publish-scheduled-posts": {
         "task": "apps.posts.tasks.publish_scheduled_posts",
         "schedule": 60.0,

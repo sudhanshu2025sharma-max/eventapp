@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { View, Animated, Text, Platform, ImageBackground, Image, StyleSheet } from 'react-native';
+import { View, Animated, Text, Platform, Image, StyleSheet } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
@@ -7,9 +7,15 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import LoginScreen          from './src/screens/LoginScreen';
 import ChangePasswordScreen from './src/screens/ChangePasswordScreen';
 import MainApp              from './src/MainApp';
-import { registerForPushNotifications, setupNotificationListeners } from './src/notifications';
+import { setupNotificationListeners, unregisterPushForCurrentDevice } from './src/notifications';
 import { API_URL, API_HEADERS, fixMediaUrl } from './src/theme';
 import { setTokens as setApiTokens } from './src/api';
+import { registerForPushNotifications } from './src/notifications';
+import { installWebAlert, WebDialogHost } from './src/webDialog';
+import NotificationPermissionPrompt from './src/NotificationPermissionPrompt';
+import SplashBackground from './src/SplashBackground';
+
+installWebAlert();
 
 // ── Session persistence ──────────────────────────────────────────────────
 const Storage = {
@@ -130,7 +136,7 @@ function SplashScreen() {
   });
 
   return (
-    <ImageBackground
+    <SplashBackground
       source={require('./assets/ETD_bgImage.png')}
       style={styles.bg}
       resizeMode="cover"
@@ -186,7 +192,7 @@ function SplashScreen() {
           </View>
         </Animated.View>
       </View>
-    </ImageBackground>
+    </SplashBackground>
   );
 }
 
@@ -306,6 +312,30 @@ export default function App() {
   const pushToken = useRef(null);
 
   useEffect(() => {
+    if (Platform.OS !== 'web' || typeof window === 'undefined') return;
+    const basePath = '/app/';
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register(`${basePath}service-worker.js`, { scope: basePath })
+        .catch((error) => console.warn('Service worker registration failed:', error));
+    }
+  }, []);
+
+  useEffect(() => {
+    if (Platform.OS !== 'web' || typeof navigator === 'undefined' || !('serviceWorker' in navigator)) return;
+    const onServiceWorkerMessage = (event) => {
+      if (event.data?.type === 'etd-notification-click') {
+        setNotificationRoute({ type: 'notifications' });
+        if (user && tokens) setScreen('app');
+      }
+    };
+    navigator.serviceWorker.addEventListener('message', onServiceWorkerMessage);
+    if (typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('open') === 'notifications') {
+      setNotificationRoute({ type: 'notifications' });
+    }
+    return () => navigator.serviceWorker.removeEventListener('message', onServiceWorkerMessage);
+  }, [user, tokens]);
+
+  useEffect(() => {
     if (tokens) setApiTokens(tokens);
   }, [tokens]);
 
@@ -351,12 +381,6 @@ export default function App() {
                 await Storage.set('etd_tokens', activeTokens);
                 nextScreen = 'app';
 
-                try {
-                  const pt = await registerForPushNotifications(activeTokens.access);
-                  pushToken.current = pt;
-                } catch (pushErr) {
-                  console.warn('Push registration warning:', pushErr);
-                }
               }
             }
           } catch (netErr) {
@@ -434,12 +458,6 @@ export default function App() {
         setScreen('change_password');
       } else {
         setScreen('app');
-        try {
-          const pt = await registerForPushNotifications(tokenData.access);
-          pushToken.current = pt;
-        } catch (pushErr) {
-          console.warn('Push registration error:', pushErr);
-        }
       }
     } catch (err) {
       console.error('handleLogin error:', err);
@@ -474,10 +492,6 @@ export default function App() {
     await Storage.set('etd_user', { ...u, must_change_password: false });
     await Storage.set('etd_tokens', t);
     setScreen('app');
-    try {
-      const pt = await registerForPushNotifications(t.access);
-      pushToken.current = pt;
-    } catch {}
   };
 
   useEffect(() => {
@@ -495,7 +509,18 @@ export default function App() {
     return () => clearInterval(interval);
   }, [tokens?.refresh]);
 
+
+  useEffect(() => {
+    if (screen !== 'app' || !tokens?.access) return;
+    let canceled = false;
+    registerForPushNotifications().then(token => {
+      if (!canceled && token) pushToken.current = token;
+    }).catch(() => {});
+    return () => { canceled = true; };
+  }, [tokens?.access, screen]);
   const handleLogout = async () => {
+    await unregisterPushForCurrentDevice(pushToken.current);
+
     setUser(null);
     setTokens(null);
     pushToken.current = null;
@@ -536,6 +561,8 @@ export default function App() {
     <SafeAreaProvider>
       <GestureHandlerRootView style={{ flex: 1 }}>
         {renderContent()}
+        <NotificationPermissionPrompt active={screen === 'app'} userId={user?.id} onRegistered={token => { pushToken.current = token; }} />
+        <WebDialogHost />
       </GestureHandlerRootView>
     </SafeAreaProvider>
   );

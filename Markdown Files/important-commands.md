@@ -10,7 +10,7 @@ cd /workspaces/eventapp/backend && python manage.py runserver 0.0.0.0:8000
 ngrok http 8000
 
 # 4. Expo
-cd /workspaces/eventapp/mobile && npx expo start --tunnel --port 8081 --clear
+cd /workspaces/eventapp/mobile && npx expo start --port 8081 --clear
 
 # 5 Kill Port
 kill -9 $(lsof -t -i:8081)

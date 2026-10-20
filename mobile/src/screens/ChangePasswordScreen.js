@@ -99,15 +99,16 @@ export default function ChangePasswordScreen({ navigation, user, tokens, onDone,
 
   return (
     <KeyboardAvoidingView
-      style={{ flex: 1 }}
+      style={{ flex: 1, backgroundColor: COLORS.bg }}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
       <StatusBar barStyle="light-content" />
       <ScrollView
-        style={{ flex: 1 }}
+        style={{ flex: 1, backgroundColor: COLORS.bg }}
         contentContainerStyle={{ flexGrow: 1 }}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
+        bounces={false}
       >
         <LinearGradient
           colors={['#0333b6', '#0245c7']}
@@ -121,7 +122,6 @@ export default function ChangePasswordScreen({ navigation, user, tokens, onDone,
           </TouchableOpacity>
 
           <View style={st.deco1} />
-          <View style={st.deco2} />
 
           <GlassCard style={st.iconBox}>
             <Ionicons name="lock-open-outline" size={34} color={COLORS.textInverse} />
@@ -303,6 +303,7 @@ const st = StyleSheet.create({
     borderTopRightRadius: RADIUS.xxxl,
   },
   body: {
+    flexGrow: 1,
     backgroundColor: COLORS.bg,
     paddingHorizontal: SPACE.xl,
     paddingBottom: SPACE.xxxl + BOTTOM,
@@ -313,8 +314,7 @@ const st = StyleSheet.create({
     borderRadius: RADIUS.xxl,
     padding: SPACE.xxl,
     ...SHADOW.lg,
-    borderWidth: Platform.OS === 'android' ? 1 : 0,
-    borderColor: COLORS.borderLight,
+    borderWidth: 0,
   },
   label: {
     fontSize: FONT.sm,

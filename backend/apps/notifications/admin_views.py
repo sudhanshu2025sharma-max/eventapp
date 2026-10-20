@@ -1,20 +1,23 @@
 from django.shortcuts import render, redirect, get_object_or_404
+import threading
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
-from .models import DeviceToken, Notification, NotificationAttachment
+from .models import DeviceToken, Notification, NotificationAttachment, WebPushSubscription, PushDelivery
 from . import fcm
 from apps.accounts.permissions_helper import module_required
+from django.db.models import Count, Q, Exists, OuterRef
 
 
 @login_required(login_url='/panel/login/')
 @module_required('notifications')
 def notifications_page(request):
-    notifs = Notification.objects.all()[:20]
-    for n in notifs:
-        n.delivered = n.delivered_count
-        n.seen      = n.read_count
+    notifs = Notification.objects.annotate(
+        delivered=Count('user_notifications'),
+        seen=Count('user_notifications', filter=Q(user_notifications__read=True)),
+        provider_logged=Exists(PushDelivery.objects.filter(notification_id=OuterRef('pk'))),
+    ).prefetch_related('attachments').order_by('-created_at')[:20]
     return render(request, 'panel/notifications.html', {
-        'device_count': DeviceToken.objects.filter(is_active=True).count(),
+        'device_count': DeviceToken.objects.filter(is_active=True).count() + WebPushSubscription.objects.filter(is_active=True).count(),
         'notifications': notifs,
     })
 
@@ -52,29 +55,39 @@ def send_notification(request):
     for f in request.FILES.getlist('attachments'):
         NotificationAttachment.objects.create(notification=notif, file=f, filename=f.name)
 
-    try:
-        if target_type == 'all':
-            success, failed, bad = fcm.send_to_all(title, body, {}, notif)
-        elif target_type == 'role':
-            success, failed, bad = fcm.send_to_role(target_role, title, body, {}, notif)
-        else:
-            raise ValueError('Invalid target type')
+    def _push_worker(n_id, t_type, t_role, t_title, t_body):
+        import django, os
+        os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'confhub.settings')
+        django.setup()
+        from apps.notifications import fcm as _fcm
+        from apps.notifications.models import Notification as _N, DeviceToken as _DT
+        try:
+            n = _N.objects.get(pk=n_id)
+            if t_type == 'all':
+                ok, fail, bad = _fcm.send_to_all(t_title, t_body, {}, n)
+            elif t_type == 'role':
+                ok, fail, bad = _fcm.send_to_role(t_role, t_title, t_body, {}, n)
+            else:
+                n.status = 'failed'; n.save(update_fields=['status']); return
+            if bad:
+                _DT.objects.filter(token__in=bad).update(is_active=False)
+            n.status = 'sent' if ok > 0 else 'failed'
+            n.sent_count = ok; n.failed_count = fail
+            n.save(update_fields=['status', 'sent_count', 'failed_count'])
+        except Exception as exc:
+            try:
+                n = _N.objects.get(pk=n_id)
+                n.status = 'failed'; n.save(update_fields=['status'])
+            except Exception:
+                pass
 
-        if bad:
-            from .models import DeviceToken
-            DeviceToken.objects.filter(token__in=bad).update(is_active=False)
+    threading.Thread(
+        target=_push_worker,
+        args=(notif.id, target_type, target_role, title, body),
+        daemon=True,
+    ).start()
 
-        notif.status      = 'sent'
-        notif.sent_count  = success
-        notif.failed_count = failed
-        notif.save()
-        messages.success(request, f'Sent to {success} device(s). {failed} failed.')
-
-    except Exception as e:
-        notif.status = 'failed'
-        notif.save()
-        messages.error(request, f'Failed: {e}')
-
+    messages.success(request, 'Notification queued for delivery. Refresh this page in a few seconds to see results.')
     return redirect('panel_notifications')
 
 

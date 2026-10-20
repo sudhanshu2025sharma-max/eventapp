@@ -37,7 +37,8 @@ def collect_expo_push_receipts():
                 proxies=proxies, timeout=30, verify=False,
             )
             response.raise_for_status()
-            receipts = response.json().get('data', {})
+            payload = response.json()
+            receipts = payload.get('data') if isinstance(payload, dict) else None
             if not isinstance(receipts, dict):
                 raise ValueError('Expo returned an invalid receipt map')
         except Exception:
@@ -54,8 +55,10 @@ def collect_expo_push_receipts():
                 delivered += 1
             else:
                 ticket.status = 'failed'
-                details = receipt.get('details') or {}
+                details = receipt.get('details')
+                details = details if isinstance(details, dict) else {}
                 ticket.error = str(details.get('error') or receipt.get('message') or 'Expo delivery failed')[:1000]
+                logger.warning('Expo delivery receipt failed (ticket_id=%s, error=%s)', ticket.ticket_id, details.get('error') or 'ProviderError')
                 failed += 1
                 if details.get('error') == 'DeviceNotRegistered':
                     DeviceToken.objects.filter(token=ticket.token).update(is_active=False)

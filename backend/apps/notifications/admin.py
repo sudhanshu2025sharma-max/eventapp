@@ -1,12 +1,5 @@
 from django.contrib import admin
-from .models import DeviceToken, Notification, UserNotification, NotificationAttachment, WebPushSubscription, PushDelivery
-
-
-@admin.register(WebPushSubscription)
-class WebPushSubscriptionAdmin(admin.ModelAdmin):
-    list_display = ('user', 'is_active', 'updated_at')
-    list_filter = ('is_active',)
-    search_fields = ('user__email', 'endpoint')
+from .models import DeviceToken, Notification, UserNotification, NotificationAttachment, PushDelivery
 
 
 @admin.register(PushDelivery)

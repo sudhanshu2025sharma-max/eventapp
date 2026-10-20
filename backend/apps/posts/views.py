@@ -1,6 +1,7 @@
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
-from django.db.models import Count, Prefetch
+from django.db.models import Count, Prefetch, OuterRef, Subquery, IntegerField
+from django.db.models.functions import Coalesce
 from django.db import transaction
 from django.core.exceptions import ValidationError
 
@@ -52,12 +53,15 @@ def _is_true(val, default=False):
 
 def _live_posts_qs():
     now = timezone.now()
+    # Independent counts avoid multiplying comments by quiz responses in one join.
+    comment_counts = FeedComment.objects.filter(post_id=OuterRef('pk')).order_by().values('post_id').annotate(total=Count('id')).values('total')
+    quiz_counts = FeedQuizResponse.objects.filter(post_id=OuterRef('pk')).order_by().values('post_id').annotate(total=Count('id')).values('total')
     return (
         FeedPost.objects
         .filter(published_at__isnull=False, published_at__lte=now)
         .select_related('author', 'session')
-        .annotate(comment_count=Count('comments', distinct=True),
-                  quiz_response_count=Count('quiz_responses', distinct=True))
+        .annotate(comment_count=Coalesce(Subquery(comment_counts, output_field=IntegerField()), 0),
+                  quiz_response_count=Coalesce(Subquery(quiz_counts, output_field=IntegerField()), 0))
         .prefetch_related('reactions')
         .order_by('-pinned', '-published_at', '-created_at')
     )
@@ -225,7 +229,7 @@ def _dispatch_feed_push(post, sent_by=None, request=None):
 
         # 3. Refresh from DB to confirm status / counts
         notif.refresh_from_db()
-        return True, 'fcm.send_to_all', notif.sent_count, str(notif.id)
+        return notif.sent_count > 0, 'fcm.send_to_all', notif.sent_count, str(notif.id)
 
     except Exception as e:
         print(f"[FEED PUSH] Error: {type(e).__name__}: {e}")

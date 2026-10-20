@@ -1,11 +1,14 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   View, Text, TouchableOpacity, ScrollView, RefreshControl,
-  StyleSheet, Platform, ActivityIndicator, Image, Linking,
+  StyleSheet, Platform, ActivityIndicator, Image, Linking, Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { COLORS, FONT, SPACE, RADIUS, API_URL, API_HEADERS, TOP, BOTTOM } from '../theme';
+import { COLORS, FONT, SPACE, RADIUS, TOP, BOTTOM } from '../theme';
 import { apiFetch } from '../api';
+import { getScreenSnapshot, setScreenSnapshot } from '../cache';
+import { enablePushPermission, openPushSettings } from '../pushPermission';
+import { getPushPermissionState } from '../notifications';
 
 function timeAgo(dateStr) {
   if (!dateStr) return '';
@@ -68,34 +71,53 @@ function NotificationDetail({ notif, onBack }) {
   );
 }
 
-export default function NotificationsScreen({ tokens, onBack }) {
-  const [notifications, setNotifications] = useState([]);
-  const [loading, setLoading] = useState(true);
+export default function NotificationsScreen({ userId, onBack }) {
+  const [notifications, setNotifications] = useState(() => getScreenSnapshot('notifications', userId)?.notifications || []);
+  const [loading, setLoading] = useState(() => !getScreenSnapshot('notifications', userId));
   const [loadError, setLoadError] = useState('');
   const [refreshing, setRefreshing] = useState(false);
-  const [unreadCount, setUnreadCount] = useState(0);
+  const [unreadCount, setUnreadCount] = useState(() => getScreenSnapshot('notifications', userId)?.unreadCount || 0);
   const [selected, setSelected] = useState(null);
+  const [pushBusy, setPushBusy] = useState(false);
 
   const fetchNotifications = useCallback(async () => {
     try {
       setLoadError('');
-      const res = await apiFetch('/notifications/my/');
+      const res = await apiFetch('/notifications/my/', { timeoutMs: 15000 });
       if (!res.ok) throw new Error(`Could not load notifications (HTTP ${res.status}). Pull down to retry.`);
       const data = await res.json();
-      if (data.notifications) {
+      if (Array.isArray(data.notifications)) {
         setNotifications(data.notifications);
         setUnreadCount(data.unread_count || 0);
-      }
+      } else throw new Error('The server returned an invalid notification inbox.');
     } catch (err) {
       setLoadError(err.message || 'Could not load notifications. Please retry.');
     }
     setLoading(false);
     setRefreshing(false);
-  }, [tokens]);
+  }, [userId]);
 
   useEffect(() => {
     fetchNotifications();
   }, [fetchNotifications]);
+
+  useEffect(() => {
+    if (!loading && !loadError) setScreenSnapshot('notifications', userId, { notifications, unreadCount });
+  }, [notifications, unreadCount, loading, loadError, userId]);
+
+  const retryPushSetup = async () => {
+    if (pushBusy) return;
+    setPushBusy(true);
+    try {
+      if (await getPushPermissionState() === 'denied') await openPushSettings();
+      else {
+        await enablePushPermission();
+        Alert.alert('Notification alerts', 'This device is registered for conference notifications. If alerts remain quiet, check sound, banners, and Focus or Do Not Disturb in device settings.');
+      }
+    } catch (error) {
+      Alert.alert('Notification setup failed', error.message || 'Please retry.');
+    } finally { setPushBusy(false); }
+  };
 
   const onRefresh = () => {
     setRefreshing(true);
@@ -104,11 +126,12 @@ export default function NotificationsScreen({ tokens, onBack }) {
 
   const markAsReadInBackground = async (notificationId) => {
     try {
-      await fetch(`${API_URL}/notifications/mark-read/`, {
+      const res = await apiFetch('/notifications/mark-read/', {
         method: 'POST',
-        headers: { ...API_HEADERS, Authorization: `Bearer ${tokens.access}` },
+        timeoutMs: 15000,
         body: JSON.stringify({ notification_ids: [notificationId] }),
       });
+      if (!res.ok) throw new Error(`Mark read failed (HTTP ${res.status}).`);
     } catch (err) {
       console.log('mark read failed:', err.message);
     }
@@ -134,10 +157,11 @@ export default function NotificationsScreen({ tokens, onBack }) {
 
   const markAllRead = async () => {
     try {
-      await fetch(`${API_URL}/notifications/mark-all-read/`, {
+      const res = await apiFetch('/notifications/mark-all-read/', {
         method: 'POST',
-        headers: { ...API_HEADERS, Authorization: `Bearer ${tokens.access}` },
+        timeoutMs: 15000,
       });
+      if (!res.ok) throw new Error(`Mark all read failed (HTTP ${res.status}).`);
       setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
       setUnreadCount(0);
     } catch (err) {
@@ -159,6 +183,9 @@ export default function NotificationsScreen({ tokens, onBack }) {
           <Text style={s.headerTitle}>Notifications</Text>
           <Text style={s.sub}>{unreadCount} unread</Text>
         </View>
+        <TouchableOpacity onPress={retryPushSetup} disabled={pushBusy} accessibilityLabel="Set up notification alerts" style={s.markBtn}>
+          {pushBusy ? <ActivityIndicator color={COLORS.brand} size="small" /> : <Ionicons name="notifications-outline" size={20} color={COLORS.brand} />}
+        </TouchableOpacity>
         {unreadCount > 0 && (
           <TouchableOpacity onPress={markAllRead} style={s.markBtn}>
             <Text style={s.markTxt}>Mark all read</Text>

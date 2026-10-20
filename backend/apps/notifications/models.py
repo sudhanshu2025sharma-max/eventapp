@@ -22,6 +22,7 @@ class DeviceToken(models.Model):
 
 
 class WebPushSubscription(models.Model):
+    # Retained for migration compatibility and existing data; browser push is retired.
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='web_push_subscriptions')
     endpoint = models.URLField(max_length=2048, unique=True)
     p256dh = models.CharField(max_length=256)

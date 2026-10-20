@@ -1,6 +1,7 @@
 import Constants, { ExecutionEnvironment } from 'expo-constants';
 import { Linking, Platform } from 'react-native';
-import { apiFetch } from './api';
+import { apiFetch, getTokens } from './api';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const EAS_PROJECT_ID = 'afa28d7e-10d5-4e85-bed4-783b7371a56b';
 
@@ -13,6 +14,7 @@ const isExpoGo =
   Boolean(global.ExpoGo);
 
 let Notifications = null;
+let moduleLoadError = null;
 
 // ONLY load and initialize expo-notifications when NOT running in Expo Go
 if (Platform.OS !== 'web' && !isExpoGo) {
@@ -30,6 +32,7 @@ if (Platform.OS !== 'web' && !isExpoGo) {
       });
     }
   } catch (e) {
+    moduleLoadError = e;
     console.warn('Failed to load expo-notifications:', e);
     Notifications = null;
   }
@@ -37,6 +40,26 @@ if (Platform.OS !== 'web' && !isExpoGo) {
 
 let activeExpoToken = null;
 let registrationError = '';
+let registrationPromise = null;
+const TOKEN_STORAGE_KEY = 'etd_native_push_token';
+
+async function withRegistrationTimeout(promise, message) {
+  let timer;
+  try {
+    return await Promise.race([promise, new Promise((_, reject) => {
+      timer = setTimeout(() => reject(new Error(message)), 20000);
+    })]);
+  } finally { clearTimeout(timer); }
+}
+
+function hasPushPermission(permission) {
+  return permission.granted || permission.status === 'granted' ||
+    (Platform.OS === 'ios' && [
+      Notifications?.IosAuthorizationStatus?.AUTHORIZED,
+      Notifications?.IosAuthorizationStatus?.PROVISIONAL,
+      Notifications?.IosAuthorizationStatus?.EPHEMERAL,
+    ].some(status => status !== undefined && permission.ios?.status === status));
+}
 
 async function prepareAndroidChannels() {
   if (Platform.OS !== 'android' || !Notifications) return;
@@ -55,10 +78,11 @@ async function prepareAndroidChannels() {
 }
 
 export async function getPushPermissionState() {
-  if (Platform.OS === 'web' || isExpoGo || !Notifications) return 'unsupported';
+  if (Platform.OS === 'web' || isExpoGo) return 'unsupported';
+  if (!Notifications) throw new Error(moduleLoadError?.message || 'Notifications are unavailable in this build. Install the latest version and retry.');
   await prepareAndroidChannels();
   const permission = await Notifications.getPermissionsAsync();
-  if (permission.granted || permission.status === 'granted') return 'subscribed';
+  if (hasPushPermission(permission)) return 'subscribed';
   return permission.canAskAgain === false ? 'denied' : 'unsubscribed';
 }
 
@@ -66,46 +90,52 @@ export function getPushRegistrationError() { return registrationError; }
 export function openNotificationSettings() { return Linking.openSettings(); }
 
 export async function registerForPushNotificationsAsync(options = {}) {
-  if (Platform.OS === 'web' || isExpoGo || !Notifications) {
-    console.log('ℹ️ Running in Expo Go: Push Notifications skipped.');
-    return null;
-  }
+  if (Platform.OS === 'web' || isExpoGo) return null;
+  if (registrationPromise) return registrationPromise;
+  registrationPromise = registerNativePush(options);
+  try { return await registrationPromise; }
+  finally { registrationPromise = null; }
+}
 
+async function registerNativePush(options) {
   try {
     registrationError = '';
-    // Android 13 needs a notification channel before requesting permission.
+    if (!Notifications) throw new Error(moduleLoadError?.message || 'Notifications are unavailable in this build.');
+    const session = getTokens()?.refresh;
+    if (!getTokens()?.access) throw new Error('Sign in before setting up notifications.');
     await prepareAndroidChannels();
-    const { status: existingStatus } = await Notifications.getPermissionsAsync();
-    let finalStatus = existingStatus;
-    if (existingStatus !== 'granted' && options.requestPermission !== false) {
-      const { status } = await Notifications.requestPermissionsAsync();
-      finalStatus = status;
+    let permission = await Notifications.getPermissionsAsync();
+    if (!hasPushPermission(permission) && options.requestPermission !== false) {
+      permission = await Notifications.requestPermissionsAsync({
+        ios: { allowAlert: true, allowBadge: true, allowSound: true },
+      });
     }
-    if (finalStatus !== 'granted') {
-      console.log('Push notification permission denied by user.');
+    if (!hasPushPermission(permission)) {
+      registrationError = 'Notifications are blocked. Allow them in your device settings to receive alerts.';
       return null;
     }
-
-    const projectId = Constants?.expoConfig?.extra?.eas?.projectId || EAS_PROJECT_ID;
-    const expoTokenObj = await Notifications.getExpoPushTokenAsync({ projectId });
+    const projectId = Constants?.expoConfig?.extra?.eas?.projectId || Constants?.easConfig?.projectId || EAS_PROJECT_ID;
+    const expoTokenObj = await withRegistrationTimeout(
+      Notifications.getExpoPushTokenAsync({ projectId }),
+      'Could not obtain a push token. Check your connection and device push services, then retry.',
+    );
     const expoToken = expoTokenObj?.data;
-
-    if (expoToken) {
-      const response = await apiFetch('/notifications/tokens/', {
-        method: 'POST',
-        body: JSON.stringify({
-          token: expoToken,
-          platform: Platform.OS,
-        }),
-      });
-      if (!response.ok) throw new Error(`Notification registration failed (HTTP ${response.status}).`);
-      activeExpoToken = expoToken;
-      console.log('Push registration confirmed by the server.');
-    }
+    if (!expoToken) throw new Error('The push service returned no device token. Please retry.');
+    if (!getTokens()?.access || getTokens()?.refresh !== session) return null;
+    const response = await apiFetch('/notifications/tokens/', {
+      method: 'POST', timeoutMs: 15000,
+      body: JSON.stringify({ token: expoToken, platform: Platform.OS }),
+    });
+    if (!response.ok) throw new Error(`Notification registration failed (HTTP ${response.status}). Please retry.`);
+    const result = await response.json();
+    if (result.success !== true) throw new Error('The server did not confirm notification registration. Please retry.');
+    activeExpoToken = expoToken;
+    await AsyncStorage.setItem(TOKEN_STORAGE_KEY, expoToken).catch(() => {});
+    console.log('Push registration confirmed by the server.');
     return expoToken;
   } catch (error) {
     registrationError = error.message || 'Notification registration failed. Please retry.';
-    console.warn('registerForPushNotifications warning:', error.message || error);
+    console.warn('Push registration failed:', registrationError);
     return null;
   }
 }
@@ -143,8 +173,13 @@ export function setupNotificationListeners(onNotificationReceived, onNotificatio
         })
       : null;
 
+    const tokenSub = Notifications.addPushTokenListener?.(() => {
+      registerForPushNotificationsAsync({ requestPermission: false });
+    });
+
     return () => {
       try {
+        tokenSub?.remove();
         if (receivedSub && typeof receivedSub.remove === 'function') receivedSub.remove();
         if (responseSub && typeof responseSub.remove === 'function') responseSub.remove();
       } catch (e) {}
@@ -174,26 +209,15 @@ export async function sendLocalNotification(title, body, data = {}) {
 
 export async function unregisterPushForCurrentDevice(token) {
   try {
-    if (Platform.OS === 'web' && typeof navigator !== 'undefined' && 'serviceWorker' in navigator) {
-      const readySubscription = navigator.serviceWorker.ready.then((registration) => registration.pushManager.getSubscription());
-      const subscription = await Promise.race([
-        readySubscription,
-        new Promise((resolve) => setTimeout(() => resolve(null), 1500)),
-      ]);
-      if (subscription) {
-        await apiFetch('/notifications/web-push/unsubscribe/', {
-          method: 'POST', body: JSON.stringify({ endpoint: subscription.endpoint }),
-        });
-        await subscription.unsubscribe();
-      }
-      return;
-    }
-    const registeredToken = token || activeExpoToken;
+    if (Platform.OS === 'web') return;
+    const registeredToken = token || activeExpoToken || await AsyncStorage.getItem(TOKEN_STORAGE_KEY);
     if (registeredToken) {
-      await apiFetch('/notifications/unregister-token/', {
-        method: 'POST', body: JSON.stringify({ token: registeredToken }),
+      const response = await apiFetch('/notifications/unregister-token/', {
+        method: 'POST', timeoutMs: 10000, body: JSON.stringify({ token: registeredToken }),
       });
+      if (!response.ok) throw new Error(`Notification unregistration failed (HTTP ${response.status}).`);
       activeExpoToken = null;
+      await AsyncStorage.removeItem(TOKEN_STORAGE_KEY);
     }
   } catch (error) {
     console.warn('Push unregistration warning:', error.message || error);

@@ -8,11 +8,12 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import {
   COLORS, SPACE, SHADOW,
-  API_URL, API_HEADERS, fixMediaUrl, W,
+  fixMediaUrl, W,
   TOP, BOTTOM,
 } from '../theme';
 import { GradientAvatar } from '../components';
 import { getCached, setCache } from '../cache';
+import { apiFetch } from '../api';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import ContactCardModal from './ContactCardModal';
@@ -49,7 +50,11 @@ const _memCache = {
 };
 
 const TABS = ['Attendees', 'Universe', 'For You', 'Speakers'];
-const authH = t => ({ ...API_HEADERS, Authorization: `Bearer ${t?.access}` });
+async function networkFetch(path, options = {}) {
+  const response = await apiFetch(path, { ...options, timeoutMs: 15000 });
+  if (!response.ok) throw new Error(`Could not load network data (HTTP ${response.status}).`);
+  return response;
+}
 
 function FloatingOrbs() {
   const orbs = useRef(
@@ -296,8 +301,8 @@ function ConferenceCloud({ cloud, myInterests = [], onConnectPerson, tokens }) {
     setTagLoading(true);
 
     try {
-      const url = `${API_URL}/checkins/network/?interest=${encodeURIComponent(tag)}`;
-      const r = await fetch(url, { headers: authH(tokens) });
+      const url = `/checkins/network/?interest=${encodeURIComponent(tag)}`;
+      const r = await networkFetch(url);
       const d = await r.json();
       const people = (d.attendees || [])
         .slice(0, 8)
@@ -690,7 +695,8 @@ export default function NetworkScreen({
   const [spotIdx, setSpotIdx] = useState(0);
   const [search, setSearch] = useState('');
   const [activeTag, setActiveTag] = useState('');
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(!Array.isArray(_memCache.attendees));
+  const [loadError, setLoadError] = useState('');
   const [refreshing, setRefreshing] = useState(false);
   const [connStatus, setConnStatus] = useState({});
   const [cardTarget, setCardTarget] = useState(null);
@@ -702,7 +708,7 @@ export default function NetworkScreen({
 
   const fetchBlockedIds = useCallback(async () => {
     try {
-      const r = await fetch(`${API_URL}/chat/blocked/`, { headers: authH(tokens) });
+      const r = await networkFetch('/chat/blocked/');
       const d = await r.json();
       if (Array.isArray(d?.blocked)) {
         setBlockedUserIds(new Set(d.blocked.map(b => String(b.id))));
@@ -717,9 +723,8 @@ export default function NetworkScreen({
     if (cached) setConnStatus(p => ({ ...p, ...cached }));
 
     try {
-      const r = await fetch(`${API_URL}/chat/check/bulk/`, {
+      const r = await networkFetch('/chat/check/bulk/', {
         method: 'POST',
-        headers: authH(tokens),
         body: JSON.stringify({ user_ids: ids }),
       });
       const d = await r.json();
@@ -737,7 +742,7 @@ export default function NetworkScreen({
   const verifyCheckInStatus = useCallback(async () => {
     try {
       setGateLoading(true);
-      const r = await fetch(`${API_URL}/checkins/status/`, { headers: authH(tokens) });
+      const r = await networkFetch('/checkins/status/');
       const d = await r.json();
       if (d.success) {
         setIsCheckedIn(!!d.checked_in);
@@ -761,8 +766,10 @@ export default function NetworkScreen({
     if (interestText) p.append('interest', interestText);
 
     try {
-      const r = await fetch(`${API_URL}/checkins/network/?${p.toString()}`, { headers: authH(tokens) });
+      setLoadError('');
+      const r = await networkFetch(`/checkins/network/?${p.toString()}`);
       const d = await r.json();
+      if (!Array.isArray(d.attendees)) throw new Error('The server returned an invalid attendee list.');
       if (d.is_checked_in !== undefined) {
         setIsCheckedIn(d.is_checked_in);
       }
@@ -796,7 +803,10 @@ export default function NetworkScreen({
       loadStatuses([...new Set([...list, ...(d.speakers || []), ...(d.organizers || [])]
         .map(a => a.id).filter(id => id !== user?.id))]);
       return list;
-    } catch { return _memCache.attendees || []; }
+    } catch (error) {
+      setLoadError(error.message || 'Could not load attendees. Please retry.');
+      return _memCache.attendees || [];
+    }
   }, [tokens, user?.id, loadStatuses]);
 
   const fetchSpeakersList = useCallback(async (searchText = '', useLocalCache = false) => {
@@ -811,7 +821,7 @@ export default function NetworkScreen({
     if (searchText.trim()) p.append('search', searchText.trim());
 
     try {
-      const r = await fetch(`${API_URL}/checkins/network/?${p.toString()}`, { headers: authH(tokens) });
+      const r = await networkFetch(`/checkins/network/?${p.toString()}`);
       const d = await r.json();
       const list = (d.attendees || [])
         .map(a => ({ ...a, profile_photo_url: fixMediaUrl(a.profile_photo_url) }));
@@ -830,7 +840,7 @@ export default function NetworkScreen({
 
   const fetchDiscoverData = useCallback(async () => {
     try {
-      const r = await fetch(`${API_URL}/auth/discover/`, { headers: authH(tokens) });
+      const r = await networkFetch('/auth/discover/');
       const d = await r.json();
 
       const payload = {
@@ -865,12 +875,11 @@ export default function NetworkScreen({
       if (cs) { _memCache.speakers = cs; setSpeakers(cs); }
       if (cd) { _memCache.discover = cd; setDiscover(cd); }
 
-      setLoading(!(_memCache.attendees?.length || ca?.list?.length));
-      await Promise.all([
-        fetchBlockedIds(),
-        fetchAttendeesList('', '', false),
-        fetchDiscoverData(),
-      ]);
+      setLoading(!Array.isArray(_memCache.attendees) && !Array.isArray(ca?.list));
+      // Discovery and block status update independently of the visible attendee list.
+      fetchBlockedIds();
+      fetchDiscoverData();
+      await fetchAttendeesList('', '', false);
       setLoading(false);
     })();
   }, []);
@@ -1061,6 +1070,7 @@ export default function NetworkScreen({
       </LinearGradient>
 
       <View style={_s.body}>
+        {!!loadError && <TouchableOpacity onPress={refreshAttendees} style={{ padding: SPACE.md }}><Text style={{ color: COLORS.error }}>{loadError} Tap to retry.</Text></TouchableOpacity>}
         <View style={_s.tabOuter}>
           <View style={_s.tabBar}>
             <View style={[_s.tabSlider, { width: tabW, transform: [{ translateX: tabOffset }] }]}>

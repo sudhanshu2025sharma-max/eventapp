@@ -9,9 +9,6 @@ urlpatterns = [
     path('register-token/',   views.register_token,      name='register_token'),
     path('tokens/',           views.register_token,      name='register_token_alias'),
     path('unregister-token/', views.unregister_token,    name='unregister_token'),
-    path('web-push/config/', views.web_push_config, name='web_push_config'),
-    path('web-push/subscribe/', views.web_push_subscribe, name='web_push_subscribe'),
-    path('web-push/unsubscribe/', views.web_push_unsubscribe, name='web_push_unsubscribe'),
 
     # Admin endpoints
     path('send/',             views.send_notification,    name='send_notification'),

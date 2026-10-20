@@ -59,7 +59,8 @@
               {% endwith %}
             </td>
             <td>
-              {% if n.status == 'sent' %}<span class="badge badge-success">{% if n.provider_logged %}Provider accepted{% else %}Legacy send{% endif %}</span>
+              {% if n.receipt_failed %}<span class="badge badge-danger">Delivery errors</span>
+              {% elif n.status == 'sent' %}<span class="badge badge-success">{% if n.provider_logged %}Provider accepted{% else %}Legacy send{% endif %}</span>
               {% elif n.status == 'failed' %}<span class="badge badge-danger">{% if n.sent_count == 0 and n.failed_count == 0 %}No registered devices{% else %}Failed{% endif %}</span>
               {% else %}<span class="badge badge-warning">Pending</span>{% endif %}
             </td>

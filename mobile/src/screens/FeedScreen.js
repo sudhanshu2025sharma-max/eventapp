@@ -10,6 +10,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useVideoPlayer, VideoView } from 'expo-video';
 import { COLORS, FONT, SPACE, RADIUS, SHADOW, TOP, BOTTOM, W, H, fixMediaUrl } from '../theme';
 import { apiFetch } from '../api';
+import { getScreenSnapshot, setScreenSnapshot } from '../cache';
 import { useKeyboardHeight } from '../useKeyboard';
 import FeedQuiz from './FeedQuiz';
 
@@ -229,9 +230,9 @@ function CommentItem({ item, onReply, idx }) {
   );
 }
 
-export default function FeedScreen({ onBack }) {
-  const [posts, setPosts] = useState([]);
-  const [loading, setLoading] = useState(true);
+export default function FeedScreen({ onBack, userId }) {
+  const [posts, setPosts] = useState(() => getScreenSnapshot('feed', userId) || []);
+  const [loading, setLoading] = useState(() => !getScreenSnapshot('feed', userId));
   const [refreshing, setRefreshing] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
   const [activePost, setActivePost] = useState(null);
@@ -250,14 +251,17 @@ export default function FeedScreen({ onBack }) {
   const load = useCallback(async (silent = false) => {
     try {
       if (!silent) setLoading(true);
-      const res = await apiFetch('/posts/feed/');
+      const res = await apiFetch('/posts/feed/', { timeoutMs: 15000 });
+      if (!res.ok) throw new Error(`Could not load feed (HTTP ${res.status}).`);
       const data = await res.json();
-      setPosts(Array.isArray(data.results) ? data.results : []);
-    } catch { if (!silent) Alert.alert('Error', 'Could not load feed.'); } 
+      if (!Array.isArray(data.results)) throw new Error('The server returned an invalid feed.');
+      setPosts(data.results);
+      setScreenSnapshot('feed', userId, data.results);
+    } catch (error) { Alert.alert('Feed', error.message || 'Could not load feed. Please retry.'); }
     finally { setLoading(false); setRefreshing(false); }
-  }, []);
+  }, [userId]);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => { load(!!getScreenSnapshot('feed', userId)); }, [load]);
   const refresh = () => { setRefreshing(true); load(true); };
 
   const react = async (postId, type) => {

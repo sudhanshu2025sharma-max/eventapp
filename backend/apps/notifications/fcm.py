@@ -1,10 +1,7 @@
 import requests
 import logging
-import json
 from copy import deepcopy
-from django.conf import settings
-from django.utils import timezone
-from .models import DeviceToken, UserNotification, WebPushSubscription, PushDelivery
+from .models import DeviceToken, UserNotification, PushDelivery
 
 logger = logging.getLogger(__name__)
 EXPO_URL = "https://exp.host/--/api/v2/push/send"
@@ -109,67 +106,10 @@ def _send_expo(tokens, title, body, data, img=None, notif=None):
                 )
     return success, failed, bad_tokens
 
-def _send_web(subscriptions, title, body, data, img=None, notif=None):
-    if not subscriptions:
-        return 0, 0
-    try:
-        from pywebpush import webpush, WebPushException
-    except ImportError:
-        logger.exception('Web Push requested but pywebpush is not installed')
-        PushDelivery.objects.bulk_create([PushDelivery(notification=notif, platform='web', status='failed', error='WebPushNotConfigured: missing dependency') for _ in subscriptions])
-        return 0, len(subscriptions)
-
-    success = failed = 0
-    vapid_private_key = getattr(settings, 'WEBPUSH_VAPID_PRIVATE_KEY', '')
-    if not vapid_private_key:
-        logger.error('Web Push is not configured: WEBPUSH_VAPID_PRIVATE_KEY is empty')
-        PushDelivery.objects.bulk_create([PushDelivery(notification=notif, platform='web', status='failed', error='WebPushNotConfigured: missing VAPID key') for _ in subscriptions])
-        return 0, len(subscriptions)
-
-    web_session = requests.Session()
-    web_session.proxies.update({
-        'http': 'http://proxy21.iitd.ac.in:3128',
-        'https': 'http://proxy21.iitd.ac.in:3128',
-    })
-    for subscription in subscriptions:
-        payload = {'title': title, 'body': body, 'data': data or {}, 'image': img}
-        try:
-            webpush(
-                subscription_info={
-                    'endpoint': subscription.endpoint,
-                    'keys': {'p256dh': subscription.p256dh, 'auth': subscription.auth},
-                },
-                data=json.dumps(payload), vapid_private_key=vapid_private_key,
-                vapid_claims={'sub': getattr(settings, 'WEBPUSH_VAPID_SUBJECT', 'mailto:admin@etd2026.iitd.ac.in')},
-                requests_session=web_session, timeout=30, ttl=86400, headers={'Urgency': 'high'},
-            )
-            PushDelivery.objects.create(notification=notif, platform='web', status='accepted')
-            success += 1
-        except WebPushException as exc:
-            response = getattr(exc, 'response', None)
-            code = getattr(response, 'status_code', None)
-            if code in (404, 410):
-                subscription.is_active = False
-                subscription.save(update_fields=['is_active', 'updated_at'])
-            PushDelivery.objects.create(
-                notification=notif, platform='web', status='failed', error=str(exc)[:1000],
-            )
-            logger.warning('Web Push delivery failed (http_status=%s)', code)
-            failed += 1
-        except Exception:
-            logger.exception('Web Push delivery failed')
-            PushDelivery.objects.create(notification=notif, platform='web', status='failed', error='Unexpected send error')
-            failed += 1
-    return success, failed
-
-
-def _dispatch(users, title, body, data=None, notif=None, request=None):
-    if notif:
-        _create_rows(notif, users)
-    user_ids = users.values_list('pk', flat=True)
-    tokens = list(DeviceToken.objects.filter(is_active=True, user_id__in=user_ids).values_list('token', flat=True))
-    subscriptions = list(WebPushSubscription.objects.filter(is_active=True, user_id__in=user_ids))
-    img = _cover_url(notif, request)
+def _send_hybrid(tokens, title, body, data=None, img=None, notif=None):
+    """Compatibility entry point used by existing native push callers."""
+    if not tokens:
+        return 0, 0, []
     expo_tokens = [token for token in tokens if 'Expo' in token or 'Exponent' in token]
     unsupported_tokens = [token for token in tokens if token not in expo_tokens]
     if unsupported_tokens:
@@ -183,12 +123,18 @@ def _dispatch(users, title, body, data=None, notif=None, request=None):
     expo_failed += len(unsupported_tokens)
     if bad:
         DeviceToken.objects.filter(token__in=bad).update(is_active=False)
-    web_data = deepcopy(data or {})
+    return expo_ok, expo_failed, bad
+
+
+def _dispatch(users, title, body, data=None, notif=None, request=None):
     if notif:
-        web_data.setdefault('notification_id', str(notif.id))
-    web_data.setdefault('href', '/app/?open=notifications')
-    web_ok, web_failed = _send_web(subscriptions, title, body, web_data, img, notif)
-    success, failed = expo_ok + web_ok, expo_failed + web_failed
+        _create_rows(notif, users)
+    user_ids = users.values_list('pk', flat=True)
+    tokens = list(DeviceToken.objects.filter(is_active=True, user_id__in=user_ids).values_list('token', flat=True))
+    img = _cover_url(notif, request)
+    success, failed, bad = _send_hybrid(tokens, title, body, data or {}, img, notif)
+    if not tokens:
+        logger.warning('Push has no registered native destinations (notification_id=%s)', getattr(notif, 'id', None))
     if notif:
         notif.status = 'sent' if success else 'failed'
         notif.sent_count = success
@@ -199,12 +145,7 @@ def _dispatch(users, title, body, data=None, notif=None, request=None):
 # --- EXPORTED DISPATCHERS ---
 
 def send_to_tokens(tokens, title, body, data=None, img=None):
-    if not tokens: 
-        return 0, 0, []
-    expo = [t for t in tokens if 'Expo' in t or 'Exponent' in t]
-    unsupported = [t for t in tokens if t not in expo]
-    success, failed, bad = _send_expo(expo, title, body, data or {}, img)
-    return success, failed + len(unsupported), bad
+    return _send_hybrid(tokens, title, body, data or {}, img)
 
 def send_to_user(user, title, body, data=None, notif=None, request=None):
     """Send push notification to a specific user"""

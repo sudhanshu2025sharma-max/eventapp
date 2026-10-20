@@ -99,33 +99,3 @@ class InboxCompatibilityTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(DeviceToken.objects.filter(token=token).count(), 1)
         self.assertEqual(DeviceToken.objects.get(token=token).user_id, self.user.id)
-
-
-class WebPushEncryptionTests(SimpleTestCase):
-    @patch.object(fcm.PushDelivery.objects, 'create')
-    @patch('apps.notifications.fcm.requests.Session')
-    def test_real_web_push_encryption_and_vapid_headers(self, session, create):
-        import base64
-        from types import SimpleNamespace
-        from cryptography.hazmat.primitives.asymmetric import ec
-        from cryptography.hazmat.primitives import serialization
-
-        encode = lambda value: base64.urlsafe_b64encode(value).rstrip(b'=').decode()
-        sender = ec.generate_private_key(ec.SECP256R1())
-        receiver = ec.generate_private_key(ec.SECP256R1())
-        subscription = SimpleNamespace(
-            endpoint='https://web.push.apple.com/test-only',
-            p256dh=encode(receiver.public_key().public_bytes(serialization.Encoding.X962, serialization.PublicFormat.UncompressedPoint)),
-            auth=encode(b'0123456789abcdef'),
-        )
-        session.return_value.post.return_value.status_code = 201
-        private = encode(sender.private_numbers().private_value.to_bytes(32, 'big'))
-        with override_settings(WEBPUSH_VAPID_PRIVATE_KEY=private, WEBPUSH_VAPID_SUBJECT='mailto:test@example.invalid'):
-            result = fcm._send_web([subscription], 'Test title', 'Private body', {})
-        self.assertEqual(result, (1, 0))
-        sent = session.return_value.post.call_args.kwargs
-        self.assertNotIn(b'Private body', sent['data'])
-        headers = {key.lower(): value for key, value in sent['headers'].items()}
-        self.assertEqual(headers['content-encoding'], 'aes128gcm')
-        self.assertTrue(headers['authorization'].startswith('vapid '))
-        self.assertEqual(headers['ttl'], '86400')

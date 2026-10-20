@@ -1,11 +1,14 @@
 from django.shortcuts import render, redirect, get_object_or_404
 import threading
+import logging
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
-from .models import DeviceToken, Notification, NotificationAttachment, WebPushSubscription, PushDelivery
+from .models import DeviceToken, Notification, NotificationAttachment, PushDelivery
 from . import fcm
 from apps.accounts.permissions_helper import module_required
 from django.db.models import Count, Q, Exists, OuterRef
+
+logger = logging.getLogger(__name__)
 
 
 @login_required(login_url='/panel/login/')
@@ -15,9 +18,10 @@ def notifications_page(request):
         delivered=Count('user_notifications'),
         seen=Count('user_notifications', filter=Q(user_notifications__read=True)),
         provider_logged=Exists(PushDelivery.objects.filter(notification_id=OuterRef('pk'))),
+        receipt_failed=Exists(PushDelivery.objects.filter(notification_id=OuterRef('pk'), receipt_checked_at__isnull=False, status='failed')),
     ).prefetch_related('attachments').order_by('-created_at')[:20]
     return render(request, 'panel/notifications.html', {
-        'device_count': DeviceToken.objects.filter(is_active=True).count() + WebPushSubscription.objects.filter(is_active=True).count(),
+        'device_count': DeviceToken.objects.filter(is_active=True).count(),
         'notifications': notifs,
     })
 
@@ -75,6 +79,7 @@ def send_notification(request):
             n.sent_count = ok; n.failed_count = fail
             n.save(update_fields=['status', 'sent_count', 'failed_count'])
         except Exception as exc:
+            logger.exception('Admin notification dispatch failed (notification_id=%s)', n_id)
             try:
                 n = _N.objects.get(pk=n_id)
                 n.status = 'failed'; n.save(update_fields=['status'])

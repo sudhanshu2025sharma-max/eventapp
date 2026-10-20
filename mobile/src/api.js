@@ -18,17 +18,17 @@ export function authHeaders() {
   return { ...API_HEADERS, Authorization: `Bearer ${_tokens.access}` };
 }
 
-async function _refreshTokens() {
+async function _refreshTokens(timeoutMs) {
   if (!_tokens?.refresh) return false;
   if (_refreshPromise) return _refreshPromise;
 
   _refreshPromise = (async () => {
     try {
-      const res = await fetch(`${API_URL}/auth/token/refresh/`, {
+      const res = await fetchWithTimeout(`${API_URL}/auth/token/refresh/`, {
         method: 'POST',
         headers: API_HEADERS,
         body: JSON.stringify({ refresh: _tokens.refresh }),
-      });
+      }, timeoutMs);
       if (!res.ok) return false;
       const data = await res.json();
       if (data.access) {
@@ -48,7 +48,29 @@ async function _refreshTokens() {
   return _refreshPromise;
 }
 
+async function fetchWithTimeout(url, options, timeoutMs) {
+  if (!timeoutMs) return fetch(url, options);
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  const abort = () => controller.abort();
+  options.signal?.addEventListener('abort', abort);
+  if (options.signal?.aborted) controller.abort();
+  try {
+    return await fetch(url, { ...options, signal: controller.signal });
+  } catch (error) {
+    if (controller.signal.aborted && !options.signal?.aborted) {
+      throw new Error('The request took too long. Please check your connection and retry.');
+    }
+    throw error;
+  } finally {
+    clearTimeout(timer);
+    options.signal?.removeEventListener('abort', abort);
+  }
+}
+
 export async function apiFetch(path, options = {}) {
+  // Opt in on slow list screens and push registration; other callers keep their behavior.
+  const { timeoutMs, ...requestOptions } = options;
   const url = path.startsWith('http') ? path : `${API_URL}${path}`;
 
   // Robust FormData detection for RN SDK 57 TurboModules
@@ -76,14 +98,14 @@ export async function apiFetch(path, options = {}) {
     delete headers['Content-Type'];
   }
 
-  let res = await fetch(url, { ...options, headers });
+  let res = await fetchWithTimeout(url, { ...requestOptions, headers }, timeoutMs);
 
   if (res.status === 401 && _tokens?.refresh) {
-    const refreshed = await _refreshTokens();
+    const refreshed = await _refreshTokens(timeoutMs);
     if (refreshed) {
       const retryHeaders = { ...headers, Authorization: `Bearer ${_tokens.access}` };
       if (isFormData) delete retryHeaders['Content-Type'];
-      res = await fetch(url, { ...options, headers: retryHeaders });
+      res = await fetchWithTimeout(url, { ...requestOptions, headers: retryHeaders }, timeoutMs);
     }
   }
 

@@ -1,9 +1,9 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Alert, AppState, Modal, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Alert, AppState, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { preparePushPermission, enablePushPermission, openPushSettings } from './pushPermission';
 
-const promptKey = state => `etd_notification_prompt_v1:${state}`;
+const promptKey = (userId, state) => `etd_notification_prompt_v2:${userId}:${state}`;
 
 export default function NotificationPermissionPrompt({ active, userId, onRegistered }) {
   const [state, setState] = useState('checking');
@@ -11,6 +11,7 @@ export default function NotificationPermissionPrompt({ active, userId, onRegiste
   const [busy, setBusy] = useState(false);
   const [retry, setRetry] = useState(0);
   const [setupError, setSetupError] = useState('');
+  const dismissedThisSession = useRef(new Set());
   const onRegisteredRef = useRef(onRegistered);
   onRegisteredRef.current = onRegistered;
 
@@ -24,11 +25,17 @@ export default function NotificationPermissionPrompt({ active, userId, onRegiste
         setState(result.state);
         setSetupError(result.error || '');
         if (result.token) onRegisteredRef.current?.(result.token);
-        const shouldPrompt = ['unsubscribed', 'denied', 'registration_failed'].includes(result.state) || (Platform.OS === 'web' && result.state === 'unsupported');
-        const dismissed = shouldPrompt && await AsyncStorage.getItem(promptKey(result.state));
+        const shouldPrompt = ['unsubscribed', 'denied', 'registration_failed'].includes(result.state);
+        const key = promptKey(userId, result.state);
+        const dismissed = dismissedThisSession.current.has(key) || (shouldPrompt && result.state !== 'registration_failed' && await AsyncStorage.getItem(key));
         if (!canceled) setVisible(shouldPrompt && !dismissed);
       } catch (error) {
         console.warn('Notification setup:', error.message);
+        if (!canceled) {
+          setState('registration_failed');
+          setSetupError(error.message || 'Notification setup failed. Please retry.');
+          setVisible(!dismissedThisSession.current.has(promptKey(userId, 'registration_failed')));
+        }
       }
     };
     check();
@@ -38,7 +45,9 @@ export default function NotificationPermissionPrompt({ active, userId, onRegiste
 
   const dismiss = () => {
     setVisible(false);
-    AsyncStorage.setItem(promptKey(state), 'dismissed').catch(() => {});
+    const key = promptKey(userId, state);
+    dismissedThisSession.current.add(key);
+    if (state !== 'registration_failed') AsyncStorage.setItem(key, 'dismissed').catch(() => {});
   };
 
   const enable = async () => {
@@ -56,19 +65,17 @@ export default function NotificationPermissionPrompt({ active, userId, onRegiste
   };
 
   if (!visible || !active) return null;
-  const unsupported = state === 'unsupported';
   return (
     <Modal transparent visible animationType="fade" onRequestClose={dismiss}>
       <View style={s.backdrop}>
         <View style={s.card} accessibilityRole="alert">
-          <Text style={s.title}>{unsupported ? 'Install for notification alerts' : state === 'registration_failed' ? 'Finish notification setup' : 'Allow conference notifications'}</Text>
+          <Text style={s.title}>{state === 'registration_failed' ? 'Finish notification setup' : 'Allow conference notifications'}</Text>
           <Text style={s.message}>Without permission, you won’t receive notification alerts for conference updates. You can still read notices in the app.</Text>
-          {unsupported && <Text style={s.message}>On iPhone or iPad with iOS 16.4 or later, open this site in Safari, use Share → Add to Home Screen, then open the installed app and allow notifications.</Text>}
-          {state === 'denied' && <Text style={s.message}>Notifications are currently blocked. You can allow them in your device or browser settings.</Text>}
+          {state === 'denied' && <Text style={s.message}>Notifications are currently blocked. You can allow them in your device settings.</Text>}
           {!!setupError && <Text style={s.message}>{setupError}</Text>}
           <View style={s.actions}>
-            <Pressable onPress={dismiss} disabled={busy} style={s.secondary}><Text style={s.secondaryText}>{unsupported ? 'Got it' : 'Not now'}</Text></Pressable>
-            {!unsupported && <Pressable onPress={enable} disabled={busy} style={s.primary}><Text style={s.primaryText}>{busy ? 'Please wait…' : state === 'denied' ? 'Open settings' : state === 'registration_failed' ? 'Retry' : 'Allow notifications'}</Text></Pressable>}
+            <Pressable onPress={dismiss} disabled={busy} style={s.secondary}><Text style={s.secondaryText}>Not now</Text></Pressable>
+            <Pressable onPress={enable} disabled={busy} style={s.primary}><Text style={s.primaryText}>{busy ? 'Please wait…' : state === 'denied' ? 'Open settings' : state === 'registration_failed' ? 'Retry' : 'Allow notifications'}</Text></Pressable>
           </View>
         </View>
       </View>

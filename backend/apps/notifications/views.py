@@ -3,13 +3,11 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework import status
 from django.shortcuts import get_object_or_404
-from .models import UserNotification, Notification, DeviceToken, WebPushSubscription, PushDelivery
-from django.conf import settings
-from urllib.parse import urlsplit
+from .models import UserNotification, Notification, DeviceToken, PushDelivery
 from uuid import UUID
+import re
 from django.db.models import Count, Q
 from django.utils import timezone
-import importlib.util
 from apps.checkins.meal_utils import sync_meal_window
 from . import fcm
 
@@ -55,6 +53,10 @@ def my_notifications(request):
 def register_token(request):
     token = request.data.get('token')
     platform = request.data.get('platform', 'android')
+    if platform not in ('android', 'ios'):
+        return Response({'error': 'Platform must be android or ios.'}, status=status.HTTP_400_BAD_REQUEST)
+    if not isinstance(token, str) or not re.fullmatch(r'(?:Expo|Exponent)PushToken\[[A-Za-z0-9_-]+\]', token):
+        return Response({'error': 'A valid Expo push token is required.'}, status=status.HTTP_400_BAD_REQUEST)
     if token:
         # Tokens identify installations, not accounts. Rebind when a phone changes user.
         DeviceToken.objects.update_or_create(
@@ -69,59 +71,6 @@ def register_token(request):
 def register_device_token(request):
     return register_token(request)
 
-
-@api_view(['GET'])
-@permission_classes([IsAuthenticated])
-def web_push_config(request):
-    ready = bool(settings.WEBPUSH_VAPID_PUBLIC_KEY and settings.WEBPUSH_VAPID_PRIVATE_KEY and importlib.util.find_spec('pywebpush'))
-    return Response({'public_key': settings.WEBPUSH_VAPID_PUBLIC_KEY if ready else '', 'enabled': ready})
-
-
-@api_view(['POST'])
-@permission_classes([IsAuthenticated])
-def web_push_subscribe(request):
-    subscription = request.data.get('subscription') or {}
-    if not isinstance(subscription, dict):
-        return Response({'error': 'A valid browser push subscription is required.'}, status=400)
-    endpoint = subscription.get('endpoint')
-    keys = subscription.get('keys') or {}
-    if not isinstance(keys, dict):
-        return Response({'error': 'Invalid subscription keys.'}, status=400)
-    p256dh, auth = keys.get('p256dh'), keys.get('auth')
-    if not endpoint or not p256dh or not auth:
-        return Response({'error': 'A valid browser push subscription is required.'}, status=status.HTTP_400_BAD_REQUEST)
-    if not isinstance(endpoint, str) or len(endpoint) > 2048:
-        return Response({'error': 'Unsupported browser push endpoint.'}, status=status.HTTP_400_BAD_REQUEST)
-    try:
-        parsed_endpoint = urlsplit(endpoint)
-        hostname = (parsed_endpoint.hostname or '').lower()
-        endpoint_port = parsed_endpoint.port
-    except ValueError:
-        return Response({'error': 'Unsupported browser push endpoint.'}, status=status.HTTP_400_BAD_REQUEST)
-    allowed_push_hosts = {
-        'fcm.googleapis.com',
-        'web.push.apple.com',
-        'updates.push.services.mozilla.com',
-    }
-    allowed = parsed_endpoint.scheme == 'https' and endpoint_port in (None, 443) and (
-        hostname in allowed_push_hosts or hostname.endswith('.notify.windows.com')
-    )
-    if not allowed:
-        return Response({'error': 'Unsupported browser push endpoint.'}, status=status.HTTP_400_BAD_REQUEST)
-    obj, _ = WebPushSubscription.objects.update_or_create(
-        endpoint=endpoint,
-        defaults={'user': request.user, 'p256dh': p256dh, 'auth': auth, 'is_active': True},
-    )
-    return Response({'success': True, 'subscription_id': obj.pk})
-
-
-@api_view(['POST'])
-@permission_classes([IsAuthenticated])
-def web_push_unsubscribe(request):
-    endpoint = (request.data.get('endpoint') or '').strip()
-    if endpoint:
-        WebPushSubscription.objects.filter(user=request.user, endpoint=endpoint).update(is_active=False)
-    return Response({'success': True})
 
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
@@ -202,7 +151,7 @@ def notification_history(request):
         'delivered_count': n.receipt_count,
         'created_at': n.created_at.isoformat()
     } for n in notifs]
-    device_count = DeviceToken.objects.filter(is_active=True).count() + WebPushSubscription.objects.filter(is_active=True).count()
+    device_count = DeviceToken.objects.filter(is_active=True).count()
     return Response({'notifications': results, 'device_count': device_count})
 
 @api_view(['GET'])

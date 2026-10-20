@@ -10,6 +10,7 @@ import MainApp              from './src/MainApp';
 import { setupNotificationListeners, unregisterPushForCurrentDevice } from './src/notifications';
 import { API_URL, API_HEADERS, fixMediaUrl } from './src/theme';
 import { setTokens as setApiTokens } from './src/api';
+import { registerForPushNotifications } from './src/notifications';
 import NotificationPermissionPrompt from './src/NotificationPermissionPrompt';
 import { clearScreenSnapshots } from './src/cache';
 
@@ -480,6 +481,22 @@ export default function App() {
     }, 20 * 60 * 1000);
     return () => clearInterval(interval);
   }, [tokens?.refresh]);
+
+  // Push notification registration on login
+  useEffect(() => {
+    if (screen !== 'app') return;
+    let canceled = false;
+    const timer = setTimeout(() => {
+      if (canceled) return;
+      registerForPushNotifications().then(token => {
+        if (!canceled && token) {
+          pushToken.current = token;
+          console.log('PUSH TOKEN REGISTERED:', token);
+        }
+      }).catch(e => console.warn('Push reg error:', e));
+    }, 2000);
+    return () => { canceled = true; clearTimeout(timer); };
+  }, [screen]);
 
   const handleLogout = async () => {
     await unregisterPushForCurrentDevice(pushToken.current);

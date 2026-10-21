@@ -47,40 +47,24 @@ export default function LoginScreen({ onLogin }) {
   const [pwdErr, setPwdErr] = useState('');
   const [apiErr, setApiErr] = useState('');
 
-  // ── Enterprise motion: entrance + imperceptible breath + error shake ──
-  const logoOp = useRef(new Animated.Value(0)).current;
-  const logoScale = useRef(new Animated.Value(0.92)).current;
+  // ── Entrance motion initialized to solid opacity to prevent dim grey startup overlay ──
+  const logoOp = useRef(new Animated.Value(1)).current;
+  const logoScale = useRef(new Animated.Value(1)).current;
   const logoBreath = useRef(new Animated.Value(1)).current;
-  const titleOp = useRef(new Animated.Value(0)).current;
-  const titleY = useRef(new Animated.Value(8)).current;
-  const cardOp = useRef(new Animated.Value(0)).current;
-  const cardY = useRef(new Animated.Value(24)).current;
+  const titleOp = useRef(new Animated.Value(1)).current;
+  const titleY = useRef(new Animated.Value(0)).current;
+  const cardOp = useRef(new Animated.Value(1)).current;
+  const cardY = useRef(new Animated.Value(0)).current;
   const errShake = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
-    // Entrance sequence: logo → title → card (staggered, purposeful)
-    Animated.sequence([
-      Animated.parallel([
-        Animated.timing(logoOp, { toValue: 1, duration: 600, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
-        Animated.timing(logoScale, { toValue: 1, duration: 700, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
-      ]),
-      Animated.parallel([
-        Animated.timing(titleOp, { toValue: 1, duration: 400, useNativeDriver: true }),
-        Animated.timing(titleY, { toValue: 0, duration: 400, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
-      ]),
-      Animated.parallel([
-        Animated.timing(cardOp, { toValue: 1, duration: 500, useNativeDriver: true }),
-        Animated.timing(cardY, { toValue: 0, duration: 500, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
-      ]),
-    ]).start(() => {
-      // After entrance settles, start the barely-perceptible breath (Revolut/N26 pattern)
-      Animated.loop(
-        Animated.sequence([
-          Animated.timing(logoBreath, { toValue: 1.015, duration: 2200, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
-          Animated.timing(logoBreath, { toValue: 1, duration: 2200, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
-        ])
-      ).start();
-    });
+    // Subtle breath animation on logo after mount
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(logoBreath, { toValue: 1.015, duration: 2200, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+        Animated.timing(logoBreath, { toValue: 1, duration: 2200, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+      ])
+    ).start();
   }, []);
 
   const shakeError = () => {
@@ -123,6 +107,7 @@ export default function LoginScreen({ onLogin }) {
     setLoading(false);
   };
 
+  const openWebsite = () => Linking.openURL('https://etd2026.iitd.ac.in/');
   const openPrivacy = () => Linking.openURL('https://etd2026.iitd.ac.in/app-privacy-policy/');
 
   return (
@@ -130,7 +115,7 @@ export default function LoginScreen({ onLogin }) {
       <StatusBar barStyle="light-content" />
       <ScrollView style={{ flex: 1 }} contentContainerStyle={{ flexGrow: 1 }} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
 
-        {/* ── HERO HEADER — Logo + Title only. Tight. Purposeful. ── */}
+        {/* ── HERO HEADER ── */}
         <LinearGradient colors={['#0333b6', '#0245c7']} start={{ x: 0, y: 0 }} end={{ x: 0, y: 1 }} style={st.header}>
           <Animated.View style={{
             opacity: logoOp,
@@ -199,14 +184,16 @@ export default function LoginScreen({ onLogin }) {
             <Divider style={{ marginVertical: SPACE.xl }} />
 
             <View style={st.infoRow}>
-              <Ionicons name="globe-outline" size={14} color={COLORS.brand} style={{ marginRight: SPACE.xs }} />
-              <Text style={st.infoText}>etd2026.iitd.ac.in</Text>
+              <TouchableOpacity onPress={openWebsite} activeOpacity={0.7} style={{ flexDirection: 'row', alignItems: 'center' }}>
+                <Ionicons name="globe-outline" size={14} color={COLORS.brand} style={{ marginRight: SPACE.xs }} />
+                <Text style={[st.infoText, { color: COLORS.brand, textDecorationLine: 'underline' }]}>etd2026.iitd.ac.in</Text>
+              </TouchableOpacity>
               <View style={st.infoDot} />
               <Text style={st.infoText}>IIT Delhi</Text>
             </View>
           </View>
 
-          <FadeIn delay={600}>
+          <FadeIn delay={200}>
             <Text style={st.footer}>Need help? Contact the conference organizer</Text>
             <TouchableOpacity onPress={openPrivacy} activeOpacity={0.7} style={{ marginTop: SPACE.sm }}>
               <Text style={st.privacyLink}>Privacy Policy</Text>
@@ -220,22 +207,17 @@ export default function LoginScreen({ onLogin }) {
 }
 
 const st = StyleSheet.create({
-  // ── HEADER: tight, logo-dominant, no decoration ──
   header: {
     paddingTop: Platform.OS === 'ios' ? 56 : 36,
     paddingBottom: 20,
     alignItems: 'center',
     overflow: 'hidden',
   },
-
-  // ── LOGO: 220px hero. Commanding presence. ──
   logoImg: {
     width: 250,
     height: 220,
-     marginTop: -40,
+    marginTop: -40,
   },
-
-  // ── TITLE: single confident line ──
   appName: {
     fontSize: FONT.xxxl,
     fontWeight: FONT.w9,
@@ -249,16 +231,13 @@ const st = StyleSheet.create({
     color: 'rgba(255,255,255,0.65)',
     letterSpacing: 0.4,
     marginTop: 10,
-    
   },
-
   curve: {
     flex: 1,
     backgroundColor: COLORS.bg,
     borderTopLeftRadius: RADIUS.xxxl,
     borderTopRightRadius: RADIUS.xxxl,
   },
-
   formWrap: {
     backgroundColor: COLORS.bg,
     paddingHorizontal: SPACE.xl,

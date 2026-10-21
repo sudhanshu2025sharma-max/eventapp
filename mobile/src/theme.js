@@ -115,7 +115,6 @@ const BASE_HEADERS = {
 
 export const API_HEADERS = { ...BASE_HEADERS, 'ngrok-skip-browser-warning': 'true' };
 
-// Fix media URLs — replaces relative/localhost URLs with public domain
 export function fixMediaUrl(url) {
   if (!url) return null;
   let clean = url;

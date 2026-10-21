@@ -7,8 +7,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { COLORS, FONT, SPACE, RADIUS, TOP, BOTTOM } from '../theme';
 import { apiFetch } from '../api';
 import { getScreenSnapshot, setScreenSnapshot } from '../cache';
-import { enablePushPermission, openPushSettings } from '../pushPermission';
-import { getPushPermissionState } from '../notifications';
+import { registerForPushNotifications, getPushPermissionState, openNotificationSettings } from '../notifications';
 
 function timeAgo(dateStr) {
   if (!dateStr) return '';
@@ -20,6 +19,7 @@ function timeAgo(dateStr) {
 }
 
 function NotificationDetail({ notif, onBack }) {
+  if (!notif) return null;
   return (
     <View style={{ flex: 1, backgroundColor: '#f0f4f9' }}>
       <View style={s.header}>
@@ -39,8 +39,8 @@ function NotificationDetail({ notif, onBack }) {
 
         <View style={d.card}>
           <Text style={d.time}>{timeAgo(notif.delivered_at || notif.created_at)}</Text>
-          <Text style={d.title}>{notif.title}</Text>
-          <Text style={d.body}>{notif.body}</Text>
+          <Text style={d.title}>{notif.title || 'Notification'}</Text>
+          <Text style={d.body}>{notif.body || ''}</Text>
 
           {!!notif.attachments?.length && (
             <View style={d.sec}>
@@ -109,13 +109,21 @@ export default function NotificationsScreen({ userId, onBack }) {
     if (pushBusy) return;
     setPushBusy(true);
     try {
-      if (await getPushPermissionState() === 'denied') await openPushSettings();
-      else {
-        await enablePushPermission();
-        Alert.alert('Notification alerts', 'This device is registered for conference notifications. If alerts remain quiet, check sound, banners, and Focus or Do Not Disturb in device settings.');
+      const permState = await getPushPermissionState();
+      if (permState === 'denied') {
+        await openNotificationSettings();
+        return;
+      }
+      const token = await registerForPushNotifications();
+      if (token) {
+        Alert.alert('Notifications active', 'Token: ' + token.substring(0, 30) + '...');
+      } else {
+        const { getPushRegistrationError } = require('../notifications');
+        const err = getPushRegistrationError();
+        Alert.alert('Push Debug', 'Token is null.\nError: ' + (err || 'none') + '\n\nAre you in Expo Go? Push does NOT work in Expo Go. Use the preview APK.');
       }
     } catch (error) {
-      Alert.alert('Notification setup failed', error.message || 'Please retry.');
+      Alert.alert('Notifications', 'Could not set up notifications. Please check your device settings.');
     } finally { setPushBusy(false); }
   };
 

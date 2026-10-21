@@ -1,17 +1,25 @@
-import { getPushPermissionState, registerForPushNotifications, getPushRegistrationError, openNotificationSettings } from './notifications';
+import { registerForPushNotifications, getPushPermissionState, openNotificationSettings } from './notifications';
 
 export async function preparePushPermission() {
-  const state = await getPushPermissionState();
-  if (state !== 'subscribed') return { state };
-  const token = await registerForPushNotifications({ requestPermission: false });
-  if (!token) return { state: 'registration_failed', error: getPushRegistrationError() || 'Could not register notifications. Check your connection and retry.' };
-  return { state, token };
+  try {
+    const state = await getPushPermissionState();
+    if (state === 'subscribed') {
+      const token = await registerForPushNotifications();
+      return { state: 'subscribed', token };
+    }
+    return { state };
+  } catch (error) {
+    return { state: 'registration_failed', error: error.message };
+  }
 }
 
 export async function enablePushPermission() {
   const token = await registerForPushNotifications();
-  if (!token) throw new Error(getPushRegistrationError() || 'Without permission you will not receive notification alerts. You can allow them in device settings.');
-  return { state: 'subscribed', token };
+  if (token) return { state: 'subscribed', token };
+  return { state: 'unsubscribed' };
 }
 
-export const openPushSettings = openNotificationSettings;
+export async function openPushSettings() {
+  await openNotificationSettings();
+  return { state: 'unsubscribed' };
+}

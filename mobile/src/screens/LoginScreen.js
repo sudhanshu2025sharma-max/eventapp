@@ -6,7 +6,7 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS, FONT, SPACE, RADIUS, SHADOW, API_URL, API_HEADERS } from '../theme';
-import { PrimaryButton, FadeIn } from '../components';
+import { PrimaryButton, FadeIn, Divider } from '../components';
 import ForgotPasswordScreen from './ForgotPasswordScreen';
 
 function Field({ icon, placeholder, value, onChange, secure, right, error, keyboardType }) {
@@ -126,9 +126,9 @@ export default function LoginScreen({ onLogin }) {
   const openPrivacy = () => Linking.openURL('https://etd2026.iitd.ac.in/app-privacy-policy/');
 
   return (
-    <KeyboardAvoidingView style={{ flex: 1, backgroundColor: COLORS.bg }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+    <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
       <StatusBar barStyle="light-content" />
-      <ScrollView style={{ flex: 1, backgroundColor: COLORS.bg }} contentContainerStyle={{ flexGrow: 1 }} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false} bounces={false}>
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ flexGrow: 1 }} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
 
         {/* ── HERO HEADER — Logo + Title only. Tight. Purposeful. ── */}
         <LinearGradient colors={['#0333b6', '#0245c7']} start={{ x: 0, y: 0 }} end={{ x: 0, y: 1 }} style={st.header}>
@@ -196,7 +196,9 @@ export default function LoginScreen({ onLogin }) {
 
             <PrimaryButton label="Sign In" onPress={handleLogin} loading={loading} />
 
-            <View style={[st.infoRow, { marginTop: SPACE.xl }]}>
+            <Divider style={{ marginVertical: SPACE.xl }} />
+
+            <View style={st.infoRow}>
               <Ionicons name="globe-outline" size={14} color={COLORS.brand} style={{ marginRight: SPACE.xs }} />
               <Text style={st.infoText}>etd2026.iitd.ac.in</Text>
               <View style={st.infoDot} />
@@ -258,7 +260,6 @@ const st = StyleSheet.create({
   },
 
   formWrap: {
-    flexGrow: 1,
     backgroundColor: COLORS.bg,
     paddingHorizontal: SPACE.xl,
     paddingBottom: SPACE.xxl,
@@ -269,7 +270,8 @@ const st = StyleSheet.create({
     borderRadius: RADIUS.xxl,
     padding: SPACE.xxl,
     ...SHADOW.lg,
-    borderWidth: 0,
+    borderWidth: Platform.OS === 'android' ? 1 : 0,
+    borderColor: COLORS.borderLight,
   },
   title: { fontSize: FONT.xxl, fontWeight: FONT.w8, color: COLORS.text, letterSpacing: -0.3 },
   subtitle: { fontSize: FONT.sm, color: COLORS.textTer, marginTop: 4, marginBottom: SPACE.xxl },

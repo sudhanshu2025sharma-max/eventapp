@@ -54,11 +54,18 @@ export default function NotificationPermissionPrompt({ active, userId, onRegiste
     setBusy(true);
     try {
       const result = await (state === 'denied' ? openPushSettings() : enablePushPermission());
-      if (result?.token) onRegisteredRef.current?.(result.token);
-      setVisible(false);
+      if (result?.token) {
+        onRegisteredRef.current?.(result.token);
+        setVisible(false);
+      } else if (result?.state === 'registration_failed' || result?.error) {
+        setState('registration_failed');
+        setSetupError(result.error || 'Failed to register notifications.');
+      } else {
+        setVisible(false);
+      }
     } catch (error) {
-      setVisible(false);
-      Alert.alert('Notification alerts', error.message, [{ text: 'OK', onPress: () => setRetry(value => value + 1) }]);
+      setState('registration_failed');
+      setSetupError(error.message || 'Notification setup failed.');
     } finally {
       setBusy(false);
     }

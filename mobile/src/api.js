@@ -18,9 +18,28 @@ export function authHeaders() {
   return { ...API_HEADERS, Authorization: `Bearer ${_tokens.access}` };
 }
 
-async function _refreshTokens() {
+function waitForRefresh(promise, signal) {
+  if (!signal) return promise;
+  return new Promise((resolve, reject) => {
+    const cleanup = () => signal.removeEventListener('abort', abort);
+    const abort = () => {
+      cleanup();
+      const error = new Error('Token refresh timed out or was canceled.');
+      error.name = 'AbortError';
+      reject(error);
+    };
+    if (signal.aborted) { abort(); return; }
+    signal.addEventListener('abort', abort, { once: true });
+    promise.then(
+      value => { cleanup(); resolve(value); },
+      error => { cleanup(); reject(error); },
+    );
+  });
+}
+
+async function _refreshTokens(signal) {
   if (!_tokens?.refresh) return false;
-  if (_refreshPromise) return _refreshPromise;
+  if (_refreshPromise) return waitForRefresh(_refreshPromise, signal);
 
   _refreshPromise = (async () => {
     try {
@@ -28,6 +47,7 @@ async function _refreshTokens() {
         method: 'POST',
         headers: API_HEADERS,
         body: JSON.stringify({ refresh: _tokens.refresh }),
+        signal,
       });
       if (!res.ok) return false;
       const data = await res.json();
@@ -45,7 +65,7 @@ async function _refreshTokens() {
     }
   })();
 
-  return _refreshPromise;
+  return waitForRefresh(_refreshPromise, signal);
 }
 
 export async function apiFetch(path, options = {}) {
@@ -75,16 +95,32 @@ export async function apiFetch(path, options = {}) {
     delete headers['Content-Type'];
   }
 
-  let res = await fetch(url, { ...options, headers });
+  const { timeoutMs, ...fetchOptions } = options;
+  let controller = null;
+  let timeoutId = null;
 
-  if (res.status === 401 && _tokens?.refresh) {
-    const refreshed = await _refreshTokens();
-    if (refreshed) {
-      const retryHeaders = { ...headers, Authorization: `Bearer ${_tokens.access}` };
-      if (isFormData) delete retryHeaders['Content-Type'];
-      res = await fetch(url, { ...options, headers: retryHeaders });
-    }
+  if (timeoutMs && typeof AbortController !== 'undefined') {
+    controller = new AbortController();
+    timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+    fetchOptions.signal = controller.signal;
   }
 
-  return res;
+  try {
+    let res = await fetch(url, { ...fetchOptions, headers });
+
+    if (res.status === 401 && _tokens?.refresh) {
+      const refreshed = await _refreshTokens(fetchOptions.signal);
+      if (refreshed) {
+        const retryHeaders = { ...headers, Authorization: `Bearer ${_tokens.access}` };
+        if (isFormData) delete retryHeaders['Content-Type'];
+        res = await fetch(url, { ...fetchOptions, headers: retryHeaders });
+      }
+    }
+
+    return res;
+  } finally {
+    if (timeoutId) {
+      clearTimeout(timeoutId);
+    }
+  }
 }

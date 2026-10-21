@@ -2,7 +2,7 @@
   "expo": {
     "name": "ETD 2026",
     "slug": "etd2026",
-    "version": "2.0.0",
+    "version": "2.0.1",
     "orientation": "portrait",
     "userInterfaceStyle": "light",
     "icon": "./assets/icon.png",
@@ -16,75 +16,43 @@
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.etd2026.app",
-      "buildNumber": "4",
+      "buildNumber": "6",
       "infoPlist": {
-        "ITSAppUsesNonExemptEncryption": false,
-        "NSCameraUsageDescription": "ETD 2026 requires camera access to scan attendee QR codes for event check-in and capture photos for your profile and conference feed.",
-        "NSPhotoLibraryUsageDescription": "ETD 2026 requires photo library access to select and upload your profile picture, session presentations, and conference gallery photos.",
-        "NSLocationWhenInUseUsageDescription": "ETD 2026 uses your location during the symposium to verify campus checkpoint attendance and navigate interactive selfie spots.",
-        "NSMotionUsageDescription": "ETD 2026 uses motion sensors for the shake-to-connect networking feature with nearby attendees.",
-        "NSAppTransportSecurity": {
-          "NSAllowsArbitraryLoadsInWebContent": true
-        }
+        "NSCameraUsageDescription": "ETD 2026 uses your camera to scan badge QR codes for check-in and connection exchanges.",
+        "NSPhotoLibraryUsageDescription": "ETD 2026 needs access to your photos to let you upload avatar pictures and share photo feed updates.",
+        "NSMicrophoneUsageDescription": "ETD 2026 may use your microphone if you record video or audio for event uploads."
       }
     },
     "android": {
       "package": "com.etd2026.app",
+      "versionCode": 6,
       "googleServicesFile": "./google-services.json",
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#0F172A"
+        "backgroundColor": "#ffffff"
       },
       "permissions": [
-        "android.permission.CAMERA",
-        "android.permission.ACCESS_NETWORK_STATE",
-        "android.permission.ACCESS_FINE_LOCATION",
-        "android.permission.ACCESS_COARSE_LOCATION",
-        "android.permission.VIBRATE"
-      ],
-      "blockedPermissions": [
-        "android.permission.READ_MEDIA_IMAGES",
-        "android.permission.READ_MEDIA_VIDEO",
-        "android.permission.READ_MEDIA_AUDIO"
-      ],
-      "versionCode": 4,
-      "edgeToEdgeEnabled": true
+        "CAMERA",
+        "READ_EXTERNAL_STORAGE",
+        "WRITE_EXTERNAL_STORAGE",
+        "INTERNET",
+        "VIBRATE",
+        "RECEIVE_BOOT_COMPLETED",
+        "POST_NOTIFICATIONS"
+      ]
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
     },
     "plugins": [
-      "./plugins/withNetworkSecurity.js",
       [
         "expo-notifications",
         {
+          "icon": "./assets/icon.png",
           "color": "#0333b6",
-          "defaultChannel": "default"
+          "sounds": []
         }
-      ],
-      "expo-video",
-      [
-        "expo-camera",
-        {
-          "cameraPermission": "ETD 2026 requires camera access to scan attendee QR codes for event check-in and capture photos for your profile and conference feed.",
-          "microphonePermission": false
-        }
-      ],
-      [
-        "expo-splash-screen",
-        {
-          "image": "./assets/splash.png",
-          "resizeMode": "contain",
-          "backgroundColor": "#0F172A"
-        }
-      ],
-      [
-        "expo-build-properties",
-        {
-          "android": {
-            "enableProguardInReleaseBuilds": true,
-            "enableShrinkResourcesInReleaseBuilds": true
-          }
-        }
-      ],
-      "./plugins/withNoMediaPermissions.js"
+      ]
     ]
   }
 }
